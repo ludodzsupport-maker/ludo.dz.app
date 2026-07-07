@@ -1,6 +1,8 @@
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { GamePiece } from "./GamePiece";
+import { GameConfigOverlay, type SelectedMode, type GameConfig } from "./GameConfigOverlay";
 
 interface GameModeScreenProps {
   lang: 'fr' | 'ar';
@@ -592,9 +594,16 @@ export function GameModeScreen({ lang, onBack }: GameModeScreenProps) {
   const featured = MODES.find(m => m.featured)!;
   const grid     = MODES.filter(m => !m.featured);
 
+  const [selectedMode, setSelectedMode] = useState<SelectedMode | null>(null);
+
   const handleModeSelect = (modeId: string) => {
-    // Placeholder — game screens will be implemented in a future task
-    console.log("Mode selected:", modeId);
+    const mode = MODES.find(m => m.id === modeId);
+    if (!mode) return;
+    setSelectedMode({
+      id:    mode.id,
+      neon:  mode.neon,
+      label: t[modeId as keyof typeof t] as string,
+    });
   };
 
   return (
@@ -714,6 +723,22 @@ export function GameModeScreen({ lang, onBack }: GameModeScreenProps) {
           <div className="h-4"/>
         </motion.div>
       </div>
+
+      {/* ── Game Config Overlay ── */}
+      <AnimatePresence>
+        {selectedMode && (
+          <GameConfigOverlay
+            key="config-overlay"
+            mode={selectedMode}
+            lang={lang}
+            onClose={() => setSelectedMode(null)}
+            onStart={(config: GameConfig) => {
+              console.log("Game config selected:", config);
+              setSelectedMode(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
