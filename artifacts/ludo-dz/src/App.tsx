@@ -7,19 +7,27 @@ import { SplashScreen } from '@/components/SplashScreen';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { GameModeScreen } from '@/components/GameModeScreen';
 import { SettingsScreen } from '@/components/SettingsScreen';
+import { GameBoardScreen } from '@/components/GameBoardScreen';
 import { AnimatePresence } from 'framer-motion';
+import type { GameConfig } from '@/components/GameConfigOverlay';
 
-type Screen = 'welcome' | 'mode-select' | 'settings';
+type Screen = 'welcome' | 'mode-select' | 'settings' | 'game';
 
 function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
-  const [screen, setScreen] = useState<Screen>('welcome');
-  const [lang, setLang] = useState<'fr' | 'ar'>('fr');
+  const [screen, setScreen]         = useState<Screen>('welcome');
+  const [lang, setLang]             = useState<'fr' | 'ar'>('fr');
+  const [gameConfig, setGameConfig] = useState<GameConfig | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2500);
     return () => clearTimeout(timer);
   }, []);
+
+  const handleStartGame = (config: GameConfig) => {
+    setGameConfig(config);
+    setScreen('game');
+  };
 
   return (
     <div
@@ -42,15 +50,23 @@ function AppContent() {
               key="mode-select"
               lang={lang}
               onBack={() => setScreen('welcome')}
+              onStart={handleStartGame}
             />
-          ) : (
+          ) : screen === 'settings' ? (
             <SettingsScreen
               key="settings"
               lang={lang}
               setLang={setLang}
               onBack={() => setScreen('welcome')}
             />
-          )}
+          ) : screen === 'game' && gameConfig ? (
+            <GameBoardScreen
+              key="game"
+              config={gameConfig}
+              lang={lang}
+              onBack={() => setScreen('mode-select')}
+            />
+          ) : null}
         </AnimatePresence>
       </div>
     </div>

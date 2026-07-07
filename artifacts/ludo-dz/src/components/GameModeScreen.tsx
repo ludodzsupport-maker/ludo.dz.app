@@ -7,6 +7,7 @@ import { GameConfigOverlay, type SelectedMode, type GameConfig } from "./GameCon
 interface GameModeScreenProps {
   lang: 'fr' | 'ar';
   onBack: () => void;
+  onStart: (config: GameConfig) => void;
 }
 
 // ─── Translations ─────────────────────────────────────────────────────────────
@@ -587,7 +588,7 @@ function GridCard({ mode, t, onClick }: {
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export function GameModeScreen({ lang, onBack }: GameModeScreenProps) {
+export function GameModeScreen({ lang, onBack, onStart }: GameModeScreenProps) {
   const t = TRANSLATIONS[lang];
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
 
@@ -733,8 +734,8 @@ export function GameModeScreen({ lang, onBack }: GameModeScreenProps) {
             lang={lang}
             onClose={() => setSelectedMode(null)}
             onStart={(config: GameConfig) => {
-              console.log("Game config selected:", config);
               setSelectedMode(null);
+              onStart(config);
             }}
           />
         )}

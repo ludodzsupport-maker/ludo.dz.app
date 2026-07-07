@@ -1,0 +1,231 @@
+// ─── Ludo Engine ─────────────────────────────────────────────────────────────
+// Pure game logic: state, moves, AI. No React/DOM dependencies.
+
+export const TRACK_SIZE    = 52;
+export const HOME_COL_SIZE = 6;
+export const FINISHED_POS  = TRACK_SIZE + HOME_COL_SIZE; // 58
+
+// ── Board path (52 cells, clockwise from Red's start) ──────────────────────
+//    Row = grid row (0-14)   Col = grid column (0-14)
+export const MAIN_PATH: readonly [number, number][] = [
+  [6,1],[6,2],[6,3],[6,4],[6,5],             // 0–4   Red strip
+  [5,6],[4,6],[3,6],[2,6],[1,6],[0,6],       // 5–10
+  [0,7],                                      // 11  ← star
+  [0,8],[1,8],[2,8],[3,8],[4,8],[5,8],       // 12–17 Blue strip
+  [6,9],[6,10],[6,11],[6,12],[6,13],[6,14],  // 18–23
+  [7,14],                                     // 24  ← star
+  [8,14],[8,13],[8,12],[8,11],[8,10],[8,9],  // 25–30 Yellow strip
+  [9,8],[10,8],[11,8],[12,8],[13,8],[14,8],  // 31–36
+  [14,7],                                     // 37  ← star
+  [14,6],[13,6],[12,6],[11,6],[10,6],[9,6],  // 38–43 Green strip
+  [8,5],[8,4],[8,3],[8,2],[8,1],[8,0],       // 44–49
+  [7,0],                                      // 50  ← star
+  [6,0],                                      // 51
+];
+
+// ── Home columns (6 cells each, from entry toward center) ──────────────────
+export const HOME_COLS: readonly (readonly [number, number][])[] = [
+  [[7,1],[7,2],[7,3],[7,4],[7,5],[7,6]],      // Red   → right
+  [[1,7],[2,7],[3,7],[4,7],[5,7],[6,7]],      // Blue  → down
+  [[7,13],[7,12],[7,11],[7,10],[7,9],[7,8]],  // Yellow← left
+  [[13,7],[12,7],[11,7],[10,7],[9,7],[8,7]],  // Green ↑ up
+];
+
+// ── Piece spawn positions inside each corner home zone ─────────────────────
+export const HOME_BASES: readonly (readonly [number, number][])[] = [
+  [[10,1],[10,3],[12,1],[12,3]],     // Red
+  [[1,1],[1,3],[3,1],[3,3]],         // Blue
+  [[1,10],[1,12],[3,10],[3,12]],     // Yellow
+  [[10,10],[10,12],[12,10],[12,12]], // Green
+];
+
+// ── Player starts (absolute track index) ───────────────────────────────────
+export const PLAYER_STARTS = [0, 13, 26, 39] as const;
+
+// ── Safe squares (absolute track index) ───────────────────────────────────
+export const SAFE_SET = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
+
+// ── Visual constants ───────────────────────────────────────────────────────
+export const PLAYER_COLORS  = ['#DC143C','#1E90FF','#FFD700','#00C060'] as const;
+export const PLAYER_NEONS   = ['#FF3366','#4DBBFF','#FFE040','#00FF88'] as const;
+export const PLAYER_NAMES_FR = ['Rouge','Bleu','Jaune','Vert']          as const;
+export const PLAYER_NAMES_AR = ['أحمر','أزرق','أصفر','أخضر']           as const;
+
+// ── Types ──────────────────────────────────────────────────────────────────
+export interface Piece {
+  player: number;
+  index:  number;
+  relPos: number; // -1=home base, 0-51=track, 52-57=home col, 58=finished
+}
+
+export interface GameState {
+  pieces:          Piece[];
+  activePlayer:    number;
+  numPlayers:      number;
+  dice:            number;
+  diceRolled:      boolean;
+  winner:          number | null;
+  phase:           'rolling' | 'selecting' | 'done';
+  movable:         string[];
+  consecutiveSixes: number;
+  lastCapture:     boolean;
+  message:         string;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+export function pieceId(player: number, index: number): string {
+  return `${player}:${index}`;
+}
+
+export function getGridPos(player: number, relPos: number): [number, number] | null {
+  if (relPos < 0) return null;
+  if (relPos < TRACK_SIZE) {
+    const abs = (PLAYER_STARTS[player] + relPos) % TRACK_SIZE;
+    return MAIN_PATH[abs] as [number, number];
+  }
+  if (relPos < FINISHED_POS) {
+    return HOME_COLS[player][relPos - TRACK_SIZE] as [number, number];
+  }
+  return null; // finished → center
+}
+
+function calcMovable(pieces: Piece[], player: number, dice: number): string[] {
+  return pieces
+    .filter(p => p.player === player && p.relPos !== FINISHED_POS)
+    .filter(p => p.relPos === -1 ? dice === 6 : p.relPos + dice <= FINISHED_POS)
+    .map(p => pieceId(p.player, p.index));
+}
+
+function nextPlayer(pieces: Piece[], current: number, total: number): number {
+  for (let i = 1; i < total; i++) {
+    const next = (current + i) % total;
+    if (!pieces.filter(p => p.player === next).every(p => p.relPos === FINISHED_POS)) {
+      return next;
+    }
+  }
+  return current;
+}
+
+// ── Game lifecycle ─────────────────────────────────────────────────────────
+export function createGame(numPlayers: number): GameState {
+  const pieces: Piece[] = [];
+  for (let p = 0; p < numPlayers; p++) {
+    for (let i = 0; i < 4; i++) pieces.push({ player: p, index: i, relPos: -1 });
+  }
+  return {
+    pieces, activePlayer: 0, numPlayers,
+    dice: 0, diceRolled: false, winner: null,
+    phase: 'rolling', movable: [],
+    consecutiveSixes: 0, lastCapture: false, message: '',
+  };
+}
+
+export function doRoll(state: GameState): GameState {
+  if (state.diceRolled || state.phase !== 'rolling') return state;
+  const dice    = Math.floor(Math.random() * 6) + 1;
+  const movable = calcMovable(state.pieces, state.activePlayer, dice);
+  const sixs    = dice === 6 ? state.consecutiveSixes + 1 : 0;
+  const message = movable.length === 0 ? 'Aucun mouvement possible' : '';
+  return { ...state, dice, diceRolled: true, movable, phase: 'selecting', consecutiveSixes: sixs, message };
+}
+
+export function doMove(state: GameState, pid: string): GameState {
+  const [ps, is] = pid.split(':').map(Number);
+  let pieces = state.pieces.map(p => ({ ...p }));
+  const piece  = pieces.find(p => p.player === ps && p.index === is)!;
+
+  // Move piece
+  if (piece.relPos === -1) {
+    piece.relPos = 0;
+  } else {
+    piece.relPos = Math.min(piece.relPos + state.dice, FINISHED_POS);
+  }
+
+  // Capture check (main track only, non-safe squares)
+  let captured = false;
+  if (piece.relPos >= 1 && piece.relPos < TRACK_SIZE) {
+    const abs = (PLAYER_STARTS[ps] + piece.relPos) % TRACK_SIZE;
+    if (!SAFE_SET.has(abs)) {
+      const [pr, pc] = MAIN_PATH[abs];
+      pieces = pieces.map(op => {
+        if (op.player === ps || op.relPos < 0 || op.relPos >= TRACK_SIZE) return op;
+        const oAbs = (PLAYER_STARTS[op.player] + op.relPos) % TRACK_SIZE;
+        const [or, oc] = MAIN_PATH[oAbs];
+        if (or === pr && oc === pc) { captured = true; return { ...op, relPos: -1 }; }
+        return op;
+      });
+    }
+  }
+
+  // Win check
+  const won = pieces.filter(p => p.player === ps).every(p => p.relPos === FINISHED_POS);
+  if (won) {
+    return { ...state, pieces, winner: ps, phase: 'done', movable: [], diceRolled: false, lastCapture: false, message: '' };
+  }
+
+  // Extra-turn logic: roll 6 or capture (but forfeit after 3 consecutive 6s)
+  const forfeit    = state.dice === 6 && state.consecutiveSixes >= 3;
+  const extraTurn  = (state.dice === 6 || captured) && !forfeit;
+  const message    = captured ? '🎯 Capturé !' : forfeit ? '3 fois 6 — tour forfait' : '';
+
+  if (!extraTurn) {
+    return {
+      ...state, pieces,
+      activePlayer: nextPlayer(pieces, state.activePlayer, state.numPlayers),
+      dice: 0, diceRolled: false, movable: [], phase: 'rolling',
+      consecutiveSixes: 0, lastCapture: captured, message,
+    };
+  }
+  return {
+    ...state, pieces,
+    dice: 0, diceRolled: false, movable: [], phase: 'rolling',
+    lastCapture: captured, message,
+  };
+}
+
+export function autoPassTurn(state: GameState): GameState {
+  return {
+    ...state,
+    activePlayer: nextPlayer(state.pieces, state.activePlayer, state.numPlayers),
+    dice: 0, diceRolled: false, movable: [], phase: 'rolling',
+    consecutiveSixes: 0, lastCapture: false, message: '',
+  };
+}
+
+// ── Simple AI ──────────────────────────────────────────────────────────────
+export function aiPickMove(state: GameState): string | null {
+  if (!state.movable.length) return null;
+  const { pieces, activePlayer: ap, dice } = state;
+
+  const scored = state.movable.map(pid => {
+    const [ps, is] = pid.split(':').map(Number);
+    const p = pieces.find(q => q.player === ps && q.index === is)!;
+    const newRel = p.relPos === -1 ? 0 : p.relPos + dice;
+    let score = newRel;
+
+    if (newRel === FINISHED_POS) score += 250;
+    if (p.relPos === -1)         score += 45;
+    if (newRel >= 52)            score += 60; // in home col — valuable
+
+    // Bonus for capture
+    if (newRel >= 1 && newRel < TRACK_SIZE) {
+      const abs = (PLAYER_STARTS[ap] + newRel) % TRACK_SIZE;
+      if (!SAFE_SET.has(abs)) {
+        const [r, c] = MAIN_PATH[abs];
+        const captures = pieces.some(op => {
+          if (op.player === ap || op.relPos < 0 || op.relPos >= TRACK_SIZE) return false;
+          const oAbs = (PLAYER_STARTS[op.player] + op.relPos) % TRACK_SIZE;
+          return MAIN_PATH[oAbs][0] === r && MAIN_PATH[oAbs][1] === c;
+        });
+        if (captures) score += 150;
+      }
+    }
+
+    // Small random jitter so AI isn't deterministic
+    score += Math.random() * 5;
+    return { pid, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0].pid;
+}
