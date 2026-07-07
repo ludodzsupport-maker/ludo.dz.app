@@ -116,11 +116,38 @@ export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
         </motion.div>
       </div>
 
-      {/* Corner Decorative Pieces (RTL-aware, gently bobbing) */}
-      <motion.div className="absolute top-6 start-6 w-12 h-12" animate={{ y: [0, -5, 0] }} transition={{ duration: 4, repeat: Infinity, delay: 0 }}><GamePiece color="#DC143C" /></motion.div>
-      <motion.div className="absolute top-6 end-6 w-12 h-12" animate={{ y: [0, -5, 0] }} transition={{ duration: 4, repeat: Infinity, delay: 1 }}><GamePiece color="#006233" /></motion.div>
-      <motion.div className="absolute bottom-20 start-6 w-12 h-12" animate={{ y: [0, -5, 0] }} transition={{ duration: 4, repeat: Infinity, delay: 2 }}><GamePiece color="#1E90FF" /></motion.div>
-      <motion.div className="absolute bottom-20 end-6 w-12 h-12" animate={{ y: [0, -5, 0] }} transition={{ duration: 4, repeat: Infinity, delay: 3 }}><GamePiece color="#FFD700" /></motion.div>
+      {/* Premium Corner Accents — HUD bracket markers with particle scatter */}
+      {([
+        { cls: "absolute top-6 start-6",     color: "#DC143C", flip: "none",          delay: 0.0 },
+        { cls: "absolute top-6 end-6",        color: "#006233", flip: "scaleX(-1)",    delay: 0.9 },
+        { cls: "absolute bottom-20 start-6",  color: "#1E90FF", flip: "scaleY(-1)",    delay: 1.7 },
+        { cls: "absolute bottom-20 end-6",    color: "#FFD700", flip: "scale(-1, -1)", delay: 2.6 },
+      ] as const).map(({ cls, color, flip, delay }, i) => (
+        <motion.div
+          key={i}
+          className={cls}
+          style={{ pointerEvents: "none" }}
+          animate={{ opacity: [0.42, 0.88, 0.42] }}
+          transition={{ duration: 3.6 + i * 0.25, repeat: Infinity, delay, ease: "easeInOut" }}
+        >
+          <svg
+            width="46" height="46" viewBox="0 0 46 46" fill="none"
+            style={{ display: "block", transform: flip, filter: `drop-shadow(0 0 7px ${color}99)` }}
+          >
+            {/* L-bracket arms */}
+            <line x1="6" y1="6" x2="36" y2="6" stroke={color} strokeWidth="1.8" strokeLinecap="round" opacity="0.90" />
+            <line x1="6" y1="6" x2="6" y2="36" stroke={color} strokeWidth="1.8" strokeLinecap="round" opacity="0.90" />
+            {/* Subtle diagonal depth line */}
+            <line x1="6" y1="6" x2="22" y2="22" stroke={color} strokeWidth="0.7" strokeDasharray="2 3" opacity="0.22" />
+            {/* Apex glow dot */}
+            <circle cx="6" cy="6" r="3" fill={color} />
+            {/* Micro-particles */}
+            <circle cx="21" cy="12" r="1.5" fill={color} opacity="0.55" />
+            <circle cx="13" cy="23" r="1.1" fill={color} opacity="0.38" />
+            <circle cx="30" cy="19" r="0.9" fill={color} opacity="0.25" />
+          </svg>
+        </motion.div>
+      ))}
 
       {/* Main Content Area */}
       <div className="relative z-20 flex flex-col items-center justify-between h-full w-full py-8 px-6 overflow-y-auto">
