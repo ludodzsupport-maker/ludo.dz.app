@@ -11,7 +11,8 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
   const logoPath = import.meta.env.BASE_URL + 'ludo-logo.png';
-  const clipId = useId();
+  const clipId = useId();   // hijab clipPath
+  const pfxId  = useId();   // prefix for all filter/gradient IDs on the pawn
   
   const t = {
     play: lang === 'fr' ? 'Jouer' : 'العب',
@@ -131,7 +132,7 @@ export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
           {/* ── Horizontal row — gap and side SVG sizes use clamp() for narrow-screen safety ── */}
           <div className="flex items-end justify-center mb-4" style={{ gap: "clamp(6px, 3vw, 12px)" }}>
 
-            {/* LEFT — Female Algerian pawn */}
+            {/* LEFT — Female Algerian pawn (3D premium) */}
             <motion.div
               className="flex-shrink-0"
               animate={{ y: [0, -7, 0] }}
@@ -139,45 +140,134 @@ export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
               style={{ width: "clamp(48px, 14vw, 62px)", height: "clamp(72px, 21vw, 93px)" }}
             >
               <svg
-                width="100%" height="100%" viewBox="0 0 100 150"
+                width="100%" height="100%" viewBox="0 0 100 155"
                 fill="none" xmlns="http://www.w3.org/2000/svg"
-                style={{ filter: "drop-shadow(0 6px 16px rgba(0,0,0,0.5))" }}
               >
                 <defs>
+                  {/* Hijab clip */}
                   <clipPath id={clipId}>
                     <circle cx="50" cy="40" r="27"/>
                   </clipPath>
+
+                  {/* Soft blur for cast shadow */}
+                  <filter id={`${pfxId}-shad`} x="-40%" y="-40%" width="180%" height="180%">
+                    <feGaussianBlur stdDeviation="4"/>
+                  </filter>
+
+                  {/* Neon outline glow — double-blur trick for brightness */}
+                  <filter id={`${pfxId}-neon`} x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="b"/>
+                    <feMerge>
+                      <feMergeNode in="b"/>
+                      <feMergeNode in="b"/>
+                    </feMerge>
+                  </filter>
+
+                  {/* Star glow — blur behind + source on top */}
+                  <filter id={`${pfxId}-sf`} x="-60%" y="-60%" width="220%" height="220%">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b"/>
+                    <feMerge>
+                      <feMergeNode in="b"/>
+                      <feMergeNode in="b"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+
+                  {/* Body — radial gradient, top-left light source */}
+                  <radialGradient id={`${pfxId}-bod`} cx="33%" cy="22%" r="75%">
+                    <stop offset="0%"   stopColor="#6EE89A"/>
+                    <stop offset="42%"  stopColor="#00A550"/>
+                    <stop offset="100%" stopColor="#003318"/>
+                  </radialGradient>
+
+                  {/* Head — radial gradient, same light direction */}
+                  <radialGradient id={`${pfxId}-hd`} cx="38%" cy="30%" r="68%">
+                    <stop offset="0%"   stopColor="#7AEEAA"/>
+                    <stop offset="45%"  stopColor="#00A550"/>
+                    <stop offset="100%" stopColor="#002e14"/>
+                  </radialGradient>
+
+                  {/* Star — gold radial, bright core to antique edge */}
+                  <radialGradient id={`${pfxId}-sg`} cx="38%" cy="28%" r="68%">
+                    <stop offset="0%"   stopColor="#FFFDE0"/>
+                    <stop offset="35%"  stopColor="#FFD700"/>
+                    <stop offset="100%" stopColor="#9A6200"/>
+                  </radialGradient>
                 </defs>
 
-                {/* Body + head — same path as GamePiece */}
-                <g stroke="rgba(0,0,0,0.35)" strokeWidth="4" strokeLinejoin="round">
+                {/* ── Soft ground shadow ellipse ── */}
+                <ellipse cx="50" cy="151" rx="34" ry="5.5"
+                  fill="#000" opacity="0.45" filter={`url(#${pfxId}-shad)`}/>
+                <ellipse cx="50" cy="150" rx="22" ry="3"
+                  fill="#000" opacity="0.25"/>
+
+                {/* ── Directional cast shadow (body silhouette blurred) ── */}
+                <path
+                  d="M 25 130 Q 30 100 40 70 Q 40 50 50 40 Q 60 50 60 70 Q 70 100 75 130 Q 90 130 90 145 L 10 145 Q 10 130 25 130 Z"
+                  fill="#000" opacity="0.32"
+                  filter={`url(#${pfxId}-shad)`} transform="translate(5,7)"/>
+                <circle cx="55" cy="47" r="28"
+                  fill="#000" opacity="0.28"
+                  filter={`url(#${pfxId}-shad)`}/>
+
+                {/* ── Neon green pulsing outline (behind fill) ── */}
+                <motion.g
+                  animate={{ opacity: [0.45, 0.95, 0.45] }}
+                  transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                >
                   <path
                     d="M 25 130 Q 30 100 40 70 Q 40 50 50 40 Q 60 50 60 70 Q 70 100 75 130 Q 90 130 90 145 L 10 145 Q 10 130 25 130 Z"
-                    fill="#00A550"
-                  />
-                  <circle cx="50" cy="40" r="28" fill="#00A550"/>
+                    fill="none" stroke="#39FF14" strokeWidth="8" strokeLinejoin="round"
+                    filter={`url(#${pfxId}-neon)`}/>
+                  <circle cx="50" cy="40" r="32"
+                    fill="none" stroke="#39FF14" strokeWidth="8"
+                    filter={`url(#${pfxId}-neon)`}/>
+                </motion.g>
+
+                {/* ── Body + head with 3D gradient fill ── */}
+                <g stroke="rgba(0,0,0,0.20)" strokeWidth="2.5" strokeLinejoin="round">
+                  <path
+                    d="M 25 130 Q 30 100 40 70 Q 40 50 50 40 Q 60 50 60 70 Q 70 100 75 130 Q 90 130 90 145 L 10 145 Q 10 130 25 130 Z"
+                    fill={`url(#${pfxId}-bod)`}/>
+                  <circle cx="50" cy="40" r="28" fill={`url(#${pfxId}-hd)`}/>
                 </g>
 
-                {/* Body highlights — matching GamePiece gloss style */}
-                <path d="M 25 130 C 35 125, 65 125, 75 130" stroke="white" strokeWidth="4" fill="none" strokeLinecap="round" opacity="0.4"/>
-                <path d="M 15 140 L 85 140"               stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.3"/>
-                <path d="M 38 70 Q 40 50 48 43"           stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.4"/>
+                {/* ── Body specular sheen streaks ── */}
+                {/* Primary lit-side streak */}
+                <path d="M 33 72 Q 31 93 30 118"
+                  stroke="white" strokeWidth="5" fill="none" strokeLinecap="round" opacity="0.20"/>
+                {/* Neck highlight */}
+                <path d="M 38 70 Q 40 50 48 43"
+                  stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.42"/>
+                {/* Base rim */}
+                <path d="M 25 130 C 35 125, 65 125, 75 130"
+                  stroke="white" strokeWidth="4" fill="none" strokeLinecap="round" opacity="0.38"/>
+                <path d="M 15 140 L 85 140"
+                  stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.26"/>
+                {/* Opposing rim light — right edge (3D depth) */}
+                <path d="M 72 76 Q 76 96 74 122"
+                  stroke="#6EE89A" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.32"/>
 
-                {/* Hijab — white arc over top of head (Algerian cultural touch) */}
+                {/* ── Head specular highlights ── */}
+                {/* Large primary gloss ellipse */}
+                <ellipse cx="40" cy="29" rx="10" ry="7"
+                  fill="white" opacity="0.42" transform="rotate(-18 40 29)"/>
+                {/* Tight bright hot-spot */}
+                <circle cx="37" cy="25" r="3.5" fill="white" opacity="0.32"/>
+                {/* Right-edge rim light on head */}
+                <path d="M 73 33 Q 77 41 75 53"
+                  stroke="#6EE89A" strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.26"/>
+
+                {/* ── Hijab — white arc (Algerian cultural touch) ── */}
                 <path
                   d="M 23 42 Q 50 7 77 42 Q 68 22 50 17 Q 32 22 23 42Z"
-                  fill="white" opacity="0.90" clipPath={`url(#${clipId})`}
-                />
+                  fill="white" opacity="0.90" clipPath={`url(#${clipId})`}/>
                 <path
                   d="M 27 35 Q 50 16 73 35"
-                  stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.45"
-                  clipPath={`url(#${clipId})`}
-                />
+                  stroke="white" strokeWidth="2" fill="none" strokeLinecap="round"
+                  opacity="0.45" clipPath={`url(#${clipId})`}/>
 
-                {/* Head gloss (GamePiece-style highlight) */}
-                <circle cx="42" cy="32" r="7" fill="white" opacity="0.42"/>
-
-                {/* Eyes */}
+                {/* ── Eyes ── */}
                 <ellipse cx="38" cy="45" rx="5.5" ry="6.5" fill="white"/>
                 <ellipse cx="62" cy="45" rx="5.5" ry="6.5" fill="white"/>
                 <circle cx="39"   cy="46"   r="3.8" fill="#1a1a2e"/>
@@ -185,24 +275,47 @@ export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
                 <circle cx="40.5" cy="44.5" r="1.5" fill="white"/>
                 <circle cx="64.5" cy="44.5" r="1.5" fill="white"/>
 
-                {/* Eyelashes */}
-                <line x1="33" y1="39" x2="30" y2="34" stroke="#1a1a2e" strokeWidth="2"   strokeLinecap="round"/>
-                <line x1="37" y1="38" x2="36" y2="33" stroke="#1a1a2e" strokeWidth="1.5" strokeLinecap="round"/>
-                <line x1="67" y1="39" x2="70" y2="34" stroke="#1a1a2e" strokeWidth="2"   strokeLinecap="round"/>
-                <line x1="63" y1="38" x2="64" y2="33" stroke="#1a1a2e" strokeWidth="1.5" strokeLinecap="round"/>
+                {/* ── Eyelashes ── */}
+                <line x1="33" y1="39" x2="30" y2="34"
+                  stroke="#1a1a2e" strokeWidth="2"   strokeLinecap="round"/>
+                <line x1="37" y1="38" x2="36" y2="33"
+                  stroke="#1a1a2e" strokeWidth="1.5" strokeLinecap="round"/>
+                <line x1="67" y1="39" x2="70" y2="34"
+                  stroke="#1a1a2e" strokeWidth="2"   strokeLinecap="round"/>
+                <line x1="63" y1="38" x2="64" y2="33"
+                  stroke="#1a1a2e" strokeWidth="1.5" strokeLinecap="round"/>
 
-                {/* Smile */}
-                <path d="M 40 55 Q 50 63 60 55" stroke="#1a1a2e" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+                {/* ── Smile ── */}
+                <path d="M 40 55 Q 50 63 60 55"
+                  stroke="#1a1a2e" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
 
-                {/* Gold 5-pointed star on body — Algerian emblem */}
-                <polygon
-                  points="50,71 52.35,76.76 58.56,77.22 53.80,81.24 55.29,87.28 50,84 44.71,87.28 46.20,81.24 41.44,77.22 47.65,76.76"
-                  fill="#FFD700" stroke="#cc9900" strokeWidth="1.5"
-                />
-                <polygon
-                  points="50,71 52.35,76.76 58.56,77.22 53.80,81.24 55.29,87.28 50,84 44.71,87.28 46.20,81.24 41.44,77.22 47.65,76.76"
-                  fill="white" opacity="0.28"
-                />
+                {/* ── Gold star emblem — glowing medallion ── */}
+                <motion.g
+                  animate={{ opacity: [0.80, 1, 0.80] }}
+                  transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}
+                >
+                  {/* Dark medallion backing for contrast */}
+                  <circle cx="50" cy="79" r="12"   fill="#001408" opacity="0.80"/>
+                  <circle cx="50" cy="79" r="10.5" fill="#002210" opacity="0.55"/>
+
+                  {/* Outer glow bloom */}
+                  <polygon
+                    points="50,70 52.35,75.76 58.56,76.22 53.80,80.24 55.29,86.28 50,83 44.71,86.28 46.20,80.24 41.44,76.22 47.65,75.76"
+                    fill="#FFD700" filter={`url(#${pfxId}-sf)`} opacity="0.70"/>
+
+                  {/* Star main fill — gold radial gradient */}
+                  <polygon
+                    points="50,70 52.35,75.76 58.56,76.22 53.80,80.24 55.29,86.28 50,83 44.71,86.28 46.20,80.24 41.44,76.22 47.65,75.76"
+                    fill={`url(#${pfxId}-sg)`} stroke="#8A5C00" strokeWidth="0.7"/>
+
+                  {/* Star specular — smaller, white, offset toward light source */}
+                  <polygon
+                    points="50,71.8 51.6,76.2 56.0,76.5 52.9,78.9 54.0,83.0 50,80.4 46.0,83.0 47.1,78.9 44.0,76.5 48.4,76.2"
+                    fill="white" opacity="0.30"/>
+
+                  {/* Star hot-spot center */}
+                  <circle cx="50" cy="78.5" r="1.8" fill="white" opacity="0.88"/>
+                </motion.g>
               </svg>
             </motion.div>
 
