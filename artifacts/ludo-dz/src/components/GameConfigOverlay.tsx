@@ -9,7 +9,7 @@ export interface SelectedMode {
   label: string;
 }
 
-export type Rule = "classic" | "quick" | "master";
+export type Rule = "classic" | "quick" | "teamup";
 
 export interface GameConfig {
   rule:    Rule;
@@ -31,24 +31,24 @@ const T = {
     rules:       "Règles du jeu",
     players:     "Joueurs",
     start:       "Commencer",
-    classic:     "Classique",
-    classicSub:  "4 pions — règles complètes",
-    quick:       "Rapide",
-    quickSub:    "2 pions — partie courte",
-    master:      "Maître",
-    masterSub:   "Pouvoirs & défis avancés",
+    classic:    "Classique",
+    classicSub: "4 pions — règles complètes",
+    quick:      "Rapide",
+    quickSub:   "2 pions — partie courte",
+    teamup:     "Équipe",
+    teamupSub:  "2 vs 2 — en alliance",
   },
   ar: {
     configTitle: "الإعداد",
     rules:       "قواعد اللعبة",
     players:     "اللاعبون",
     start:       "ابدأ اللعبة",
-    classic:     "كلاسيكي",
-    classicSub:  "٤ قطع — القواعد الكاملة",
-    quick:       "سريع",
-    quickSub:    "قطعتان — جولة قصيرة",
-    master:      "ماستر",
-    masterSub:   "قدرات خاصة وتحديات",
+    classic:    "كلاسيكي",
+    classicSub: "٤ قطع — القواعد الكاملة",
+    quick:      "سريع",
+    quickSub:   "قطعتان — جولة قصيرة",
+    teamup:     "فريق",
+    teamupSub:  "٢ ضد ٢ بالتحالف",
   },
 } as const;
 
@@ -56,7 +56,7 @@ const T = {
 const RULES: Array<{ id: Rule; neon: string; cardBg: string }> = [
   { id: "classic", neon: "#1E90FF", cardBg: "linear-gradient(145deg,#040d22 0%,#071a45 100%)" },
   { id: "quick",   neon: "#FFD700", cardBg: "linear-gradient(145deg,#1a1200 0%,#352400 100%)" },
-  { id: "master",  neon: "#B44FFF", cardBg: "linear-gradient(145deg,#0e0025 0%,#200048 100%)" },
+  { id: "teamup",  neon: "#FF2855", cardBg: "linear-gradient(145deg,#180008 0%,#32000f 100%)" },
 ];
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
@@ -141,42 +141,41 @@ function QuickIcon({ neon }: { neon: string }) {
   );
 }
 
-/** Master — Crown with gem peaks and a centre diamond */
-function MasterIcon({ neon }: { neon: string }) {
+/** Team Up — Two pawns side-by-side with alliance arc and VS badge (2v2) */
+function TeamUpIcon({ neon }: { neon: string }) {
   return (
     <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
       <defs>
-        <filter id="mi-f" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b"/>
+        <filter id="tu-f" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="b"/>
           <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
-        <radialGradient id="mi-g" cx="33%" cy="22%" r="72%">
-          <stop offset="0%"   stopColor="#ddb8ff"/>
-          <stop offset="55%"  stopColor={neon}/>
-          <stop offset="100%" stopColor="#160030"/>
+        <radialGradient id="tu-g" cx="33%" cy="22%" r="70%">
+          <stop offset="0%"   stopColor="#ffaabb"/>
+          <stop offset="50%"  stopColor={neon}/>
+          <stop offset="100%" stopColor="#3a0008"/>
         </radialGradient>
       </defs>
-      {/* Crown body */}
-      <path
-        d="M7 41 L7 22 L18 33 L28 9 L38 33 L49 22 L49 41 Z"
-        fill="url(#mi-g)"
-        stroke={neon} strokeWidth="1.8" strokeLinejoin="round"
-        filter="url(#mi-f)"
-      />
-      {/* Crown band */}
-      <rect x="7" y="39" width="42" height="8" rx="2.5"
-        fill={neon} opacity="0.50" filter="url(#mi-f)"/>
-      {/* Gems on peaks */}
-      <circle cx="28" cy="10" r="3.8" fill="white" opacity="0.82" filter="url(#mi-f)"/>
-      <circle cx="7"  cy="23" r="2.8" fill={neon}  opacity="0.90" filter="url(#mi-f)"/>
-      <circle cx="49" cy="23" r="2.8" fill={neon}  opacity="0.90" filter="url(#mi-f)"/>
-      {/* Centre diamond */}
-      <polygon points="28,28 32,34 28,40 24,34" fill="white" opacity="0.60" filter="url(#mi-f)"/>
-      {/* Side pearls */}
-      <circle cx="16" cy="37" r="2.2" fill="white" opacity="0.50"/>
-      <circle cx="40" cy="37" r="2.2" fill="white" opacity="0.50"/>
-      {/* Specular arc */}
-      <path d="M11 26 Q18 18 28 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.28"/>
+      {/* Left pawn */}
+      <g transform="translate(-1,4) scale(0.66)">
+        <path d="M14 54 Q17 44 20 36 Q20 29 24 25 Q28 29 28 36 Q31 44 34 54 Q39 54 39 60 L9 60 Q9 54 14 54 Z"
+          fill="url(#tu-g)" stroke={neon} strokeWidth="1.5" strokeLinejoin="round" filter="url(#tu-f)"/>
+        <circle cx="24" cy="25" r="12" fill="url(#tu-g)" stroke={neon} strokeWidth="1.5" filter="url(#tu-f)"/>
+        <ellipse cx="19" cy="19" rx="4.5" ry="3" fill="white" opacity="0.38" transform="rotate(-15 19 19)"/>
+      </g>
+      {/* Right pawn */}
+      <g transform="translate(23,4) scale(0.66)">
+        <path d="M14 54 Q17 44 20 36 Q20 29 24 25 Q28 29 28 36 Q31 44 34 54 Q39 54 39 60 L9 60 Q9 54 14 54 Z"
+          fill="url(#tu-g)" stroke={neon} strokeWidth="1.5" strokeLinejoin="round" filter="url(#tu-f)"/>
+        <circle cx="24" cy="25" r="12" fill="url(#tu-g)" stroke={neon} strokeWidth="1.5" filter="url(#tu-f)"/>
+        <ellipse cx="19" cy="19" rx="4.5" ry="3" fill="white" opacity="0.38" transform="rotate(-15 19 19)"/>
+      </g>
+      {/* Alliance arc across both pawns */}
+      <path d="M8 8 Q28 1 48 8" stroke={neon} strokeWidth="2.4" fill="none" strokeLinecap="round" filter="url(#tu-f)"/>
+      {/* VS badge centred between the two pawns */}
+      <circle cx="28" cy="37" r="8" fill="#200005" stroke={neon} strokeWidth="1.6" filter="url(#tu-f)"/>
+      <text x="28" y="41" textAnchor="middle" fontSize="9" fontWeight="bold"
+        fill="white" fontFamily="Arial,sans-serif" letterSpacing="0.5">VS</text>
     </svg>
   );
 }
@@ -223,13 +222,13 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
   const dir = lang === "ar" ? "rtl" : "ltr";
 
   const ruleLabel = (r: Rule) =>
-    r === "classic" ? t.classic : r === "quick" ? t.quick : t.master;
+    r === "classic" ? t.classic : r === "quick" ? t.quick : t.teamup;
   const ruleSub = (r: Rule) =>
-    r === "classic" ? t.classicSub : r === "quick" ? t.quickSub : t.masterSub;
+    r === "classic" ? t.classicSub : r === "quick" ? t.quickSub : t.teamupSub;
   const ruleIcon = (r: Rule, neon: string) => {
     if (r === "classic") return <ClassicIcon neon={neon}/>;
     if (r === "quick")   return <QuickIcon   neon={neon}/>;
-    return                      <MasterIcon  neon={neon}/>;
+    return                      <TeamUpIcon  neon={neon}/>;
   };
 
   return (
