@@ -372,7 +372,7 @@ const cardVariants = {
 // ─── Featured Card ─────────────────────────────────────────────────────────────
 function FeaturedCard({ mode, t, onClick }: {
   mode: ModeConfig;
-  t: (typeof TRANSLATIONS)['fr'];
+  t: typeof TRANSLATIONS[keyof typeof TRANSLATIONS];
   onClick: () => void;
 }) {
   const label    = t[`${mode.id}` as keyof typeof t] as string;
@@ -497,7 +497,7 @@ function FeaturedCard({ mode, t, onClick }: {
 // ─── Grid Card ────────────────────────────────────────────────────────────────
 function GridCard({ mode, t, onClick }: {
   mode: ModeConfig;
-  t: (typeof TRANSLATIONS)['fr'];
+  t: typeof TRANSLATIONS[keyof typeof TRANSLATIONS];
   onClick: () => void;
 }) {
   const label   = t[`${mode.id}` as keyof typeof t] as string;

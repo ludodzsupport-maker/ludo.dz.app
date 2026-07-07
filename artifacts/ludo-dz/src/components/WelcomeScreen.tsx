@@ -7,9 +7,10 @@ import { Play, Settings, Trophy, Info } from "lucide-react";
 interface WelcomeScreenProps {
   lang: 'fr' | 'ar';
   setLang: (lang: 'fr' | 'ar') => void;
+  onPlay?: () => void;
 }
 
-export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
+export function WelcomeScreen({ lang, setLang, onPlay }: WelcomeScreenProps) {
   const logoPath = import.meta.env.BASE_URL + 'ludo-logo.png';
   const clipId = useId();   // hijab clipPath
   const pfxId  = useId();   // prefix for all filter/gradient IDs on the pawn
@@ -425,6 +426,7 @@ export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
             variants={itemVariants}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
+            onClick={onPlay}
             className="group relative w-[85%] h-24 rounded-3xl bg-gradient-to-b from-[#00cc66] to-[#006233] border-b-8 border-[#00331a] shadow-[0_10px_20px_rgba(0,0,0,0.4)] flex items-center justify-center overflow-hidden"
           >
             {/* Button Shine Effect */}
