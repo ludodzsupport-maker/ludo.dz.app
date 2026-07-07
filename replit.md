@@ -4,12 +4,19 @@ A mobile-first Ludo board game app with French/Arabic language support.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080)
+Workflows (managed by Replit):
+- `artifacts/ludo-dz: web` — Vite dev server (port 21341, preview at `/`)
+- `artifacts/api-server: API Server` — Express API (port 8080, paths under `/api`)
+
+Useful commands:
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+
+Environment:
+- `DATABASE_URL` — auto-provisioned by Replit's built-in PostgreSQL (no manual setup needed)
+- `SESSION_SECRET` — stored as a Replit Secret
 
 ## Stack
 
