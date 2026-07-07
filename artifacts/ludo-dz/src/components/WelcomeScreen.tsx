@@ -116,37 +116,57 @@ export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
         </motion.div>
       </div>
 
-      {/* Premium Corner Accents — HUD bracket markers with particle scatter */}
-      {([
-        { cls: "absolute top-6 start-6",     color: "#DC143C", flip: "none",          delay: 0.0 },
-        { cls: "absolute top-6 end-6",        color: "#006233", flip: "scaleX(-1)",    delay: 0.9 },
-        { cls: "absolute bottom-20 start-6",  color: "#1E90FF", flip: "scaleY(-1)",    delay: 1.7 },
-        { cls: "absolute bottom-20 end-6",    color: "#FFD700", flip: "scale(-1, -1)", delay: 2.6 },
-      ] as const).map(({ cls, color, flip, delay }, i) => (
-        <motion.div
-          key={i}
-          className={cls}
-          style={{ pointerEvents: "none" }}
-          animate={{ opacity: [0.42, 0.88, 0.42] }}
-          transition={{ duration: 3.6 + i * 0.25, repeat: Infinity, delay, ease: "easeInOut" }}
-        >
-          <svg
-            width="46" height="46" viewBox="0 0 46 46" fill="none"
-            style={{ display: "block", transform: flip, filter: `drop-shadow(0 0 7px ${color}99)` }}
+      {/* Neon Corner Accents — physical left/right (direction-stable, never flips with RTL) */}
+      {[
+        { cls: "absolute top-6 left-6",      color: "#FF1744", flip: "none",           delay: 0.0 },
+        { cls: "absolute top-6 right-6",     color: "#00E676", flip: "scaleX(-1)",     delay: 0.8 },
+        { cls: "absolute bottom-20 left-6",  color: "#40C4FF", flip: "scaleY(-1)",     delay: 1.6 },
+        { cls: "absolute bottom-20 right-6", color: "#FFD740", flip: "scale(-1, -1)",  delay: 2.4 },
+      ].map(({ cls, color, flip, delay }, i) => (
+        <div key={i} className={`${cls} pointer-events-none`}>
+          {/* Ambient pulse blob — breathes behind the bracket */}
+          <motion.div
+            className="absolute -inset-2 rounded-full"
+            style={{ background: color, filter: "blur(14px)" }}
+            animate={{ opacity: [0.07, 0.22, 0.07], scale: [0.8, 1.5, 0.8] }}
+            transition={{ duration: 2.2, repeat: Infinity, delay, ease: "easeInOut" }}
+          />
+          {/* Neon L-bracket SVG */}
+          <motion.svg
+            width="52" height="52" viewBox="0 0 52 52" fill="none"
+            style={{
+              display: "block",
+              transform: flip,
+              filter: `drop-shadow(0 0 5px ${color}) drop-shadow(0 0 10px ${color}66)`,
+            }}
+            animate={{ opacity: [0.52, 1, 0.52] }}
+            transition={{ duration: 2.6 + i * 0.2, repeat: Infinity, delay: delay + 0.15, ease: "easeInOut" }}
           >
-            {/* L-bracket arms */}
-            <line x1="6" y1="6" x2="36" y2="6" stroke={color} strokeWidth="1.8" strokeLinecap="round" opacity="0.90" />
-            <line x1="6" y1="6" x2="6" y2="36" stroke={color} strokeWidth="1.8" strokeLinecap="round" opacity="0.90" />
-            {/* Subtle diagonal depth line */}
-            <line x1="6" y1="6" x2="22" y2="22" stroke={color} strokeWidth="0.7" strokeDasharray="2 3" opacity="0.22" />
-            {/* Apex glow dot */}
-            <circle cx="6" cy="6" r="3" fill={color} />
-            {/* Micro-particles */}
-            <circle cx="21" cy="12" r="1.5" fill={color} opacity="0.55" />
-            <circle cx="13" cy="23" r="1.1" fill={color} opacity="0.38" />
-            <circle cx="30" cy="19" r="0.9" fill={color} opacity="0.25" />
-          </svg>
-        </motion.div>
+            {/* Layer 1 — outer soft glow */}
+            <line x1="7" y1="7" x2="44" y2="7" stroke={color} strokeWidth="8"   strokeLinecap="round" opacity="0.08"/>
+            <line x1="7" y1="7" x2="7"  y2="44" stroke={color} strokeWidth="8"   strokeLinecap="round" opacity="0.08"/>
+            {/* Layer 2 — mid glow */}
+            <line x1="7" y1="7" x2="44" y2="7" stroke={color} strokeWidth="3.5" strokeLinecap="round" opacity="0.32"/>
+            <line x1="7" y1="7" x2="7"  y2="44" stroke={color} strokeWidth="3.5" strokeLinecap="round" opacity="0.32"/>
+            {/* Layer 3 — bright neon tube core */}
+            <line x1="7" y1="7" x2="44" y2="7" stroke="white" strokeWidth="1.3" strokeLinecap="round" opacity="0.88"/>
+            <line x1="7" y1="7" x2="7"  y2="44" stroke="white" strokeWidth="1.3" strokeLinecap="round" opacity="0.88"/>
+            {/* Arm-tip perpendicular ticks */}
+            <line x1="44" y1="3"  x2="44" y2="12" stroke={color} strokeWidth="3"   strokeLinecap="round" opacity="0.55"/>
+            <line x1="44" y1="3"  x2="44" y2="12" stroke="white" strokeWidth="1.1" strokeLinecap="round" opacity="0.78"/>
+            <line x1="3"  y1="44" x2="12" y2="44" stroke={color} strokeWidth="3"   strokeLinecap="round" opacity="0.55"/>
+            <line x1="3"  y1="44" x2="12" y2="44" stroke="white" strokeWidth="1.1" strokeLinecap="round" opacity="0.78"/>
+            {/* Apex — concentric neon endpoint */}
+            <circle cx="7" cy="7" r="7"   fill={color} opacity="0.10"/>
+            <circle cx="7" cy="7" r="4.2" fill={color} opacity="0.52"/>
+            <circle cx="7" cy="7" r="2.3" fill={color} opacity="0.90"/>
+            <circle cx="7" cy="7" r="1.1" fill="white"  opacity="1.00"/>
+            {/* Interior micro-particles */}
+            <circle cx="22" cy="13" r="1.5" fill={color} opacity="0.50"/>
+            <circle cx="13" cy="26" r="1.1" fill={color} opacity="0.35"/>
+            <circle cx="34" cy="21" r="0.9" fill={color} opacity="0.22"/>
+          </motion.svg>
+        </div>
       ))}
 
       {/* Main Content Area */}
