@@ -5,10 +5,14 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { SplashScreen } from '@/components/SplashScreen';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
+import { GameModeScreen } from '@/components/GameModeScreen';
 import { AnimatePresence } from 'framer-motion';
+
+type Screen = 'welcome' | 'mode-select';
 
 function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
+  const [screen, setScreen] = useState<Screen>('welcome');
   const [lang, setLang] = useState<'fr' | 'ar'>('fr');
 
   useEffect(() => {
@@ -28,8 +32,19 @@ function AppContent() {
         <AnimatePresence mode="wait">
           {showSplash ? (
             <SplashScreen key="splash" lang={lang} />
+          ) : screen === 'welcome' ? (
+            <WelcomeScreen
+              key="welcome"
+              lang={lang}
+              setLang={setLang}
+              onPlay={() => setScreen('mode-select')}
+            />
           ) : (
-            <WelcomeScreen key="welcome" lang={lang} setLang={setLang} />
+            <GameModeScreen
+              key="mode-select"
+              lang={lang}
+              onBack={() => setScreen('welcome')}
+            />
           )}
         </AnimatePresence>
       </div>
