@@ -150,13 +150,13 @@ export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
             <motion.div className="absolute -bottom-2 -left-4 text-white text-xl drop-shadow-md" animate={{ scale: [1, 1.3, 1], rotate: [0, -90, -180] }} transition={{ duration: 3, repeat: Infinity, delay: 1 }}>★</motion.div>
           </div>
 
-          <h1 className="text-5xl font-heading text-white tracking-wide text-center drop-shadow-title relative">
+          <h1 className="text-6xl font-heading text-white text-center drop-shadow-title relative" style={{ letterSpacing: '0.14em', fontWeight: 700 }}>
             <span className="text-shadow-gold">LUDO DZ</span>
             <span className="absolute -top-3 -right-6 text-xl text-dz-gold rotate-12">☽</span>
           </h1>
           
           <div className="mt-2 bg-black/30 px-4 py-1 rounded-full border border-white/10 backdrop-blur-md">
-            <p className="text-white/90 text-sm font-bold uppercase tracking-widest">{t.welcome}</p>
+            <p className="text-white/90 text-sm font-heading font-semibold uppercase" style={{ letterSpacing: '0.22em' }}>{t.welcome}</p>
           </div>
         </motion.div>
 
@@ -186,7 +186,7 @@ export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
 
             <div className="flex items-center gap-4 z-10">
               <Play className="w-10 h-10 text-white fill-white drop-shadow-md group-hover:scale-110 transition-transform" />
-              <span className="text-4xl font-heading text-white tracking-wider text-shadow-glow">
+              <span className="text-4xl font-heading text-white text-shadow-glow" style={{ letterSpacing: '0.12em', fontWeight: 700 }}>
                 {t.play}
               </span>
             </div>
@@ -213,7 +213,7 @@ export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
               >
                 <div className="absolute top-0 left-0 right-0 h-1/4 bg-white/20 rounded-t-2xl"></div>
                 <btn.icon className="w-7 h-7 text-white drop-shadow-md" />
-                <span className="text-xs font-bold text-white uppercase tracking-wide drop-shadow-md">{btn.label}</span>
+                <span className="text-xs font-heading font-semibold text-white uppercase drop-shadow-md" style={{ letterSpacing: '0.1em' }}>{btn.label}</span>
               </motion.button>
             ))}
           </motion.div>
@@ -226,7 +226,7 @@ export function WelcomeScreen({ lang, setLang }: WelcomeScreenProps) {
           animate={{ opacity: 0.5 }}
           transition={{ delay: 1 }}
         >
-          <p className="text-white text-xs font-mono">v1.0.0</p>
+          <p className="text-white text-xs font-heading" style={{ letterSpacing: '0.18em', fontWeight: 500 }}>v1.0.0</p>
         </motion.div>
 
       </div>

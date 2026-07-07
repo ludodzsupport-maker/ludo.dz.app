@@ -375,8 +375,9 @@ export function SplashScreen({ lang }: SplashScreenProps) {
             <motion.span
               key={i}
               style={{
-                fontFamily   : "'Fredoka One', cursive",
-                fontSize     : ch === "\u00A0" ? 22 : 70,
+                fontFamily   : "'Rajdhani', 'Cairo', sans-serif",
+                fontWeight   : 700,
+                fontSize     : ch === "\u00A0" ? 20 : 72,
                 display      : "inline-block",
                 color        : gold ? "transparent" : "white",
                 background   : gold
@@ -387,7 +388,7 @@ export function SplashScreen({ lang }: SplashScreenProps) {
                 textShadow   : gold
                   ? undefined
                   : "0 0 40px rgba(255,255,255,0.28), 2px 5px 0px rgba(0,0,0,0.55)",
-                letterSpacing: "0.03em",
+                letterSpacing: "0.14em",
                 filter       : gold
                   ? "drop-shadow(0 3px 14px rgba(255,160,0,0.88))"
                   : undefined,
@@ -413,12 +414,12 @@ export function SplashScreen({ lang }: SplashScreenProps) {
         {/* ③ Tagline */}
         <motion.p
           style={{
-            fontFamily   : "'Nunito', sans-serif",
-            fontSize     : 12,
-            fontWeight   : 700,
-            letterSpacing: "0.22em",
+            fontFamily   : "'Cairo', 'Rajdhani', sans-serif",
+            fontSize     : 11,
+            fontWeight   : 600,
+            letterSpacing: "0.28em",
             textTransform: "uppercase",
-            color        : "rgba(255,255,255,0.38)",
+            color        : "rgba(255,255,255,0.42)",
             margin       : "-4px 0 2px",
           }}
           initial={{ opacity: 0 }}
@@ -435,10 +436,10 @@ export function SplashScreen({ lang }: SplashScreenProps) {
         {/* ⑤ Loading label */}
         <motion.p
           style={{
-            fontFamily   : "'Nunito', sans-serif",
-            fontSize     : 11,
-            fontWeight   : 600,
-            letterSpacing: "0.16em",
+            fontFamily   : "'Cairo', 'Rajdhani', sans-serif",
+            fontSize     : 10,
+            fontWeight   : 500,
+            letterSpacing: "0.22em",
             textTransform: "uppercase",
             color        : "rgba(255,255,255,0.24)",
             margin       : "-4px 0 0",
