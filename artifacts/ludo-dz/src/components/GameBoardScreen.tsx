@@ -156,12 +156,21 @@ function DieFace({
 }
 
 // ─── Layout constants for corner dice panels ──────────────────────────────────
-// Each panel sits diagonally outside its board corner (no overlap).
-// Container padding must be ≥ PANEL_W+GAP (horizontal) and PANEL_H+GAP (vertical)
-// so the panels never clip into the header or status bar.
+// Each panel hovers above/below its board corner, inset to the frame's own
+// left/right edge (see PANEL_INSET below) — not diagonally outside on both
+// axes. Container's vertical padding must be ≥ PANEL_H+GAP so panels never
+// clip into the header or status bar; horizontal padding is a small fixed
+// BOARD_MARGIN since panels no longer overhang sideways.
 const PANEL_W = 54;   // px — panel width
 const PANEL_H = 78;   // px — panel height
 const PANEL_GAP = 6;  // px — space between panel edge and board frame edge
+// Board is portrait (narrower than tall), so board SIZE is bottlenecked by
+// horizontal space, not vertical. Panels therefore hover above/below the frame
+// (using the vertical headroom, which is plentiful) and hug the frame's own
+// left/right edge horizontally instead of overhanging sideways — this keeps
+// them fully outside the board while costing almost no extra board width.
+const BOARD_MARGIN = 14;   // px — minimal side margin for the board frame itself
+const PANEL_INSET  = 6;    // px — how far the panel sits inward from the frame's corner
 
 // ─── Corner dice panel ────────────────────────────────────────────────────────
 // Sits diagonally outside its board corner, positioned relative to the board frame.
@@ -187,19 +196,25 @@ function CornerDice({
   const diceVal     = isActive ? animDice : (lastDice[player] || 1);
   const canTap      = canRoll && isActive;
 
-  // Position the panel outside the board frame corner using negative offsets.
-  // The board frame has overflow:visible so these render outside its bounds.
+  // Panel hovers entirely above/below the frame (outside the board vertically)
+  // while hugging the frame's own left/right edge horizontally — this avoids
+  // eating into board WIDTH, which is the dimension that actually bottlenecks
+  // the board's size on a portrait screen. Board frame has overflow:visible
+  // so these render outside its bounds without being clipped.
   const pos = {
-    tl: { top:    -(PANEL_H + PANEL_GAP), left:  -(PANEL_W + PANEL_GAP) },
-    tr: { top:    -(PANEL_H + PANEL_GAP), right: -(PANEL_W + PANEL_GAP) },
-    bl: { bottom: -(PANEL_H + PANEL_GAP), left:  -(PANEL_W + PANEL_GAP) },
-    br: { bottom: -(PANEL_H + PANEL_GAP), right: -(PANEL_W + PANEL_GAP) },
+    tl: { top:    -(PANEL_H + PANEL_GAP), left:  PANEL_INSET },
+    tr: { top:    -(PANEL_H + PANEL_GAP), right: PANEL_INSET },
+    bl: { bottom: -(PANEL_H + PANEL_GAP), left:  PANEL_INSET },
+    br: { bottom: -(PANEL_H + PANEL_GAP), right: PANEL_INSET },
   }[anchor];
+  // Subtle outward "flag" tilt — fans away from board centre per corner.
+  const rotation = { tl: -5, tr: 5, bl: 5, br: -5 }[anchor];
 
   if (!exists) {
     return (
       <div style={{
         position: 'absolute', ...pos,
+        transform: `rotate(${rotation}deg)`,
         width: PANEL_W, height: PANEL_H,
         borderRadius: 12,
         background: 'rgba(3,10,22,0.40)',
@@ -228,6 +243,7 @@ function CornerDice({
       transition={{ duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
       style={{
         position: 'absolute', ...pos,
+        rotate: rotation,
         width: PANEL_W, height: PANEL_H,
         zIndex: 12,
         display: 'flex', flexDirection: 'column',
@@ -942,15 +958,18 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
       </div>
 
       {/* ── Board + corner dice panels ── */}
-      {/* Container padding reserves space for the corner panels so they never
-          clip into the header or status bar. The board frame uses overflow:visible
-          and the panels are positioned via negative offsets from its corners. */}
+      {/* Vertical padding reserves room for the panels hovering above/below the
+          frame (never clips into header/status bar). Horizontal padding is a
+          minimal fixed margin since panels hug the frame's own edge rather
+          than overhanging sideways — on this portrait screen, board size is
+          bottlenecked by WIDTH, so keeping side margins small is what lets the
+          board grow to fill the available space. */}
       <div className="relative z-10 flex-1 min-h-0 flex items-center justify-center"
         style={{
           paddingTop:    PANEL_H + PANEL_GAP + 4,
           paddingBottom: PANEL_H + PANEL_GAP + 4,
-          paddingLeft:   PANEL_W + PANEL_GAP + 4,
-          paddingRight:  PANEL_W + PANEL_GAP + 4,
+          paddingLeft:   BOARD_MARGIN,
+          paddingRight:  BOARD_MARGIN,
         }}>
         <motion.div
           style={{
