@@ -157,10 +157,11 @@ function DieFace({
 
 // ─── Layout constants for corner dice panels ──────────────────────────────────
 // Each panel hovers above/below its board corner, inset to the frame's own
-// left/right edge (see PANEL_INSET below) — not diagonally outside on both
-// axes. Container's vertical padding must be ≥ PANEL_H+GAP so panels never
-// clip into the header or status bar; horizontal padding is a small fixed
-// BOARD_MARGIN since panels no longer overhang sideways.
+// left/right edge (see PANEL_INSET below), flat (no rotation), and linked to
+// the frame via a small connector "tail" so it reads as anchored rather than
+// floating. Container's vertical padding must be ≥ PANEL_H+GAP so panels
+// never clip into the header or status bar; horizontal padding is a small
+// fixed BOARD_MARGIN since panels never overhang sideways.
 const PANEL_W = 54;   // px — panel width
 const PANEL_H = 78;   // px — panel height
 const PANEL_GAP = 6;  // px — space between panel edge and board frame edge
@@ -170,11 +171,19 @@ const PANEL_GAP = 6;  // px — space between panel edge and board frame edge
 // left/right edge horizontally instead of overhanging sideways — this keeps
 // them fully outside the board while costing almost no extra board width.
 const BOARD_MARGIN = 14;   // px — minimal side margin for the board frame itself
-const PANEL_INSET  = 6;    // px — how far the panel sits inward from the frame's corner
+const PANEL_INSET  = 9;    // px — how far the panel sits inward from the frame's corner
+// Connector tail — a small triangle inside the untouched PANEL_GAP buffer,
+// pointing from the panel toward its board corner. TAIL_H + TAIL_GAP must
+// stay ≤ PANEL_GAP so it never touches the frame.
+const TAIL_W   = 5;   // px — half-width of the tail triangle
+const TAIL_H   = 4;   // px — tail height
+const TAIL_GAP = 2;   // px — clear buffer between the tail tip and the frame edge
 
 // ─── Corner dice panel ────────────────────────────────────────────────────────
-// Sits diagonally outside its board corner, positioned relative to the board frame.
-// Vertical layout: colour dot + name → die face → TAP label → progress dots.
+// Sits outside its board corner, flat and mirror-symmetric across both axes,
+// with a small tail pointing at the frame so it reads as anchored, not
+// floating. Vertical layout: colour dot + name → die face → TAP label →
+// progress dots.
 function CornerDice({
   player, anchor, game, isAI, lang,
   rolling, animDice, justLanded, lastDice,
@@ -195,8 +204,9 @@ function CornerDice({
   const isRollingMe = rolling && isActive;
   const diceVal     = isActive ? animDice : (lastDice[player] || 1);
   const canTap      = canRoll && isActive;
+  const isTop       = anchor === 'tl' || anchor === 'tr';
 
-  // Panel hovers entirely above/below the frame (outside the board vertically)
+  // Wrapper hovers entirely above/below the frame (outside the board vertically)
   // while hugging the frame's own left/right edge horizontally — this avoids
   // eating into board WIDTH, which is the dimension that actually bottlenecks
   // the board's size on a portrait screen. Board frame has overflow:visible
@@ -207,27 +217,50 @@ function CornerDice({
     bl: { bottom: -(PANEL_H + PANEL_GAP), left:  PANEL_INSET },
     br: { bottom: -(PANEL_H + PANEL_GAP), right: PANEL_INSET },
   }[anchor];
-  // Subtle outward "flag" tilt — fans away from board centre per corner.
-  const rotation = { tl: -5, tr: 5, bl: 5, br: -5 }[anchor];
+  // Tail sits in the empty PANEL_GAP strip between the panel and the frame —
+  // never overlaps the board itself.
+  const tailPos = isTop
+    ? { top: PANEL_H + TAIL_GAP }
+    : { top: -(TAIL_H + TAIL_GAP) };
+  const tailBorderSide = isTop ? 'borderTop' : 'borderBottom';
 
   if (!exists) {
     return (
-      <div style={{
-        position: 'absolute', ...pos,
-        transform: `rotate(${rotation}deg)`,
-        width: PANEL_W, height: PANEL_H,
-        borderRadius: 12,
-        background: 'rgba(3,10,22,0.40)',
-        border: '1px solid rgba(255,255,255,0.04)',
-        opacity: 0.35,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1a2a40' }}/>
+      <div style={{ position: 'absolute', ...pos, width: PANEL_W, height: PANEL_H }}>
+        <div style={{
+          position: 'absolute', left: '50%', transform: 'translateX(-50%)', ...tailPos,
+          width: 0, height: 0,
+          borderLeft: `${TAIL_W}px solid transparent`,
+          borderRight: `${TAIL_W}px solid transparent`,
+          [tailBorderSide]: `${TAIL_H}px solid rgba(255,255,255,0.05)`,
+        }}/>
+        <div style={{
+          width: '100%', height: '100%',
+          borderRadius: 12,
+          background: 'rgba(3,10,22,0.40)',
+          border: '1px solid rgba(255,255,255,0.04)',
+          opacity: 0.35,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1a2a40' }}/>
+        </div>
       </div>
     );
   }
 
   return (
+    <div style={{ position: 'absolute', ...pos, width: PANEL_W, height: PANEL_H, zIndex: 12 }}>
+      {/* Connector tail — visually anchors the panel to its board corner */}
+      <div style={{
+        position: 'absolute', left: '50%', transform: 'translateX(-50%)', ...tailPos,
+        width: 0, height: 0,
+        borderLeft: `${TAIL_W}px solid transparent`,
+        borderRight: `${TAIL_W}px solid transparent`,
+        [tailBorderSide]: `${TAIL_H}px solid ${isActive ? neon : col + '55'}`,
+        filter: isActive ? `drop-shadow(0 0 3px ${neon})` : 'none',
+        transition: 'border-color 0.4s',
+        pointerEvents: 'none',
+      }}/>
     <motion.div
       onClick={canTap ? onRoll : undefined}
       whileTap={canTap ? { scale: 0.91 } : {}}
@@ -242,10 +275,7 @@ function CornerDice({
       }}
       transition={{ duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
       style={{
-        position: 'absolute', ...pos,
-        rotate: rotation,
-        width: PANEL_W, height: PANEL_H,
-        zIndex: 12,
+        width: '100%', height: '100%',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'space-evenly',
         padding: '6px 4px',
@@ -360,6 +390,7 @@ function CornerDice({
         })}
       </div>
     </motion.div>
+    </div>
   );
 }
 
