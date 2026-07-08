@@ -8,6 +8,8 @@ Workflows (managed by Replit):
 - `artifacts/ludo-dz: web` — Vite dev server (port 21341, preview at `/`)
 - `artifacts/api-server: API Server` — Express API (port 8080, paths under `/api`)
 
+Imported project: after a fresh import/checkout, run `pnpm install` at the repo root before starting the workflows — both fail with "vite: not found" / "Cannot find package 'esbuild'" until dependencies are installed. `DATABASE_URL` and `SESSION_SECRET` are already provisioned.
+
 Useful commands:
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
