@@ -155,38 +155,80 @@ function DieFace({
   );
 }
 
-// ─── Per-player dice panel (side column) ─────────────────────────────────────
-// Each panel occupies roughly half the board height.
-// Left col: players 0 (top=TL=Red) and 3 (bottom=BL=Green)
-// Right col: players 1 (top=TR=Blue) and 2 (bottom=BR=Yellow)
-function DicePanel({
-  player, game, isAI, lang,
+// ─── Corner dice container ────────────────────────────────────────────────────
+// One panel per player, absolutely placed at the matching corner of the board
+// frame (Red=TL, Blue=TR, Yellow=BR, Green=BL). Sits atop the home-zone corner
+// of the SVG — no side columns needed, freeing the board to fill full width.
+type Corner = 'tl' | 'tr' | 'br' | 'bl';
+
+// Dice panels sit just outside the board frame (negative offsets), so they
+// frame the corners without ever covering the home-zone piece slots.
+const CORNER_POS: Record<Corner, { top?: number; bottom?: number; left?: number; right?: number }> = {
+  tl: { top: -6, left: -6 },
+  tr: { top: -6, right: -6 },
+  br: { bottom: -6, right: -6 },
+  bl: { bottom: -6, left: -6 },
+};
+
+// Gradient flows from the corner toward the board centre
+const CORNER_GRAD: Record<Corner, string> = {
+  tl: '135deg', tr: '225deg', br: '315deg', bl: '45deg',
+};
+
+// Border-radius: outer corner of the container is fully rounded, inner edges subtler
+const CORNER_RADIUS: Record<Corner, string> = {
+  tl: '14px 6px 12px 6px',
+  tr: '6px 14px 6px 12px',
+  br: '12px 6px 14px 6px',
+  bl: '6px 12px 6px 14px',
+};
+
+function CornerDice({
+  player, corner, game, isAI, lang,
   rolling, animDice, justLanded, lastDice,
   onRoll, canRoll,
-  side,
 }: {
-  player: number; game: E.GameState; isAI: boolean; lang: 'fr'|'ar';
+  player: number; corner: Corner;
+  game: E.GameState; isAI: boolean; lang: 'fr' | 'ar';
   rolling: boolean; animDice: number; justLanded: boolean; lastDice: number[];
   onRoll: () => void; canRoll: boolean;
-  side: 'left'|'right';
 }) {
-  const col      = E.PLAYER_COLORS[player];
-  const neon     = E.PLAYER_NEONS[player];
-  const isActive = game.activePlayer === player && game.phase !== 'done';
-  const exists   = player < game.numPlayers;
-  const pieces   = game.pieces.filter(p => p.player === player);
-  const name     = lang === 'ar' ? E.PLAYER_NAMES_AR[player] : E.PLAYER_NAMES_FR[player];
+  const col         = E.PLAYER_COLORS[player];
+  const neon        = E.PLAYER_NEONS[player];
+  const isActive    = game.activePlayer === player && game.phase !== 'done';
+  const exists      = player < game.numPlayers;
+  const pieces      = game.pieces.filter(p => p.player === player);
+  const name        = lang === 'ar' ? E.PLAYER_NAMES_AR[player] : E.PLAYER_NAMES_FR[player];
   const isRollingMe = rolling && isActive;
-  const diceVal  = isActive ? animDice : (lastDice[player] || 1);
-  const canTap   = canRoll && isActive;
+  const diceVal     = isActive ? animDice : (lastDice[player] || 1);
+  const canTap      = canRoll && isActive;
+
+  const baseStyle = {
+    position: 'absolute' as const,
+    ...CORNER_POS[corner],
+    width: 72,
+    zIndex: 12,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '8px 7px',
+    borderRadius: CORNER_RADIUS[corner],
+    // Apply blur only on the active panel; inactive panels have near-transparent
+    // backgrounds and a blur would visually smear the board content behind them.
+    backdropFilter: isActive ? 'blur(10px)' : 'none',
+    WebkitBackdropFilter: isActive ? 'blur(10px)' : 'none',
+  };
 
   if (!exists) {
     return (
       <div style={{
-        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        opacity: 0.08,
+        ...baseStyle,
+        background: 'rgba(3,10,22,0.55)',
+        border: '1px solid rgba(255,255,255,0.04)',
+        opacity: 0.5,
       }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#555' }}/>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1a2a40' }}/>
       </div>
     );
   }
@@ -194,83 +236,81 @@ function DicePanel({
   return (
     <motion.div
       onClick={canTap ? onRoll : undefined}
-      whileTap={canTap ? { scale: 0.93 } : {}}
+      whileTap={canTap ? { scale: 0.91 } : {}}
       animate={isActive ? {
         boxShadow: [
-          `inset 0 0 14px ${col}18, 0 0 8px ${col}28`,
-          `inset 0 0 22px ${col}30, 0 0 16px ${col}50`,
-          `inset 0 0 14px ${col}18, 0 0 8px ${col}28`,
+          `0 0 14px ${col}38, inset 0 0 12px ${col}14`,
+          `0 0 28px ${neon}60, inset 0 0 20px ${col}30`,
+          `0 0 14px ${col}38, inset 0 0 12px ${col}14`,
         ],
-      } : { boxShadow: 'inset 0 0 0px transparent' }}
+      } : {
+        boxShadow: `0 2px 10px rgba(0,0,0,0.50)`,
+      }}
       transition={{ duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
       style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'space-evenly',
-        padding: '6px 3px',
+        ...baseStyle,
         cursor: canTap ? 'pointer' : 'default',
-        position: 'relative',
-        borderLeft:  side === 'right' ? `2px solid ${isActive ? neon : col + '22'}` : undefined,
-        borderRight: side === 'left'  ? `2px solid ${isActive ? neon : col + '22'}` : undefined,
+        // Inactive panels are mostly transparent so home-zone pieces are visible
+        // through them. Only the active player's panel has a solid background.
         background: isActive
-          ? `linear-gradient(${side === 'left' ? '270deg' : '90deg'}, ${col}20 0%, ${col}06 100%)`
-          : 'transparent',
+          ? `linear-gradient(${CORNER_GRAD[corner]}, ${col}30 0%, ${col}0c 100%)`
+          : `rgba(4,12,26,0.42)`,
+        border: `1.5px solid ${isActive ? neon : col + '22'}`,
         transition: 'background 0.35s, border-color 0.35s',
         overflow: 'hidden',
+        // Inactive panels must not block clicks on home-zone piece slots below.
+        // Only the active panel (the one the user taps to roll) captures events.
+        pointerEvents: isActive ? 'auto' : 'none',
       }}
     >
-      {/* Active bar shimmer */}
+      {/* Active shimmer line across outer edge */}
       {isActive && (
         <motion.div style={{
           position: 'absolute',
-          [side === 'left' ? 'right' : 'left']: 0,
-          top: 0, bottom: 0, width: 2,
-          background: `linear-gradient(180deg, transparent, ${neon}cc, transparent)`,
+          ...(corner.includes('t') ? { top: 0 } : { bottom: 0 }),
+          left: 0, right: 0, height: 1.5,
+          background: `linear-gradient(90deg, transparent, ${neon}cc, transparent)`,
         }}
           animate={{ opacity: [0.4, 1, 0.4] }}
           transition={{ duration: 1.4, repeat: Infinity }}
         />
       )}
 
-      {/* Player indicator dot + name */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      {/* Player indicator: dot + initial / AI icon */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
         <motion.div
-          animate={isActive ? { boxShadow: [`0 0 4px ${neon}80`, `0 0 10px ${neon}`, `0 0 4px ${neon}80`] } : {}}
+          animate={isActive
+            ? { boxShadow: [`0 0 4px ${neon}80`, `0 0 12px ${neon}`, `0 0 4px ${neon}80`] }
+            : {}}
           transition={{ duration: 1.4, repeat: Infinity }}
           style={{
-            width: 8, height: 8, borderRadius: '50%', background: col,
-            boxShadow: isActive ? `0 0 8px ${neon}` : 'none',
+            width: 9, height: 9, borderRadius: '50%', background: col,
+            boxShadow: isActive ? `0 0 10px ${neon}` : 'none',
           }}
         />
         <span style={{
           fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 9,
           color: isActive ? neon : col + '80',
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase' as const,
-          writingMode: 'horizontal-tb' as const,
+          letterSpacing: '0.05em', textTransform: 'uppercase' as const,
         }}>
-          {isAI ? '🤖' : name.slice(0,1)}
+          {isAI ? '🤖' : name.slice(0, 1)}
         </span>
       </div>
 
-      {/* Die face */}
+      {/* Die face with pulse ring when ready */}
       <div style={{ position: 'relative' }}>
-        {/* Pulse ring when ready */}
         {canTap && !rolling && (
           <motion.div style={{
-            position: 'absolute', inset: -5, borderRadius: 10,
+            position: 'absolute', inset: -6, borderRadius: 11,
             border: `1.5px solid ${neon}`,
           }}
-            animate={{ scale: [1, 1.22, 1], opacity: [0.7, 0, 0.7] }}
-            transition={{ duration: 1.6, repeat: Infinity }}
+            animate={{ scale: [1, 1.24, 1], opacity: [0.75, 0, 0.75] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
           />
         )}
         <DieFace
-          value={diceVal}
-          neon={neon} col={col}
-          size={42}
+          value={diceVal} neon={neon} col={col}
+          size={48}
           rolling={isRollingMe}
           justLanded={justLanded && isActive}
           dim={!isActive}
@@ -278,9 +318,9 @@ function DicePanel({
       </div>
 
       {/* Token progress dots */}
-      <div style={{ display: 'flex', gap: 2 }}>
-        {[0,1,2,3].map(i => {
-          const p = pieces[i];
+      <div style={{ display: 'flex', gap: 3 }}>
+        {[0, 1, 2, 3].map(i => {
+          const p  = pieces[i];
           const st = !p ? 'none'
                    : p.relPos === E.FINISHED_POS ? 'done'
                    : p.relPos >= 0 ? 'on'
@@ -288,17 +328,17 @@ function DicePanel({
           return (
             <div key={i} style={{
               width: 5, height: 5, borderRadius: '50%',
-              background: st === 'done' ? neon : st === 'on' ? col : `${col}38`,
-              border: `0.5px solid ${col}40`,
-              boxShadow: st === 'done' ? `0 0 4px ${neon}` : 'none',
+              background: st === 'done' ? neon : st === 'on' ? col : `${col}35`,
+              border: `0.5px solid ${col}45`,
+              boxShadow: st === 'done' ? `0 0 5px ${neon}` : 'none',
               transition: 'all 0.3s',
             }}/>
           );
         })}
       </div>
 
-      {/* Phase label */}
-      <div style={{ minHeight: 14, display: 'flex', alignItems: 'center' }}>
+      {/* TAP / rolling label */}
+      <div style={{ minHeight: 13, display: 'flex', alignItems: 'center' }}>
         <AnimatePresence mode="wait">
           {canTap && (
             <motion.span key="tap"
@@ -306,8 +346,8 @@ function DicePanel({
               exit={{ opacity: 0, y: -3 }}
               style={{
                 fontFamily: 'Rajdhani, sans-serif', fontSize: 9, fontWeight: 700,
-                color: neon, letterSpacing: '0.06em',
-                textShadow: `0 0 6px ${neon}`,
+                color: neon, letterSpacing: '0.08em',
+                textShadow: `0 0 8px ${neon}`,
               }}>
               {lang === 'ar' ? 'ارمِ' : 'TAP'}
             </motion.span>
@@ -924,93 +964,61 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
         </motion.button>
       </div>
 
-      {/* ── Board + side dice panels ── */}
-      {/* Layout: [Left col: Red(top) + Green(bot)] [Board] [Right col: Blue(top) + Yellow(bot)] */}
-      <div className="relative z-10 flex-1 flex items-center justify-center min-h-0 px-2">
-        <div style={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'stretch',
-          width: '100%',
-          maxWidth: 480,
-          gap: 4,
-        }}>
-          {/* ── Left dice column (Red top, Green bottom) ── */}
+      {/* ── Board + corner dice panels ── */}
+      {/* The board fills the full available width. Four CornerDice panels are
+          absolutely positioned at the corners of the board frame, sitting atop
+          each player's home-zone corner — mimicking professional Ludo layouts
+          and freeing the board to expand in both directions. */}
+      <div className="relative z-10 flex-1 min-h-0 flex items-center justify-center"
+        style={{ padding: '6px 8px' }}>
+        {/* Square board frame — takes full width, height auto-follows via aspect-ratio.
+            overflow: visible lets the corner dice appear outside the rounded frame. */}
+        <motion.div
+          style={{
+            position: 'relative',
+            width: '100%',
+            aspectRatio: '1',
+            // Safety cap: never taller than the available flex-1 space minus tiny margin.
+            // aspect-ratio + max-height together make the element shrink to a square
+            // that fits within whichever dimension is smaller.
+            maxHeight: 'calc(100% - 4px)',
+            boxSizing: 'border-box',
+            borderRadius: 22,
+            overflow: 'visible',
+            padding: '6px',
+            background: 'radial-gradient(ellipse 120% 100% at 50% 50%, #0e2647 0%, #030b16 70%)',
+            border: '1px solid rgba(255,255,255,0.07)',
+          }}
+          animate={{
+            boxShadow: [
+              `0 0 28px ${activeColor}28, 0 0 60px rgba(0,0,0,0.65)`,
+              `0 0 48px ${activeColor}55, 0 0 80px rgba(0,0,0,0.65)`,
+              `0 0 28px ${activeColor}28, 0 0 60px rgba(0,0,0,0.65)`,
+            ],
+          }}
+          transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}>
+
+          {/* Inner felt — the live SVG board, clipped to the rounded frame */}
           <div style={{
-            width: 52, flexShrink: 0,
-            display: 'flex', flexDirection: 'column',
-            borderRadius: 12,
+            width: '100%',
+            height: '100%',
+            borderRadius: 14,
             overflow: 'hidden',
-            border: '1px solid rgba(255,255,255,0.06)',
-            background: 'rgba(0,0,0,0.25)',
+            boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.60), inset 0 0 0 1px rgba(255,255,255,0.05)',
           }}>
-            <DicePanel {...dpCommon} player={0} isAI={false} side="left"/>
-            <div style={{ height: 1, background: 'rgba(255,255,255,0.05)' }}/>
-            <DicePanel {...dpCommon} player={3} isAI={isComputer} side="left"/>
+            <BoardSVG game={game} onPieceClick={handlePieceClick} springCfg={springCfg}/>
           </div>
 
-          {/* ── Board ── */}
-          {/* Outer "frame" card: fixed width (unchanged), but taller than a plain
-              square via generous top/bottom padding — reads as a premium tabletop
-              rail around the felt rather than a stretched/distorted grid. */}
-          <motion.div
-            style={{
-              flex: 1,
-              boxSizing: 'border-box',
-              borderRadius: 20,
-              overflow: 'hidden',
-              // Vertical rail is a % of width (grows the frame taller without touching
-              // board width); horizontal is a hairline so the playable width is
-              // effectively unchanged. maxHeight is a viewport-relative safety cap so
-              // the frame can never grow tall enough to overlap the header or status
-              // text on short/landscape viewports.
-              padding: '17% 3px',
-              maxHeight: 'clamp(200px, 62vh, 640px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'radial-gradient(ellipse 130% 110% at 50% 38%, #0d2544 0%, #030b16 72%)',
-              border: '1px solid rgba(255,255,255,0.06)',
-            }}
-            animate={{
-              boxShadow: [
-                `0 0 22px ${activeColor}22, 0 0 50px rgba(0,0,0,0.60)`,
-                `0 0 38px ${activeColor}48, 0 0 70px rgba(0,0,0,0.60)`,
-                `0 0 22px ${activeColor}22, 0 0 50px rgba(0,0,0,0.60)`,
-              ],
-            }}
-            transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}>
-            {/* Inner "felt" — the actual square grid, recessed within the frame.
-                maxHeight keeps it from overflowing the frame's own maxHeight cap on
-                short viewports; the SVG's own viewBox + default preserveAspectRatio
-                ("meet") then letterboxes to stay square and fully visible/uncropped
-                even if this box briefly becomes wider than tall. */}
-            <div style={{
-              width: '100%',
-              aspectRatio: '1',
-              maxHeight: '100%',
-              borderRadius: 12,
-              overflow: 'hidden',
-              boxShadow: 'inset 0 3px 16px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.04)',
-            }}>
-              <BoardSVG game={game} onPieceClick={handlePieceClick} springCfg={springCfg}/>
-            </div>
-          </motion.div>
-
-          {/* ── Right dice column (Blue top, Yellow bottom) ── */}
-          <div style={{
-            width: 52, flexShrink: 0,
-            display: 'flex', flexDirection: 'column',
-            borderRadius: 12,
-            overflow: 'hidden',
-            border: '1px solid rgba(255,255,255,0.06)',
-            background: 'rgba(0,0,0,0.25)',
-          }}>
-            <DicePanel {...dpCommon} player={1} isAI={isComputer} side="right"/>
-            <div style={{ height: 1, background: 'rgba(255,255,255,0.05)' }}/>
-            <DicePanel {...dpCommon} player={2} isAI={isComputer} side="right"/>
-          </div>
-        </div>
+          {/* ── Corner dice panels — one per player, at their matching home corner ── */}
+          {/* Red  → top-left  (home zone TL) */}
+          <CornerDice {...dpCommon} player={0} corner="tl" isAI={false}/>
+          {/* Blue → top-right (home zone TR) */}
+          <CornerDice {...dpCommon} player={1} corner="tr" isAI={isComputer}/>
+          {/* Yellow → bottom-right (home zone BR) */}
+          <CornerDice {...dpCommon} player={2} corner="br" isAI={isComputer}/>
+          {/* Green  → bottom-left (home zone BL) */}
+          <CornerDice {...dpCommon} player={3} corner="bl" isAI={isComputer}/>
+        </motion.div>
       </div>
 
       {/* ── Status bar ── */}
