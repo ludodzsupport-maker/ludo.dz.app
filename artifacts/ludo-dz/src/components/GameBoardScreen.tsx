@@ -155,229 +155,6 @@ function DieFace({
   );
 }
 
-// ─── Corner dice container ────────────────────────────────────────────────────
-// One dedicated "player zone" per player, absolutely positioned at each corner
-// of the GAME AREA — fully outside and independent of the board frame.
-// Layout: game area uses CSS padding (PAD_TB × PAD_LR) to carve out corner
-// zones. Board sits as a flex child in the padded centre; dice panels are
-// position:absolute children anchored to the four corners of the same div.
-//
-//   PAD_LR = PANEL_W + GAP = 56 + 12 = 68 px   (left / right padding)
-//   PAD_TB = PANEL_H + GAP = 90 + 12 = 102 px  (top  / bottom padding)
-//   → Board fills min(game_area_w − 136, game_area_h − 204) ≈ 278 px
-//   → Gap between every panel edge and board border = 12 px (clean breathing room)
-type Corner = 'tl' | 'tr' | 'br' | 'bl';
-
-// Panels anchor to the game area corners (position:absolute, top/bottom/left/right = 0).
-// The game area padding guarantees they never overlap the board frame.
-const CORNER_POS: Record<Corner, { top?: number; bottom?: number; left?: number; right?: number }> = {
-  tl: { top: 0, left: 0 },
-  tr: { top: 0, right: 0 },
-  br: { bottom: 0, right: 0 },
-  bl: { bottom: 0, left: 0 },
-};
-
-// Gradient sweeps from the game-area corner inward toward the board — creates
-// the impression that each zone "points at" its home quadrant.
-const CORNER_GRAD: Record<Corner, string> = {
-  tl: '135deg', tr: '225deg', br: '315deg', bl: '45deg',
-};
-
-// Outermost corner (screen edge) gets the most rounding; inner corners facing
-// the board are subtler so the panel reads as "attached" to that corner zone.
-const CORNER_RADIUS: Record<Corner, string> = {
-  tl: '16px 6px 12px 6px',
-  tr: '6px 16px 6px 12px',
-  br: '12px 6px 16px 6px',
-  bl: '6px 12px 6px 16px',
-};
-
-function CornerDice({
-  player, corner, game, isAI, lang,
-  rolling, animDice, justLanded, lastDice,
-  onRoll, canRoll,
-}: {
-  player: number; corner: Corner;
-  game: E.GameState; isAI: boolean; lang: 'fr' | 'ar';
-  rolling: boolean; animDice: number; justLanded: boolean; lastDice: number[];
-  onRoll: () => void; canRoll: boolean;
-}) {
-  const col         = E.PLAYER_COLORS[player];
-  const neon        = E.PLAYER_NEONS[player];
-  const isActive    = game.activePlayer === player && game.phase !== 'done';
-  const exists      = player < game.numPlayers;
-  const pieces      = game.pieces.filter(p => p.player === player);
-  const name        = lang === 'ar' ? E.PLAYER_NAMES_AR[player] : E.PLAYER_NAMES_FR[player];
-  const isRollingMe = rolling && isActive;
-  const diceVal     = isActive ? animDice : (lastDice[player] || 1);
-  const canTap      = canRoll && isActive;
-
-  // Panel is now fully outside the board frame; width matches PAD_LR − GAP = 56 px.
-  // Height is content-driven but capped implicitly by PAD_TB = 102 px available.
-  const baseStyle = {
-    position: 'absolute' as const,
-    ...CORNER_POS[corner],
-    width: 56,
-    zIndex: 12,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '8px 5px',
-    borderRadius: CORNER_RADIUS[corner],
-    // Blur is safe on external panels — they no longer share a stacking context
-    // with the board SVG, so backdrop-filter cannot wash out board content.
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-  };
-
-  if (!exists) {
-    return (
-      <div style={{
-        ...baseStyle,
-        background: 'rgba(3,10,22,0.55)',
-        border: '1px solid rgba(255,255,255,0.04)',
-        opacity: 0.5,
-      }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1a2a40' }}/>
-      </div>
-    );
-  }
-
-  return (
-    <motion.div
-      onClick={canTap ? onRoll : undefined}
-      whileTap={canTap ? { scale: 0.91 } : {}}
-      animate={isActive ? {
-        boxShadow: [
-          `0 0 14px ${col}38, inset 0 0 12px ${col}14`,
-          `0 0 28px ${neon}60, inset 0 0 20px ${col}30`,
-          `0 0 14px ${col}38, inset 0 0 12px ${col}14`,
-        ],
-      } : {
-        boxShadow: `0 2px 10px rgba(0,0,0,0.50)`,
-      }}
-      transition={{ duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
-      style={{
-        ...baseStyle,
-        cursor: canTap ? 'pointer' : 'default',
-        // Panels are now fully external — no board overlap, so all can have solid
-        // backgrounds. Active panel glows; inactive is a dark neon-card variant.
-        background: isActive
-          ? `linear-gradient(${CORNER_GRAD[corner]}, ${col}38 0%, ${col}10 100%)`
-          : `linear-gradient(${CORNER_GRAD[corner]}, ${col}14 0%, rgba(4,12,26,0.88) 100%)`,
-        border: `1.5px solid ${isActive ? neon : col + '40'}`,
-        transition: 'background 0.4s, border-color 0.4s',
-        overflow: 'hidden',
-        // All panels capture clicks (no board overlap to worry about).
-        pointerEvents: 'auto',
-      }}
-    >
-      {/* Active shimmer line across outer edge */}
-      {isActive && (
-        <motion.div style={{
-          position: 'absolute',
-          ...(corner.includes('t') ? { top: 0 } : { bottom: 0 }),
-          left: 0, right: 0, height: 1.5,
-          background: `linear-gradient(90deg, transparent, ${neon}cc, transparent)`,
-        }}
-          animate={{ opacity: [0.4, 1, 0.4] }}
-          transition={{ duration: 1.4, repeat: Infinity }}
-        />
-      )}
-
-      {/* Player indicator: dot + initial / AI icon */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-        <motion.div
-          animate={isActive
-            ? { boxShadow: [`0 0 4px ${neon}80`, `0 0 12px ${neon}`, `0 0 4px ${neon}80`] }
-            : {}}
-          transition={{ duration: 1.4, repeat: Infinity }}
-          style={{
-            width: 9, height: 9, borderRadius: '50%', background: col,
-            boxShadow: isActive ? `0 0 10px ${neon}` : 'none',
-          }}
-        />
-        <span style={{
-          fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 9,
-          color: isActive ? neon : col + '80',
-          letterSpacing: '0.05em', textTransform: 'uppercase' as const,
-        }}>
-          {isAI ? '🤖' : name.slice(0, 1)}
-        </span>
-      </div>
-
-      {/* Die face with pulse ring when ready */}
-      <div style={{ position: 'relative' }}>
-        {canTap && !rolling && (
-          <motion.div style={{
-            position: 'absolute', inset: -6, borderRadius: 11,
-            border: `1.5px solid ${neon}`,
-          }}
-            animate={{ scale: [1, 1.24, 1], opacity: [0.75, 0, 0.75] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          />
-        )}
-        <DieFace
-          value={diceVal} neon={neon} col={col}
-          size={48}
-          rolling={isRollingMe}
-          justLanded={justLanded && isActive}
-          dim={!isActive}
-        />
-      </div>
-
-      {/* Token progress dots */}
-      <div style={{ display: 'flex', gap: 3 }}>
-        {[0, 1, 2, 3].map(i => {
-          const p  = pieces[i];
-          const st = !p ? 'none'
-                   : p.relPos === E.FINISHED_POS ? 'done'
-                   : p.relPos >= 0 ? 'on'
-                   : 'home';
-          return (
-            <div key={i} style={{
-              width: 5, height: 5, borderRadius: '50%',
-              background: st === 'done' ? neon : st === 'on' ? col : `${col}35`,
-              border: `0.5px solid ${col}45`,
-              boxShadow: st === 'done' ? `0 0 5px ${neon}` : 'none',
-              transition: 'all 0.3s',
-            }}/>
-          );
-        })}
-      </div>
-
-      {/* TAP / rolling label */}
-      <div style={{ minHeight: 13, display: 'flex', alignItems: 'center' }}>
-        <AnimatePresence mode="wait">
-          {canTap && (
-            <motion.span key="tap"
-              initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -3 }}
-              style={{
-                fontFamily: 'Rajdhani, sans-serif', fontSize: 9, fontWeight: 700,
-                color: neon, letterSpacing: '0.08em',
-                textShadow: `0 0 8px ${neon}`,
-              }}>
-              {lang === 'ar' ? 'ارمِ' : 'TAP'}
-            </motion.span>
-          )}
-          {isRollingMe && (
-            <motion.span key="roll"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{
-                fontFamily: 'Rajdhani, sans-serif', fontSize: 9,
-                color: 'rgba(255,255,255,0.45)',
-              }}>
-              …
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </div>
-    </motion.div>
-  );
-}
-
 // ─── BoardSVG — pure game board ───────────────────────────────────────────────
 interface BoardSVGProps {
   game: E.GameState;
@@ -730,67 +507,155 @@ function SettingsOverlay({ lang, animSpeed, onSpeed, onClose }: {
   );
 }
 
-// ─── Player chip (header bar) ─────────────────────────────────────────────────
-function PlayerChip({ game, player, isAI, lang }: {
+// ─── Player dice chip (header bar) ────────────────────────────────────────────
+// Combines the player colour tab with an inline compact dice panel so the
+// header reads: [● NAME 🤖 | die TAP ••••] for each active player.
+// Clicking the chip (when it's the human's turn) rolls the dice.
+function PlayerDiceChip({ game, player, isAI, lang, rolling, animDice, justLanded, lastDice, onRoll, canRoll }: {
   game: E.GameState; player: number; isAI: boolean; lang: 'fr'|'ar';
+  rolling: boolean; animDice: number; justLanded: boolean; lastDice: number[];
+  onRoll: () => void; canRoll: boolean;
 }) {
-  const col      = E.PLAYER_COLORS[player];
-  const neon     = E.PLAYER_NEONS[player];
-  const isActive = game.activePlayer === player && game.phase !== 'done';
-  const pieces   = game.pieces.filter(p => p.player === player);
-  const name     = lang === 'ar' ? E.PLAYER_NAMES_AR[player] : E.PLAYER_NAMES_FR[player];
+  const col        = E.PLAYER_COLORS[player];
+  const neon       = E.PLAYER_NEONS[player];
+  const isActive   = game.activePlayer === player && game.phase !== 'done';
+  const pieces     = game.pieces.filter(p => p.player === player);
+  const name       = lang === 'ar' ? E.PLAYER_NAMES_AR[player] : E.PLAYER_NAMES_FR[player];
+  const isRollingMe = rolling && isActive;
+  const diceVal    = isActive ? animDice : (lastDice[player] || 1);
+  const canTap     = canRoll && isActive;
 
   return (
     <motion.div
+      onClick={canTap ? onRoll : undefined}
+      whileTap={canTap ? { scale: 0.93 } : {}}
       animate={{
-        scale: isActive ? 1.06 : 1,
         boxShadow: isActive
-          ? `0 0 12px ${neon}70, inset 0 0 6px ${col}18`
+          ? [
+              `0 0 10px ${neon}55, inset 0 0 6px ${col}18`,
+              `0 0 22px ${neon}80, inset 0 0 12px ${col}28`,
+              `0 0 10px ${neon}55, inset 0 0 6px ${col}18`,
+            ]
           : '0 0 0px transparent',
       }}
-      transition={{ duration: 0.22 }}
+      transition={{ duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
       style={{
-        background: `linear-gradient(135deg, ${col}18, ${col}08)`,
-        border: `1.5px solid ${isActive ? neon : col + '25'}`,
-        borderRadius: 12, padding: '5px 8px', minWidth: 56, position: 'relative', overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 5,
+        background: isActive
+          ? `linear-gradient(135deg, ${col}28 0%, ${col}0f 100%)`
+          : `linear-gradient(135deg, ${col}12, ${col}06)`,
+        border: `1.5px solid ${isActive ? neon : col + '28'}`,
+        borderRadius: 12,
+        padding: '5px 7px',
+        cursor: canTap ? 'pointer' : 'default',
+        flexShrink: 0,
+        position: 'relative',
+        overflow: 'hidden',
+        transition: 'background 0.35s, border-color 0.35s',
+        userSelect: 'none',
       }}>
+
+      {/* Active top-edge shimmer */}
       {isActive && (
         <motion.div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+          position: 'absolute', top: 0, left: 0, right: 0, height: 1.5,
           background: `linear-gradient(90deg, transparent, ${neon}, transparent)`,
+          pointerEvents: 'none',
         }}
-          animate={{ opacity: [0.5, 1, 0.5] }}
+          animate={{ opacity: [0.45, 1, 0.45] }}
           transition={{ duration: 1.1, repeat: Infinity }}
         />
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-        <div style={{
-          width: 7, height: 7, borderRadius: '50%', background: col,
-          boxShadow: `0 0 4px ${neon}80`, flexShrink: 0,
-        }}/>
-        <span style={{
-          fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 10,
-          color: isActive ? '#fff' : 'rgba(255,255,255,0.50)',
-          letterSpacing: '0.05em',
-        }}>
-          {name.slice(0,4).toUpperCase()}
-        </span>
-        {isAI && <Bot size={8} color="rgba(255,255,255,0.30)"/>}
+
+      {/* Left side — colour dot + name + AI badge + progress dots */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <motion.div
+            animate={isActive
+              ? { boxShadow: [`0 0 3px ${neon}80`, `0 0 9px ${neon}`, `0 0 3px ${neon}80`] }
+              : {}}
+            transition={{ duration: 1.4, repeat: Infinity }}
+            style={{ width: 7, height: 7, borderRadius: '50%', background: col, flexShrink: 0 }}
+          />
+          <span style={{
+            fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 10,
+            color: isActive ? '#fff' : 'rgba(255,255,255,0.48)',
+            letterSpacing: '0.05em',
+          }}>
+            {name.slice(0,4).toUpperCase()}
+          </span>
+          {isAI && <Bot size={8} color="rgba(255,255,255,0.32)"/>}
+        </div>
+        {/* Token progress dots */}
+        <div style={{ display: 'flex', gap: 2 }}>
+          {[0,1,2,3].map(i => {
+            const p  = pieces[i];
+            const st = !p ? 'none' : p.relPos === E.FINISHED_POS ? 'done' : p.relPos >= 0 ? 'on' : 'home';
+            return (
+              <div key={i} style={{
+                width: 4, height: 4, borderRadius: '50%',
+                background: st === 'done' ? neon : st === 'on' ? col : `${col}35`,
+                border: `0.5px solid ${col}40`,
+                boxShadow: st === 'done' ? `0 0 4px ${neon}` : 'none',
+                transition: 'all 0.28s',
+              }}/>
+            );
+          })}
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 2 }}>
-        {[0,1,2,3].map(i => {
-          const p  = pieces[i];
-          const st = !p ? 'none' : p.relPos === E.FINISHED_POS ? 'done' : p.relPos >= 0 ? 'on' : 'home';
-          return (
-            <div key={i} style={{
-              width: 5, height: 5, borderRadius: '50%',
-              background: st === 'done' ? neon : st === 'on' ? col : `${col}40`,
-              border: `0.5px solid ${col}30`,
-              boxShadow: st === 'done' ? `0 0 4px ${neon}` : 'none',
-              transition: 'all 0.28s',
-            }}/>
-          );
-        })}
+
+      {/* Vertical separator */}
+      <div style={{
+        width: 1, alignSelf: 'stretch', margin: '2px 0',
+        background: isActive ? `${neon}40` : `${col}25`,
+        flexShrink: 0,
+        transition: 'background 0.35s',
+      }}/>
+
+      {/* Right side — compact die face + TAP/roll label */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, position: 'relative' }}>
+        {/* Pulse ring when it's this player's turn to roll */}
+        {canTap && !rolling && (
+          <motion.div style={{
+            position: 'absolute', inset: -5, borderRadius: 8,
+            border: `1.5px solid ${neon}`,
+            pointerEvents: 'none',
+          }}
+            animate={{ scale: [1, 1.22, 1], opacity: [0.80, 0, 0.80] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          />
+        )}
+        <DieFace
+          value={diceVal} neon={neon} col={col}
+          size={26}
+          rolling={isRollingMe}
+          justLanded={justLanded && isActive}
+          dim={!isActive}
+        />
+        {/* TAP / rolling / idle label — fixed height so chip doesn't resize */}
+        <div style={{ height: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <AnimatePresence mode="wait">
+            {canTap && !isRollingMe ? (
+              <motion.span key="tap"
+                initial={{ opacity: 0, y: 2 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -2 }}
+                style={{
+                  fontFamily: 'Rajdhani, sans-serif', fontSize: 8, fontWeight: 700,
+                  color: neon, letterSpacing: '0.08em',
+                  textShadow: `0 0 6px ${neon}`,
+                }}>
+                {lang === 'ar' ? 'ارمِ' : 'TAP'}
+              </motion.span>
+            ) : isRollingMe ? (
+              <motion.span key="roll"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 8, color: 'rgba(255,255,255,0.38)' }}>
+                …
+              </motion.span>
+            ) : null}
+          </AnimatePresence>
+        </div>
       </div>
     </motion.div>
   );
@@ -910,9 +775,6 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
         ? (lang === 'ar' ? 'انتظر الكمبيوتر…' : 'IA réfléchit…')
         : '');
 
-  // ── Shared DicePanel props ─────────────────────────────────────────────────
-  const dpCommon = { game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll };
-
   return (
     <motion.div key={restartKey}
       className="absolute inset-0 z-20 flex flex-col overflow-hidden select-none"
@@ -949,11 +811,14 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
             style={{ transform: lang === 'ar' ? 'scaleX(-1)' : undefined }}/>
         </motion.button>
 
-        {/* Player chips */}
+        {/* Player chips — each chip contains the dice panel inline */}
         <div className="flex-1 flex gap-1.5 overflow-x-auto min-w-0" style={{ scrollbarWidth: 'none' }}>
           {Array.from({ length: game.numPlayers }, (_, i) => (
-            <PlayerChip key={i} game={game} player={i}
-              isAI={isComputer && i !== 0} lang={lang}/>
+            <PlayerDiceChip key={i}
+              game={game} player={i} isAI={isComputer && i !== 0} lang={lang}
+              rolling={rolling} animDice={animDice} justLanded={justLanded}
+              lastDice={lastDice} onRoll={handleRoll} canRoll={canRoll}
+            />
           ))}
         </div>
 
@@ -974,11 +839,7 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
         </motion.button>
       </div>
 
-      {/* ── Board + corner dice panels ── */}
-      {/* The board fills the full available width. Four CornerDice panels are
-          absolutely positioned at the corners of the board frame, sitting atop
-          each player's home-zone corner — mimicking professional Ludo layouts
-          and freeing the board to expand in both directions. */}
+      {/* ── Board ── */}
       <div className="relative z-10 flex-1 min-h-0 flex items-center justify-center"
         style={{ padding: '6px 8px' }}>
         {/* Square board frame — takes full width, height auto-follows via aspect-ratio.
@@ -1019,15 +880,7 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
             <BoardSVG game={game} onPieceClick={handlePieceClick} springCfg={springCfg}/>
           </div>
 
-          {/* ── Corner dice panels — one per player, at their matching home corner ── */}
-          {/* Red  → top-left  (home zone TL) */}
-          <CornerDice {...dpCommon} player={0} corner="tl" isAI={false}/>
-          {/* Blue → top-right (home zone TR) */}
-          <CornerDice {...dpCommon} player={1} corner="tr" isAI={isComputer}/>
-          {/* Yellow → bottom-right (home zone BR) */}
-          <CornerDice {...dpCommon} player={2} corner="br" isAI={isComputer}/>
-          {/* Green  → bottom-left (home zone BL) */}
-          <CornerDice {...dpCommon} player={3} corner="bl" isAI={isComputer}/>
+          {/* Dice panels have moved to the header bar — board is now clean */}
         </motion.div>
       </div>
 
