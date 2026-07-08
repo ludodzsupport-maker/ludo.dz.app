@@ -101,90 +101,109 @@ function getPieceXY(piece: E.Piece, all: E.Piece[]): [number, number] {
   return [cx + dx, cy + dy];
 }
 
-// ─── Die SVG face — 3D rolling animation ─────────────────────────────────────
+// ─── Die face — true CSS 3D cube with 6 dot-faces ────────────────────────────
+// Cube rotation (rotateX, rotateY) so each face value faces the camera.
+// Standard dice: 1-front, 6-back, 2-right, 5-left, 3-top, 4-bottom.
+const FACE_SHOW: Record<number, [number, number]> = {
+  1: [0, 0], 2: [0, -90], 3: [90, 0], 4: [-90, 0], 5: [0, 90], 6: [0, 180],
+};
+function cubeFaceTransform(fv: number, half: number): string {
+  switch (fv) {
+    case 1: return `translateZ(${half}px)`;
+    case 6: return `rotateY(180deg) translateZ(${half}px)`;
+    case 2: return `rotateY(90deg) translateZ(${half}px)`;
+    case 5: return `rotateY(-90deg) translateZ(${half}px)`;
+    case 3: return `rotateX(-90deg) translateZ(${half}px)`;
+    case 4: return `rotateX(90deg) translateZ(${half}px)`;
+    default: return '';
+  }
+}
+
 function DieFace({
   value, neon, col, size, rolling, justLanded, dim,
 }: {
   value: number; neon: string; col: string; size: number;
   rolling?: boolean; justLanded?: boolean; dim?: boolean;
 }) {
-  const dots    = DOTS[Math.max(1, Math.min(6, value))] ?? DOTS[1];
   const opacity = dim ? 0.82 : 1;
   const ctrl    = useAnimationControls();
+  const half    = size / 2;
 
-  // ── Spectacular 3D roll: multi-axis tumble + scale pop toward screen ────────
+  // ── Rolling: multi-axis 3D tumble — 9 keyframes that each cycle ends at
+  //    (720°, −720°, 0°) so the cube is visually at the neutral orientation
+  //    at the end of every loop, ready for a clean landing interrupt.
   useEffect(() => {
     if (!rolling) return;
     ctrl.start({
-      // Each channel cycles at the same period but with different phase/speed
-      // so the dice appears to tumble chaotically in 3D space.
-      rotateX: [0,  130,  260,  390,  220,  420,  560,  700,  360],
-      rotateY: [0,  -95, -220,  -80, -340, -180, -440, -270, -720],
-      rotateZ: [-16,  12,  -9,   13,   -7,   10,   -4,    7,    0],
-      scale:   [1.0, 1.16, 1.01, 1.13, 1.0, 1.15, 1.02, 1.12, 1.0],
-      transition: {
-        duration: 0.58,
-        repeat: Infinity,
-        ease: 'linear',
-      },
+      rotateX: [0, 90, 180, 270, 360, 450, 540, 630, 720],
+      rotateY: [0, -90, -180, -360, -270, -450, -360, -630, -720],
+      rotateZ: [-14, 9, -7, 11, -9, 6, -3, 7, 0],
+      scale:   [1.0, 1.20, 0.97, 1.18, 1.0, 1.16, 0.98, 1.15, 1.0],
+      transition: { duration: 0.62, repeat: Infinity, ease: 'linear' },
     });
   }, [rolling]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Landing: 3D spring-settle with squash & stretch impact ─────────────────
-  // Interrupts any ongoing rolling animation automatically.
+  // ── Landing: snap cube to neutral, then spin to the correct face with
+  //    a squash-and-stretch bounce so the landing feels physical.
   useEffect(() => {
     if (!justLanded) return;
+    const [rx, ry] = FACE_SHOW[Math.max(1, Math.min(6, value))] ?? [0, 0];
+    // Instant reset to 0,0,0 so the keyframe sequence has a known start point.
+    ctrl.set({ rotateX: 0, rotateY: 0, rotateZ: 0, scale: 1 });
     ctrl.start({
-      // Dice snaps to a "just-landed" lean, then wobbles to flat.
-      rotateX: [-22,  8, -3.0,  1.0, 0],
-      rotateY: [ 15, -6,  2.5, -0.8, 0],
-      rotateZ: [  9, -4,  1.5, -0.4, 0],
-      // scale: pop toward viewer on impact, squash, over-recover, settle.
-      scale:   [1.28, 0.76, 1.13, 0.95, 1.0],
+      rotateX: [0, rx + 24, rx - 10, rx + 4, rx],
+      rotateY: [0, ry - 22, ry + 9,  ry - 3, ry],
+      rotateZ: [0, 0, 0, 0, 0],
+      scale:   [1.30, 0.76, 1.14, 0.94, 1.0],
       transition: {
-        duration: 0.52,
-        times: [0, 0.24, 0.54, 0.78, 1.0],
+        duration: 0.56,
+        times: [0, 0.22, 0.52, 0.78, 1.0],
         ease: 'easeOut',
       },
     });
   }, [justLanded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <motion.svg width={size} height={size} viewBox="-3 -3 6 6"
-      animate={ctrl}
-      initial={{ rotateX: 0, rotateY: 0, rotateZ: 0, scale: 1 }}
-      style={{
-        display: 'block',
-        opacity,
-        willChange: 'transform',
-      }}>
-      <defs>
-        <radialGradient id={`dg-${neon.replace('#','')}`} cx="35%" cy="28%" r="75%">
-          <stop offset="0%"   stopColor="rgba(255,255,255,0.24)" />
-          <stop offset="42%"  stopColor={neon} stopOpacity="0.22" />
-          <stop offset="100%" stopColor={col}  stopOpacity="0.18" />
-        </radialGradient>
-        <filter id={`df-${neon.replace('#','')}`} x="-100%" y="-100%" width="300%" height="300%">
-          <feGaussianBlur stdDeviation="0.40" result="b"/>
-          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-      </defs>
-      {/* Body */}
-      <rect x="-3" y="-3" width="6" height="6" rx="0.90"
-        fill={`url(#dg-${neon.replace('#','')})`}
-        stroke={neon} strokeWidth={dim ? 0.19 : 0.26}
-      />
-      {/* Sheen */}
-      <rect x="-2.6" y="-2.7" width="2.0" height="0.75" rx="0.30"
-        fill="white" opacity="0.18"/>
-      {/* Shadow */}
-      <ellipse cx="0.1" cy="2.5" rx="2.1" ry="0.50" fill="rgba(0,0,0,0.28)"/>
-      {/* Dots */}
-      {dots.map(([dx, dy], i) => (
-        <circle key={i} cx={dx} cy={dy} r="0.55"
-          fill={neon} filter={`url(#df-${neon.replace('#','')})`}/>
-      ))}
-    </motion.svg>
+    <div style={{ width: size, height: size, position: 'relative', opacity }}>
+      <motion.div
+        animate={ctrl}
+        initial={{ rotateX: 0, rotateY: 0, rotateZ: 0, scale: 1 }}
+        style={{
+          width: size, height: size,
+          position: 'relative',
+          transformStyle: 'preserve-3d',
+          willChange: 'transform',
+        }}
+      >
+        {([1, 2, 3, 4, 5, 6] as const).map(fv => {
+          const d = DOTS[fv] ?? DOTS[1];
+          return (
+            <div key={fv} style={{
+              position: 'absolute', top: 0, left: 0,
+              width: size, height: size,
+              transform: cubeFaceTransform(fv, half),
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              background: `radial-gradient(circle at 36% 28%, rgba(255,255,255,0.26), ${neon}28 42%, ${col}cc)`,
+              border: `${Math.max(1, Math.round(size * 0.038))}px solid ${neon}`,
+              borderRadius: `${size * 0.16}px`,
+              overflow: 'hidden',
+            }}>
+              <svg width={size} height={size} viewBox="-3 -3 6 6"
+                style={{ display: 'block', position: 'absolute', top: 0, left: 0 }}>
+                {/* Glass sheen */}
+                <rect x="-2.6" y="-2.7" width="2.1" height="0.76" rx="0.30"
+                  fill="white" opacity="0.20"/>
+                {/* Neon dots */}
+                {d.map(([dx, dy], i) => (
+                  <circle key={i} cx={dx} cy={dy} r="0.55" fill={neon}/>
+                ))}
+              </svg>
+            </div>
+          );
+        })}
+      </motion.div>
+    </div>
   );
 }
 
@@ -359,7 +378,7 @@ function CornerDice({
       </div>
 
       {/* Die face with pulse ring — perspective establishes the 3D rendering context */}
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', perspective: '120px' }}>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', perspective: '300px' }}>
         {canTap && !rolling && (
           <motion.div style={{
             position: 'absolute', inset: -6, borderRadius: 10,
@@ -507,6 +526,75 @@ const SQUASH_Y  = 0.91; // scaleY at squash peak (shorter on impact)
 const SQUASH_MS = 46;   // ms — fits within INTER_MS, plays during the pause gap
 // ── Capture: defeat arc (captured piece flies home) ──────────────────────────
 const DEFEAT_ARC_H = 3.20; // SVG units — dramatic high parabolic arc
+
+// ─── Corner pivot map — the 4 diagonal transitions on the outer Ludo track ───
+// Standard Ludo board has exactly 4 corners where consecutive path cells change
+// BOTH row and col simultaneously, causing a pawn to slide diagonally instead
+// of turning a crisp 90°. We insert a pivot waypoint so the pawn completes the
+// axis it was already travelling before turning.
+//
+//  Key format: "fromX,fromY-toX,toY"  (SVG centre-of-cell coords)
+//  Value: the pivot waypoint to insert between from→to
+//
+//  Track 4→5   [6,5]→[5,6]  Red   corner (→ then ↑)  pivot at [6,6]
+//  Track 17→18 [5,8]→[6,9]  Blue  corner (↓ then →)  pivot at [6,8]
+//  Track 30→31 [8,9]→[9,8]  Yellow corner (← then ↓) pivot at [8,8]
+//  Track 43→44 [9,6]→[8,5]  Green corner (↑ then ←)  pivot at [8,6]
+const CORNER_PIVOTS = new Map<string, HopStep>([
+  ['5.5,6.5-6.5,5.5', { x: 6.5, y: 6.5 }],
+  ['8.5,5.5-9.5,6.5', { x: 8.5, y: 6.5 }],
+  ['9.5,8.5-8.5,9.5', { x: 8.5, y: 8.5 }],
+  ['6.5,9.5-5.5,8.5', { x: 6.5, y: 8.5 }],
+]);
+
+// Build a cell-by-cell SVG hop path for a piece moving from pFrom → pTo,
+// inserting corner pivot waypoints so X and Y transitions never conflict.
+function buildHopPath(
+  player: number,
+  index: number,
+  pFrom: number,
+  pTo: number,
+): HopStep[] {
+  const raw: HopStep[] = [];
+
+  if (pFrom === -1) {
+    // Exiting home base: single hop to track entry cell
+    const gp = E.getGridPos(player, 0);
+    if (gp) raw.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
+  } else {
+    const trackEnd = pTo === E.FINISHED_POS ? E.FINISHED_POS - 1 : pTo;
+    for (let r = pFrom + 1; r <= trackEnd; r++) {
+      const gp = E.getGridPos(player, r);
+      if (gp) raw.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
+    }
+    if (pTo === E.FINISHED_POS) raw.push({ x: 7.5, y: 7.5 });
+  }
+
+  if (raw.length === 0) return raw;
+
+  // Starting SVG position of the piece before this move
+  let prevX: number, prevY: number;
+  if (pFrom === -1) {
+    const hb = E.HOME_BASES[player][index];
+    prevX = hb[1] + 0.5; prevY = hb[0] + 0.5;
+  } else {
+    const gp = E.getGridPos(player, pFrom);
+    prevX = gp ? gp[1] + 0.5 : raw[0].x;
+    prevY = gp ? gp[0] + 0.5 : raw[0].y;
+  }
+
+  // Scan each step for a known diagonal corner; if found, prepend the pivot
+  const smoothed: HopStep[] = [];
+  for (const step of raw) {
+    const key = `${prevX},${prevY}-${step.x},${step.y}`;
+    const pivot = CORNER_PIVOTS.get(key);
+    if (pivot) smoothed.push(pivot);
+    smoothed.push(step);
+    prevX = step.x; prevY = step.y;
+  }
+
+  return smoothed;
+}
 
 // ─── PawnToken ────────────────────────────────────────────────────────────────
 // Self-animating piece using two nested motion groups:
@@ -787,6 +875,78 @@ function ShockwaveEffect({
   );
 }
 
+// ─── Home Finish VFX — cyberpunk neon burst when a pawn reaches center ────────
+function HomeFinishVFX({
+  x, y, neon, onDone,
+}: { x: number; y: number; neon: string; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 950);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  const SPOKES = 8;
+  const SPOKE_LEN = 2.8;
+
+  return (
+    <g pointerEvents="none">
+      {/* White-hot core flash */}
+      <motion.circle cx={x} cy={y} r={0.16}
+        fill="white"
+        style={{ transformOrigin: `${x}px ${y}px` }}
+        initial={{ scale: 1, opacity: 0.95 }}
+        animate={{ scale: 5, opacity: 0 }}
+        transition={{ duration: 0.28, ease: 'easeOut' }}
+      />
+      {/* Neon core burst */}
+      <motion.circle cx={x} cy={y} r={0.22}
+        fill={neon}
+        style={{ transformOrigin: `${x}px ${y}px` }}
+        initial={{ scale: 1, opacity: 0.88 }}
+        animate={{ scale: 4, opacity: 0 }}
+        transition={{ duration: 0.40, ease: 'easeOut' }}
+      />
+      {/* Three expanding neon rings, staggered */}
+      {[0, 1, 2].map(i => (
+        <motion.circle
+          key={i}
+          cx={x} cy={y} r={0.12}
+          fill="none"
+          stroke={neon}
+          strokeWidth={0.11 - i * 0.026}
+          style={{ transformOrigin: `${x}px ${y}px` }}
+          initial={{ scale: 1, opacity: 0.90 - i * 0.14 }}
+          animate={{ scale: 11 + i * 6, opacity: 0 }}
+          transition={{ duration: 0.54 + i * 0.14, delay: i * 0.09, ease: 'easeOut' }}
+        />
+      ))}
+      {/* Outer white sparkle ring */}
+      <motion.circle cx={x} cy={y} r={0.09}
+        fill="none" stroke="white" strokeWidth={0.065}
+        style={{ transformOrigin: `${x}px ${y}px` }}
+        initial={{ scale: 1, opacity: 0.88 }}
+        animate={{ scale: 16, opacity: 0 }}
+        transition={{ duration: 0.78, delay: 0.06, ease: 'easeOut' }}
+      />
+      {/* 8 radial particle sparks flying outward */}
+      {Array.from({ length: SPOKES }, (_, i) => {
+        const angle  = (i / SPOKES) * Math.PI * 2;
+        const tx     = Math.cos(angle) * SPOKE_LEN;
+        const ty     = Math.sin(angle) * SPOKE_LEN;
+        return (
+          <motion.g
+            key={i}
+            initial={{ x: 0, y: 0, opacity: 1 }}
+            animate={{ x: tx, y: ty, opacity: 0 }}
+            transition={{ duration: 0.50, delay: 0.04, ease: 'easeOut' }}
+          >
+            <circle cx={x} cy={y} r={0.10} fill={neon}/>
+          </motion.g>
+        );
+      })}
+    </g>
+  );
+}
+
 // ─── BoardSVG — pure game board ───────────────────────────────────────────────
 interface BoardSVGProps {
   game: E.GameState;
@@ -829,17 +989,18 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
   const [pieceAnims, setPieceAnims] = useState<Record<string, PieceAnim>>({});
   const prevPiecesRef = useRef<E.Piece[]>([]);
 
-  // ── Capture visual effects ────────────────────────────────────────────────────
+  // ── Visual effects state ──────────────────────────────────────────────────────
   type ShockwaveEvent = { x: number; y: number; neon: string; id: number };
-  const [shockwave,  setShockwave]  = useState<ShockwaveEvent | null>(null);
-  const [homeImpact, setHomeImpact] = useState<{ player: number; index: number; id: number } | null>(null);
+  const [shockwave,     setShockwave]     = useState<ShockwaveEvent | null>(null);
+  const [homeImpact,    setHomeImpact]    = useState<{ player: number; index: number; id: number } | null>(null);
+  const [homeFinishVFX, setHomeFinishVFX] = useState<ShockwaveEvent | null>(null);
 
   useEffect(() => {
     const prev = prevPiecesRef.current;
     prevPiecesRef.current = pieces;
     if (!prev.length) return;
 
-    // Detect both the captor (relPos advanced) and the captured piece (relPos → -1)
+    // Detect the moving piece (relPos advanced) and any captured piece (relPos → -1)
     let captorPiece:   E.Piece | null = null;
     let captorPrev:    E.Piece | null = null;
     let capturedPiece: E.Piece | null = null;
@@ -848,7 +1009,7 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
       const prevP = prev.find(p => p.player === piece.player && p.index === piece.index);
       if (!prevP || prevP.relPos === piece.relPos) continue;
       if (piece.relPos === -1) {
-        capturedPiece = piece;          // this piece was eaten
+        capturedPiece = piece;
       } else {
         captorPiece = piece;
         captorPrev  = prevP;
@@ -861,33 +1022,30 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
     const pFrom = captorPrev.relPos;
     const pTo   = captorPiece.relPos;
 
-    // Build cell-by-cell hop path for the captor
-    const steps: HopStep[] = [];
-    if (pFrom === -1) {
-      // Exiting home base: single hop to track start
-      const gp = E.getGridPos(captorPiece.player, 0);
-      if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
-    } else {
-      const trackEnd = pTo === E.FINISHED_POS ? E.FINISHED_POS - 1 : pTo;
-      for (let r = pFrom + 1; r <= trackEnd; r++) {
-        const gp = E.getGridPos(captorPiece.player, r);
-        if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
-      }
-      if (pTo === E.FINISHED_POS) steps.push({ x: 7.5, y: 7.5 });
-    }
+    // Build corner-smooth hop path using buildHopPath
+    const steps = buildHopPath(captorPiece.player, captorPiece.index, pFrom, pTo);
 
-    const capturedPid = capturedPiece
-      ? E.pieceId(capturedPiece.player, capturedPiece.index)
-      : null;
-
-    // Build effect callbacks (closures capture stable data at time of turn)
-    const capturedSnapshot = capturedPiece; // stable ref for closures below
+    const capturedPid      = capturedPiece ? E.pieceId(capturedPiece.player, capturedPiece.index) : null;
+    const capturedSnapshot = capturedPiece;
     const captorNeon       = E.PLAYER_NEONS[captorPiece.player];
     const lastStep         = steps[steps.length - 1];
+    const isHomeFinish     = pTo === E.FINISHED_POS;
 
-    const onLastHop: (() => void) | undefined =
+    // Capture shockwave — only when a capture happened
+    const captureCallback: (() => void) | undefined =
       capturedPid && lastStep
         ? () => setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() })
+        : undefined;
+
+    // Home finish VFX — fires when this pawn reaches the center
+    const homeFinishCallback: (() => void) | undefined =
+      isHomeFinish
+        ? () => setHomeFinishVFX({ x: 7.5, y: 7.5, neon: captorNeon, id: Date.now() })
+        : undefined;
+
+    const onLastHop: (() => void) | undefined =
+      (captureCallback || homeFinishCallback)
+        ? () => { captureCallback?.(); homeFinishCallback?.(); }
         : undefined;
 
     const onArrival: (() => void) | undefined =
@@ -898,7 +1056,7 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
           }
         : undefined;
 
-    // Commit: captor hops, captured piece defeat-arcs, all others spring to position
+    // Commit: moving piece hops, captured piece defeat-arcs, all others spring
     setPieceAnims(() => {
       const next: Record<string, PieceAnim> = {};
       pieces.forEach(p => { next[E.pieceId(p.player, p.index)] = { steps: null }; });
@@ -1368,6 +1526,17 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
           y={shockwave.y}
           neon={shockwave.neon}
           onDone={() => setShockwave(null)}
+        />
+      )}
+
+      {/* ── Home finish VFX — neon burst when a pawn reaches center ── */}
+      {homeFinishVFX && (
+        <HomeFinishVFX
+          key={homeFinishVFX.id}
+          x={homeFinishVFX.x}
+          y={homeFinishVFX.y}
+          neon={homeFinishVFX.neon}
+          onDone={() => setHomeFinishVFX(null)}
         />
       )}
 
