@@ -101,31 +101,63 @@ function getPieceXY(piece: E.Piece, all: E.Piece[]): [number, number] {
   return [cx + dx, cy + dy];
 }
 
-// ─── Die SVG face ─────────────────────────────────────────────────────────────
+// ─── Die SVG face — 3D rolling animation ─────────────────────────────────────
 function DieFace({
   value, neon, col, size, rolling, justLanded, dim,
 }: {
   value: number; neon: string; col: string; size: number;
   rolling?: boolean; justLanded?: boolean; dim?: boolean;
 }) {
-  const dots = DOTS[Math.max(1, Math.min(6, value))] ?? DOTS[1];
+  const dots    = DOTS[Math.max(1, Math.min(6, value))] ?? DOTS[1];
   const opacity = dim ? 0.82 : 1;
+  const ctrl    = useAnimationControls();
 
-  const anim =
-    rolling    ? { rotate: [0, 22, -18, 14, -10, 6, -3, 0] }
-    : justLanded ? { scale: [1.35, 0.80, 1.10, 0.95, 1.0] }
-    : {};
+  // ── Spectacular 3D roll: multi-axis tumble + scale pop toward screen ────────
+  useEffect(() => {
+    if (!rolling) return;
+    ctrl.start({
+      // Each channel cycles at the same period but with different phase/speed
+      // so the dice appears to tumble chaotically in 3D space.
+      rotateX: [0,  130,  260,  390,  220,  420,  560,  700,  360],
+      rotateY: [0,  -95, -220,  -80, -340, -180, -440, -270, -720],
+      rotateZ: [-16,  12,  -9,   13,   -7,   10,   -4,    7,    0],
+      scale:   [1.0, 1.16, 1.01, 1.13, 1.0, 1.15, 1.02, 1.12, 1.0],
+      transition: {
+        duration: 0.58,
+        repeat: Infinity,
+        ease: 'linear',
+      },
+    });
+  }, [rolling]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const trans =
-    rolling    ? { duration: 0.40, repeat: Infinity, ease: 'linear' as const }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    : justLanded ? { duration: 0.45, ease: [0.22, 1.7, 0.36, 1] as any }
-    : {};
+  // ── Landing: 3D spring-settle with squash & stretch impact ─────────────────
+  // Interrupts any ongoing rolling animation automatically.
+  useEffect(() => {
+    if (!justLanded) return;
+    ctrl.start({
+      // Dice snaps to a "just-landed" lean, then wobbles to flat.
+      rotateX: [-22,  8, -3.0,  1.0, 0],
+      rotateY: [ 15, -6,  2.5, -0.8, 0],
+      rotateZ: [  9, -4,  1.5, -0.4, 0],
+      // scale: pop toward viewer on impact, squash, over-recover, settle.
+      scale:   [1.28, 0.76, 1.13, 0.95, 1.0],
+      transition: {
+        duration: 0.52,
+        times: [0, 0.24, 0.54, 0.78, 1.0],
+        ease: 'easeOut',
+      },
+    });
+  }, [justLanded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <motion.svg width={size} height={size} viewBox="-3 -3 6 6"
-      style={{ display: 'block', opacity }}
-      animate={anim} transition={trans}>
+      animate={ctrl}
+      initial={{ rotateX: 0, rotateY: 0, rotateZ: 0, scale: 1 }}
+      style={{
+        display: 'block',
+        opacity,
+        willChange: 'transform',
+      }}>
       <defs>
         <radialGradient id={`dg-${neon.replace('#','')}`} cx="35%" cy="28%" r="75%">
           <stop offset="0%"   stopColor="rgba(255,255,255,0.24)" />
@@ -326,8 +358,8 @@ function CornerDice({
         {isAI && <Bot size={8} color="rgba(255,255,255,0.30)" style={{ flexShrink: 0 }}/>}
       </div>
 
-      {/* Die face with pulse ring */}
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Die face with pulse ring — perspective establishes the 3D rendering context */}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', perspective: '120px' }}>
         {canTap && !rolling && (
           <motion.div style={{
             position: 'absolute', inset: -6, borderRadius: 10,
@@ -631,19 +663,19 @@ function PawnToken({
   const pulsePts = `0,${-pR} ${ph3},${-pR*0.5} ${ph3},${pR*0.5} 0,${pR} ${-ph3},${pR*0.5} ${-ph3},${-pR*0.5}`;
 
   return (
-    // Outer group: tile-to-tile x/y movement
+    // Outer group: tile-to-tile x/y movement — GPU-composited layer
     <motion.g
       animate={baseCtrl}
       initial={{ x: finalX, y: finalY }}
       onClick={() => isMovable && !isHopping && onPieceClick()}
-      style={{ cursor: isMovable && !isHopping ? 'pointer' : 'default' }}>
+      style={{ cursor: isMovable && !isHopping ? 'pointer' : 'default', willChange: 'transform' }}>
 
       {/* Ground shadow — anchored to base elevation, NOT lifted by arc */}
       <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
         fill="rgba(0,0,0,0.62)"/>
 
-      {/* Inner group: parabolic Y-arc overlay */}
-      <motion.g animate={arcCtrl} initial={{ y: 0 }}>
+      {/* Inner group: parabolic Y-arc overlay — GPU-composited for buttery arcs */}
+      <motion.g animate={arcCtrl} initial={{ y: 0 }} style={{ willChange: 'transform' }}>
 
         {/* Ambient neon bloom */}
         <circle cx={0} cy={0} r={HR*1.55} fill={neon} fillOpacity="0.042"/>
