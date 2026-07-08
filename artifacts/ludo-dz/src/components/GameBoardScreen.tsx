@@ -560,137 +560,175 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
       {/* ── Background ── */}
       <rect width="15" height="15" fill="#030b16"/>
 
-      {/* ── Home zones — Crystal Nexus Chambers ── */}
+      {/* ── Home zones — Lapidary Court ── */}
       {[0,1,2,3].map(player => {
         const [zr, zc] = [[0,0],[0,9],[9,9],[9,0]][player] as [number,number];
-        const col  = E.PLAYER_COLORS[player];
-        const neon = E.PLAYER_NEONS[player];
+        const neon      = E.PLAYER_NEONS[player];
         const exists    = player < game.numPlayers;
         const isCurrent = player === game.activePlayer && game.phase !== 'done';
-        const bLen = 0.85;
-        const corners: [[number,number],[number,number],[number,number]][] = [
-          [[zc+bLen,zr],[zc,zr],[zc,zr+bLen]],
-          [[zc+6-bLen,zr],[zc+6,zr],[zc+6,zr+bLen]],
-          [[zc,zr+6-bLen],[zc,zr+6],[zc+bLen,zr+6]],
-          [[zc+6-bLen,zr+6],[zc+6,zr+6],[zc+6,zr+6-bLen]],
-        ];
+        const cx = zc + 3, cy = zr + 3;
+
+        // Opacity scaler: active > inactive > missing
+        const ao = (base: number) =>
+          exists ? (isCurrent ? Math.min(base * 1.55, 1) : base) : base * 0.18;
+
+        // Diamond polygon points string
+        const diam = (x: number, y: number, d: number): string =>
+          `${x},${y-d} ${x+d},${y} ${x},${y+d} ${x-d},${y}`;
+
         return (
           <g key={`hz-${player}`}>
-            {/* Dark crystalline base */}
-            <rect x={zc} y={zr} width="6" height="6" fill="#020912" fillOpacity="0.96"/>
-            {/* Radial color atmosphere */}
+
+            {/* ── 0 · Background void ── */}
+            <rect x={zc} y={zr} width="6" height="6" fill="#04101e"/>
             <rect x={zc} y={zr} width="6" height="6"
               fill={`url(#hbg${player})`}
-              fillOpacity={isCurrent ? 1.0 : exists ? 0.55 : 0.14}
+              fillOpacity={isCurrent ? 0.90 : exists ? 0.44 : 0.10}
             />
-            {/* Outer border */}
-            <rect x={zc} y={zr} width="6" height="6" fill="none"
-              stroke={neon}
-              strokeWidth={isCurrent ? 0.09 : 0.05}
-              strokeOpacity={isCurrent ? 0.82 : exists ? 0.36 : 0.10}
-            />
-            {/* HUD corner brackets */}
-            {corners.map(([[x1,y1],[x2,y2],[x3,y3]], ci) => (
-              <polyline key={ci}
-                points={`${x1},${y1} ${x2},${y2} ${x3},${y3}`}
-                stroke={neon} strokeWidth="0.11"
-                strokeOpacity={isCurrent ? 0.95 : exists ? 0.52 : 0.14}
-                fill="none" strokeLinecap="round" strokeLinejoin="round"
+
+            {/* ── 1 · Ghost monogram watermark ── */}
+            <text
+              x={cx} y={cy + 0.90}
+              textAnchor="middle" dominantBaseline="middle"
+              fontSize="3.40" fontFamily="Rajdhani, sans-serif"
+              fontWeight="900" letterSpacing="-0.05"
+              fill={neon} fillOpacity={ao(0.058)}
+              style={{ userSelect: 'none', pointerEvents: 'none' }}
+            >
+              {['R','B','J','V'][player]}
+            </text>
+
+            {/* ── 2 · 8-spoke structural asterisk ── */}
+            {[0, 45, 90, 135].map(angle => (
+              <rect key={angle}
+                x={cx - 2.60} y={cy - 0.068}
+                width={5.20} height={0.136}
+                fill={neon} fillOpacity={ao(0.09)}
+                transform={`rotate(${angle} ${cx} ${cy})`}
+                rx="0.068"
               />
             ))}
-            {/* Outer dashed orbital ring */}
-            <circle cx={zc+3} cy={zr+3} r="2.26"
-              fill="none" stroke={neon} strokeWidth="0.028"
-              strokeOpacity={isCurrent ? 0.42 : exists ? 0.18 : 0.05}
-              strokeDasharray="0.20 0.13"
-            />
-            {/* Middle solid orbital ring */}
-            <circle cx={zc+3} cy={zr+3} r="1.56"
-              fill="none" stroke={neon} strokeWidth="0.052"
-              strokeOpacity={isCurrent ? 0.62 : exists ? 0.28 : 0.07}
-            />
-            {/* 8 tick marks on middle ring */}
-            {Array.from({length: 8}, (_, ti) => {
-              const a = (ti * Math.PI) / 4;
+
+            {/* ── 3 · Structural grid (cross + diagonals) ── */}
+            <line x1={zc+0.28} y1={cy} x2={zc+5.72} y2={cy}
+              stroke={neon} strokeWidth="0.016" strokeOpacity={ao(0.26)}/>
+            <line x1={cx} y1={zr+0.28} x2={cx} y2={zr+5.72}
+              stroke={neon} strokeWidth="0.016" strokeOpacity={ao(0.26)}/>
+            <line x1={zc+0.36} y1={zr+0.36} x2={zc+5.64} y2={zr+5.64}
+              stroke={neon} strokeWidth="0.013" strokeOpacity={ao(0.16)}/>
+            <line x1={zc+5.64} y1={zr+0.36} x2={zc+0.36} y2={zr+5.64}
+              stroke={neon} strokeWidth="0.013" strokeOpacity={ao(0.16)}/>
+
+            {/* ── 4 · Chamfered inner inset frame ── */}
+            {(() => {
+              const m = 0.26, cut = 0.30;
+              const x0 = zc+m, x1 = zc+6-m, y0 = zr+m, y1 = zr+6-m;
               return (
-                <line key={ti}
-                  x1={zc+3 + Math.cos(a)*1.46} y1={zr+3 + Math.sin(a)*1.46}
-                  x2={zc+3 + Math.cos(a)*1.66} y2={zr+3 + Math.sin(a)*1.66}
-                  stroke={neon} strokeWidth="0.038"
-                  strokeOpacity={isCurrent ? 0.68 : exists ? 0.30 : 0.08}
+                <polygon
+                  points={[
+                    `${x0+cut},${y0}`, `${x1-cut},${y0}`,
+                    `${x1},${y0+cut}`, `${x1},${y1-cut}`,
+                    `${x1-cut},${y1}`, `${x0+cut},${y1}`,
+                    `${x0},${y1-cut}`, `${x0},${y0+cut}`,
+                  ].join(' ')}
+                  fill="none"
+                  stroke={neon} strokeWidth="0.026"
+                  strokeOpacity={isCurrent ? 0.62 : exists ? 0.26 : 0.06}
                 />
               );
-            })}
-            {/* Inner glow ring */}
-            <circle cx={zc+3} cy={zr+3} r="0.84"
-              fill={col} fillOpacity={isCurrent ? 0.24 : exists ? 0.10 : 0.03}
-              stroke={neon} strokeWidth="0.068"
-              strokeOpacity={isCurrent ? 0.85 : exists ? 0.38 : 0.09}
-            />
-            {/* Energy lines from center to slot positions */}
-            {E.HOME_BASES[player].map(([br, bc], si) => (
-              <line key={si}
-                x1={zc+3} y1={zr+3} x2={bc+0.5} y2={br+0.5}
-                stroke={neon} strokeWidth="0.024"
-                strokeOpacity={exists ? 0.20 : 0.04}
+            })()}
+
+            {/* ── 5 · Mid-edge accent diamonds ── */}
+            {([[cx, zr+0.14],[zc+5.86, cy],[cx, zr+5.86],[zc+0.14, cy]] as [number,number][]).map(([ax, ay], i) => (
+              <polygon key={i} points={diam(ax, ay, 0.14)}
+                fill={neon} fillOpacity={ao(0.62)}
               />
             ))}
-            {/* Center nexus — pulses when active */}
-            {isCurrent ? (
-              <motion.circle cx={zc+3} cy={zr+3} r={0.22} fill={neon}
-                animate={{ r: [0.17, 0.27, 0.17], fillOpacity: [0.80, 1.0, 0.80] }}
-                transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            ) : (
-              <circle cx={zc+3} cy={zr+3} r="0.20"
-                fill={neon} fillOpacity={exists ? 0.62 : 0.10}
-              />
-            )}
-            {/* Slot landing pads */}
+
+            {/* ── 6 · Outer border ── */}
+            <rect x={zc} y={zr} width="6" height="6" fill="none"
+              stroke={neon}
+              strokeWidth={isCurrent ? 0.076 : 0.040}
+              strokeOpacity={isCurrent ? 0.90 : exists ? 0.38 : 0.08}
+            />
+
+            {/* ── 7 · Pawn slots — diamond-frame gem settings ── */}
             {E.HOME_BASES[player].map(([br, bc], si) => {
-              const sx = bc+0.5, sy = br+0.5;
+              const sx = bc + 0.5, sy = br + 0.5;
               return (
                 <g key={si}>
-                  {/* Outer glow halo */}
-                  <circle cx={sx} cy={sy} r="0.56"
-                    fill={neon} fillOpacity={exists ? 0.07 : 0.015}/>
-                  {/* Outer dark ring */}
-                  <circle cx={sx} cy={sy} r="0.46"
-                    fill="#020912" fillOpacity="0.88"
-                    stroke={neon} strokeWidth="0.058"
-                    strokeOpacity={exists ? 0.55 : 0.10}
+                  {/* Outer diamond ambient glow */}
+                  <polygon points={diam(sx, sy, 0.50)}
+                    fill={neon} fillOpacity={exists ? 0.055 : 0.010}
                   />
-                  {/* Mid colored ring */}
-                  <circle cx={sx} cy={sy} r="0.31"
-                    fill={col} fillOpacity={exists ? 0.18 : 0.04}
-                    stroke={neon} strokeWidth="0.034"
-                    strokeOpacity={exists ? 0.40 : 0.08}
+                  {/* Diamond frame */}
+                  <polygon points={diam(sx, sy, 0.44)}
+                    fill="#04101e" fillOpacity="0.92"
+                    stroke={neon} strokeWidth="0.050"
+                    strokeOpacity={isCurrent ? 0.92 : exists ? 0.55 : 0.11}
                   />
-                  {/* Deep concave well */}
-                  <circle cx={sx} cy={sy} r="0.17" fill="rgba(0,0,0,0.80)"/>
-                  {/* Inner jewel dot */}
-                  <circle cx={sx} cy={sy} r="0.076"
-                    fill={neon} fillOpacity={exists ? 0.92 : 0.12}
+                  {/* Tip accent diamonds at 4 points of the frame */}
+                  {([[sx, sy-0.56],[sx+0.56, sy],[sx, sy+0.56],[sx-0.56, sy]] as [number,number][]).map(([ax,ay], ti) => (
+                    <polygon key={ti} points={diam(ax, ay, 0.075)}
+                      fill={neon} fillOpacity={exists ? 0.72 : 0.08}
+                    />
+                  ))}
+                  {/* Inner circular socket */}
+                  <circle cx={sx} cy={sy} r="0.23"
+                    fill="#020810"
+                    stroke={neon} strokeWidth="0.028"
+                    strokeOpacity={exists ? 0.52 : 0.09}
+                  />
+                  {/* Center gem diamond */}
+                  <polygon points={diam(sx, sy, 0.092)}
+                    fill={neon} fillOpacity={exists ? 0.96 : 0.12}
                   />
                   {/* Specular glint */}
-                  <circle cx={sx-0.05} cy={sy-0.05} r="0.032"
-                    fill="white" opacity={exists ? 0.58 : 0.08}
+                  <circle cx={sx-0.030} cy={sy-0.030} r="0.036"
+                    fill="white" opacity={exists ? 0.72 : 0.08}
                   />
                 </g>
               );
             })}
-            {/* Player label */}
+
+            {/* ── 8 · Center sigil ── */}
+            {/* Axis cross arms */}
+            <line x1={cx-0.42} y1={cy} x2={cx+0.42} y2={cy}
+              stroke={neon} strokeWidth="0.034" strokeOpacity={ao(0.80)} strokeLinecap="round"/>
+            <line x1={cx} y1={cy-0.42} x2={cx} y2={cy+0.42}
+              stroke={neon} strokeWidth="0.034" strokeOpacity={ao(0.80)} strokeLinecap="round"/>
+            {/* Pulsing/static diamond sigil */}
+            {isCurrent ? (
+              <motion.polygon
+                points={diam(cx, cy, 0.20)}
+                fill={neon}
+                animate={{ fillOpacity: [0.65, 1.0, 0.65] }}
+                transition={{ duration: 1.35, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            ) : (
+              <polygon points={diam(cx, cy, 0.18)}
+                fill={neon} fillOpacity={ao(0.70)}
+              />
+            )}
+            {/* Center white glint */}
+            <circle cx={cx} cy={cy} r="0.055"
+              fill="white" opacity={ao(0.82)}
+            />
+
+            {/* ── 9 · Player label ── */}
             {exists && (
               <text
-                x={zc+3}
-                y={zr + (player >= 2 ? 5.62 : 0.88)}
-                textAnchor="middle" fontSize="0.42"
+                x={cx}
+                y={zr + (player >= 2 ? 5.66 : 0.82)}
+                textAnchor="middle" fontSize="0.36"
                 fontFamily="Rajdhani, sans-serif" fontWeight="700"
-                fill={neon} opacity={isCurrent ? 1 : 0.42}
+                fill={neon} opacity={isCurrent ? 0.90 : 0.34}
+                style={{ userSelect: 'none', pointerEvents: 'none' }}
               >
                 {['R','B','J','V'][player]}
               </text>
             )}
+
           </g>
         );
       })}
