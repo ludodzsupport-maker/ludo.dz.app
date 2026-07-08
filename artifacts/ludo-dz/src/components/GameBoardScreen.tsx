@@ -5,7 +5,7 @@
 // • Animation speed setting (Fast / Normal / Slow)
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { ArrowLeft, Bot, RotateCcw, Settings, Trophy, X, Zap } from 'lucide-react';
 import { GamePiece } from './GamePiece';
 import * as E from '../lib/ludo-engine';
@@ -462,6 +462,212 @@ function PlayerChip({ game, player, isAI, lang }: {
   );
 }
 
+// ─── Hop animation constants ─────────────────────────────────────────────────
+interface HopStep { x: number; y: number }
+// Premium cubic-bezier easing: snappy ease-out-quart for lateral movement
+const STEP_EASE: [number, number, number, number] = [0.22, 1.0, 0.36, 1.0];
+const ARC_H     = 0.80; // SVG units — arc peak height per hop
+const INTER_MS  = 50;   // ms pause between consecutive steps ("tap" feel)
+const LAND_SPRING = { type: 'spring' as const, stiffness: 680, damping: 34, mass: 0.55 };
+
+// ─── PawnToken ────────────────────────────────────────────────────────────────
+// Self-animating piece using two nested motion groups:
+//   Outer motion.g → moves tile-to-tile in x/y (cubic-bezier STEP_EASE)
+//   Inner motion.g → applies parabolic Y-arc overlay per step
+// This separation lets X and Y-arc be animated independently, producing a true
+// parabolic flight path: piece traverses each cell with a smooth hop, peaks at
+// 45% of step duration, then descends and snaps to canonical stacking position.
+function PawnToken({
+  pid, player, finalX, finalY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
+}: {
+  pid: string; player: number;
+  finalX: number; finalY: number;
+  hopSteps: HopStep[] | null;   // null=spring; []=capture-snap; [...n]=hop sequence
+  hopMs: number;
+  springCfg: { stiffness: number; damping: number; mass: number };
+  isMovable: boolean;
+  onPieceClick: () => void;
+}) {
+  const baseCtrl = useAnimationControls(); // drives outer x/y position
+  const arcCtrl  = useAnimationControls(); // drives inner y-arc offset
+  const [isHopping, setIsHopping] = useState(false);
+
+  // Stable refs so async closures always see the latest values
+  const seqKeyRef      = useRef(0);
+  const finalRef       = useRef({ x: finalX, y: finalY });
+  const springCfgRef   = useRef(springCfg);
+  finalRef.current     = { x: finalX, y: finalY };
+  springCfgRef.current = springCfg;
+
+  // ── Effect 1: hop sequence ──────────────────────────────────────────────────
+  // Fires whenever hopSteps changes to a new non-null value (i.e., this piece moved)
+  useEffect(() => {
+    if (hopSteps === null) return; // Effect 2 handles non-moving pieces
+
+    const key   = ++seqKeyRef.current;
+    const stale = () => seqKeyRef.current !== key;
+
+    arcCtrl.set({ y: 0 }); // reset arc before new sequence
+
+    if (!hopSteps.length) {
+      // Capture — spring-snap directly to home base, no hop
+      const { x, y } = finalRef.current;
+      baseCtrl.start({ x, y, transition: { type: 'spring', ...springCfgRef.current } });
+      return;
+    }
+
+    setIsHopping(true);
+
+    (async () => {
+      const dur = hopMs / 1000; // step duration in seconds
+
+      for (let i = 0; i < hopSteps.length; i++) {
+        if (stale()) return;
+        const step = hopSteps[i];
+
+        // Move base position to next cell (smooth ease-out-quart) while
+        // simultaneously running a parabolic arc on the inner group.
+        // Promise.all ensures both transitions complete before the next step.
+        await Promise.all([
+          baseCtrl.start({
+            x: step.x, y: step.y,
+            transition: { duration: dur, ease: STEP_EASE },
+          }),
+          arcCtrl.start({
+            // Keyframes: ground → peak → ground (true parabolic shape)
+            y: [0, -ARC_H, 0],
+            transition: {
+              duration: dur,
+              times: [0, 0.45, 1],       // peak at 45% of step duration
+              ease: ['easeIn', 'easeOut'], // natural gravity: accelerate up, decelerate down
+            },
+          }),
+        ]);
+
+        // Brief inter-step pause for premium "tap" feel between hops
+        if (i < hopSteps.length - 1) {
+          if (stale()) return;
+          await new Promise<void>(r => setTimeout(r, INTER_MS));
+        }
+      }
+
+      if (stale()) return;
+
+      // Final reconcile: spring-snap to canonical stacking position
+      const { x, y } = finalRef.current;
+      await baseCtrl.start({ x, y, transition: LAND_SPRING });
+      if (!stale()) setIsHopping(false);
+    })();
+  }, [hopSteps]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Effect 2: non-hop position updates ─────────────────────────────────────
+  // When hopSteps is null (this piece didn't move), spring to the new canonical
+  // position. This handles stacking reflows when a neighbour arrives/departs.
+  useEffect(() => {
+    if (hopSteps !== null) return; // Effect 1 owns the hopping case
+    baseCtrl.start({ x: finalX, y: finalY,
+      transition: { type: 'spring', ...springCfgRef.current } });
+  }, [finalX, finalY, hopSteps]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Visual geometry (identical to original — no style changes) ───────────────
+  const neon     = E.PLAYER_NEONS[player];
+  const HR       = 0.325;
+  const h3       = HR * 0.866;
+  const hexPts   = `0,${-HR} ${h3},${-HR*0.5} ${h3},${HR*0.5} 0,${HR} ${-h3},${HR*0.5} ${-h3},${-HR*0.5}`;
+  const hr2      = HR * 0.62;
+  const h32      = hr2 * 0.866;
+  const innerPts = `0,${-hr2} ${h32},${-hr2*0.5} ${h32},${hr2*0.5} 0,${hr2} ${-h32},${hr2*0.5} ${-h32},${-hr2*0.5}`;
+  const pR       = HR + 0.148;
+  const ph3      = pR * 0.866;
+  const pulsePts = `0,${-pR} ${ph3},${-pR*0.5} ${ph3},${pR*0.5} 0,${pR} ${-ph3},${pR*0.5} ${-ph3},${-pR*0.5}`;
+
+  return (
+    // Outer group: tile-to-tile x/y movement
+    <motion.g
+      animate={baseCtrl}
+      initial={{ x: finalX, y: finalY }}
+      onClick={() => isMovable && !isHopping && onPieceClick()}
+      style={{ cursor: isMovable && !isHopping ? 'pointer' : 'default' }}>
+
+      {/* Ground shadow — anchored to base elevation, NOT lifted by arc */}
+      <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
+        fill="rgba(0,0,0,0.62)"/>
+
+      {/* Inner group: parabolic Y-arc overlay */}
+      <motion.g animate={arcCtrl} initial={{ y: 0 }}>
+
+        {/* Ambient neon bloom */}
+        <circle cx={0} cy={0} r={HR*1.55} fill={neon} fillOpacity="0.042"/>
+
+        {/* Movable hex pulse ring */}
+        {isMovable && (
+          <motion.polygon points={pulsePts}
+            fill="none" stroke={neon} strokeWidth="0.076"
+            animate={{ opacity: [0.15, 0.88, 0.15] }}
+            transition={{ duration: 0.88, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        )}
+
+        {/* Hex body */}
+        <polygon points={hexPts}
+          fill={`url(#pgcp${player})`}
+          filter={isMovable ? `url(#pglow${player})` : undefined}
+        />
+
+        {/* Neon hex rim */}
+        <polygon points={hexPts} fill="none"
+          stroke={isMovable ? neon : `url(#pgrim${player})`}
+          strokeWidth={isMovable ? 0.056 : 0.028}
+        />
+
+        {/* Inner hex frame */}
+        <polygon points={innerPts}
+          fill="none" stroke={neon} strokeWidth="0.012" strokeOpacity="0.26"
+        />
+
+        {/* 3 internal circuit trace lines */}
+        <line x1={0} y1={-HR*0.86} x2={0} y2={HR*0.86}
+          stroke={neon} strokeWidth="0.010" strokeOpacity="0.22"/>
+        <line x1={-h3*0.86} y1={-HR*0.5*0.86} x2={h3*0.86} y2={HR*0.5*0.86}
+          stroke={neon} strokeWidth="0.010" strokeOpacity="0.17"/>
+        <line x1={h3*0.86} y1={-HR*0.5*0.86} x2={-h3*0.86} y2={HR*0.5*0.86}
+          stroke={neon} strokeWidth="0.010" strokeOpacity="0.17"/>
+
+        {/* Vertex tick marks (5 — skip top, reserved for antenna) */}
+        {([[h3,-HR*0.5],[h3,HR*0.5],[0,HR],[-h3,HR*0.5],[-h3,-HR*0.5]] as [number,number][])
+          .map(([vx,vy], vi) => (
+            <line key={vi}
+              x1={vx} y1={vy}
+              x2={vx*(1+0.068/HR)} y2={vy*(1+0.068/HR)}
+              stroke={neon} strokeWidth="0.018" strokeOpacity="0.66"
+            />
+          ))}
+
+        {/* Top antenna spike + signal dot */}
+        <line x1={0} y1={-HR} x2={0} y2={-HR-0.172}
+          stroke={neon} strokeWidth="0.015" strokeOpacity="0.84" strokeLinecap="round"/>
+        <circle cx={0} cy={-HR-0.172} r="0.026" fill={neon} opacity="0.92"/>
+
+        {/* Central targeting crosshair */}
+        <line x1={-0.118} y1={0} x2={0.118} y2={0}
+          stroke="white" strokeWidth="0.013" strokeOpacity="0.60"/>
+        <line x1={0} y1={-0.118} x2={0} y2={0.118}
+          stroke="white" strokeWidth="0.013" strokeOpacity="0.60"/>
+        <circle cx={0} cy={0} r="0.054"
+          fill="none" stroke="white" strokeWidth="0.011" strokeOpacity="0.44"/>
+
+        {/* Specular highlight along upper-left edge */}
+        <line
+          x1={-h3*0.48} y1={-HR*0.5*0.48}
+          x2={-h3*0.04} y2={-HR*0.88}
+          stroke="white" strokeWidth="0.028" strokeOpacity="0.56" strokeLinecap="round"
+        />
+        <circle cx={-h3*0.27} cy={-HR*0.68} r="0.019" fill="white" opacity="0.46"/>
+      </motion.g>
+    </motion.g>
+  );
+}
+
 // ─── BoardSVG — pure game board ───────────────────────────────────────────────
 interface BoardSVGProps {
   game: E.GameState;
@@ -493,37 +699,16 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
     });
   }, [game.movable, game.phase, pieces]);
 
-  // ── Sequential hop animation ──────────────────────────────────────────────
-  // Each piece step gets a mini parabolic arc: piece lifts ARC_H SVG units
-  // on the way to each cell, then drops and settles at the canonical position.
-  const ARC_H      = 0.72; // SVG units the piece lifts at the peak of each hop
-  const HOP_SPRING = { type: 'spring' as const, stiffness: 500, damping: 26, mass: 0.65 };
-
-  // dispPos: displayed (x,y) per piece — initialised to canonical positions
-  const [dispPos, setDispPos] = useState<Record<string, { x: number; y: number }>>(() => {
-    const m: Record<string, { x: number; y: number }> = {};
-    pieces.forEach(p => {
-      const [x, y] = getPieceXY(p, pieces);
-      m[E.pieceId(p.player, p.index)] = { x, y };
-    });
-    return m;
-  });
-  const [arcY,    setArcY]    = useState<Record<string, number>>({});
-  const [hopping, setHopping] = useState<Record<string, boolean>>({});
-  const prevPRef = useRef<E.Piece[]>([]);
-  const hopTRef  = useRef<Record<string, ReturnType<typeof setTimeout>[]>>({});
+  // ── Piece hop state — which piece is hopping and its cell-by-cell path ────────
+  const [pieceHops, setPieceHops] = useState<Record<string, HopStep[] | null>>({});
+  const prevPiecesRef = useRef<E.Piece[]>([]);
 
   useEffect(() => {
-    const prev = prevPRef.current;
-    prevPRef.current = pieces;
+    const prev = prevPiecesRef.current;
+    prevPiecesRef.current = pieces;
+    if (!prev.length) return;
 
-    // Cancel ALL in-flight hop timers whenever the game state changes
-    Object.values(hopTRef.current).flat().forEach(clearTimeout);
-    hopTRef.current = {};
-
-    if (!prev.length) return; // first render — initialiser already set dispPos
-
-    // Find the single piece that moved this turn (only one can move per turn in Ludo)
+    // Find the single piece that moved this turn
     let movedPiece: E.Piece | null = null;
     let movedPrev:  E.Piece | null = null;
     for (const piece of pieces) {
@@ -532,81 +717,39 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
         movedPiece = piece; movedPrev = prevP; break;
       }
     }
-
-    // Immediately resync all non-hopping pieces to canonical getPieceXY.
-    // This keeps stacking offsets correct when a neighbour joins or leaves a cell.
-    const movingPid = movedPiece ? E.pieceId(movedPiece.player, movedPiece.index) : null;
-    setDispPos(d => {
-      const next = { ...d };
-      pieces.forEach(p => {
-        const pid = E.pieceId(p.player, p.index);
-        if (pid === movingPid) return; // will be animated by hop sequence below
-        const [x, y] = getPieceXY(p, pieces);
-        next[pid] = { x, y };
-      });
-      return next;
-    });
-    setHopping({});
-    setArcY({});
-
     if (!movedPiece || !movedPrev) return;
 
-    const pid    = movingPid!;
-    const pFrom  = movedPrev.relPos;
-    const pTo    = movedPiece.relPos;
-    hopTRef.current[pid] = [];
-    const push = (t: ReturnType<typeof setTimeout>) => hopTRef.current[pid].push(t);
+    const pid   = E.pieceId(movedPiece.player, movedPiece.index);
+    const pFrom = movedPrev.relPos;
+    const pTo   = movedPiece.relPos;
 
-    // Captured piece (relPos → -1): snap to home base with a spring, no hop
-    if (pTo === -1) {
-      const [x, y] = getPieceXY(movedPiece, pieces);
-      setDispPos(d => ({ ...d, [pid]: { x, y } }));
-      return;
-    }
-
-    // Build one grid position per cell the piece visits on its way to pTo
-    const steps: { x: number; y: number }[] = [];
-    if (pFrom === -1) {
-      // Exiting home base → single hop to track start
-      const gp = E.getGridPos(movedPiece.player, 0);
-      if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
-    } else {
-      const trackEnd = pTo === E.FINISHED_POS ? E.FINISHED_POS - 1 : pTo;
-      for (let r = pFrom + 1; r <= trackEnd; r++) {
-        const gp = E.getGridPos(movedPiece.player, r);
+    // Build the cell-by-cell hop path
+    // pTo === -1 (capture) → empty steps array → PawnToken spring-snaps to home
+    const steps: HopStep[] = [];
+    if (pTo !== -1) {
+      if (pFrom === -1) {
+        // Exiting home base: single hop to track start
+        const gp = E.getGridPos(movedPiece.player, 0);
         if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
+      } else {
+        const trackEnd = pTo === E.FINISHED_POS ? E.FINISHED_POS - 1 : pTo;
+        for (let r = pFrom + 1; r <= trackEnd; r++) {
+          const gp = E.getGridPos(movedPiece.player, r);
+          if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
+        }
+        if (pTo === E.FINISHED_POS) steps.push({ x: 7.5, y: 7.5 });
       }
-      if (pTo === E.FINISHED_POS) steps.push({ x: 7.5, y: 7.5 });
     }
 
-    if (!steps.length) return;
-
-    setHopping(h => ({ ...h, [pid]: true }));
-    const capturedPiece = movedPiece; // stable reference for closure
-
-    steps.forEach((pos, i) => {
-      push(setTimeout(() => {
-        setDispPos(d => ({ ...d, [pid]: pos }));
-        setArcY(a => ({ ...a, [pid]: ARC_H }));
-        // Drop arc back after the peak → parabolic landing
-        push(setTimeout(() => setArcY(a => ({ ...a, [pid]: 0 })), hopMs * 0.46));
-        if (i === steps.length - 1) {
-          // After landing: mark done and reconcile to canonical getPieceXY
-          // (accounts for stacking offsets at the destination cell)
-          push(setTimeout(() => {
-            setHopping(h => ({ ...h, [pid]: false }));
-            const [fx, fy] = getPieceXY(capturedPiece, pieces);
-            setDispPos(d => ({ ...d, [pid]: { x: fx, y: fy } }));
-          }, hopMs));
-        }
-      }, i * hopMs));
+    // Give this piece its new hop sequence; reset all others to null so they
+    // spring directly to their new canonical positions via Effect 2 in PawnToken.
+    setPieceHops(() => {
+      const next: Record<string, HopStep[] | null> = {};
+      pieces.forEach(p => { next[E.pieceId(p.player, p.index)] = null; });
+      next[pid] = steps;
+      return next;
     });
-  }, [pieces, hopMs]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Cleanup all hop timers on unmount
-  useEffect(() => () => {
-    Object.values(hopTRef.current).flat().forEach(clearTimeout);
-  }, []);
+  }, [pieces]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <svg viewBox="0 0 15 15"
@@ -1047,107 +1190,23 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
         transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
       />
 
-      {/* ── Pieces — Cyberpunk Hex Drone ── */}
-      {piecePositions.map(({ player, index, xy: [cx, cy] }) => {
-        const pid       = E.pieceId(player, index);
-        const isMovable = game.movable.includes(pid);
-        const neon      = E.PLAYER_NEONS[player];
-        const HR        = 0.325;                  // hex radius
-        const h3        = HR * 0.866;             // √3/2 factor
-        const hexPts    = `0,${-HR} ${h3},${-HR*0.5} ${h3},${HR*0.5} 0,${HR} ${-h3},${HR*0.5} ${-h3},${-HR*0.5}`;
-        const hr2       = HR * 0.62;              // inner hex radius
-        const h32       = hr2 * 0.866;
-        const innerPts  = `0,${-hr2} ${h32},${-hr2*0.5} ${h32},${hr2*0.5} 0,${hr2} ${-h32},${hr2*0.5} ${-h32},${-hr2*0.5}`;
-        const pR        = HR + 0.148;             // pulse hex radius
-        const ph3       = pR * 0.866;
-        const pulsePts  = `0,${-pR} ${ph3},${-pR*0.5} ${ph3},${pR*0.5} 0,${pR} ${-ph3},${pR*0.5} ${-ph3},${-pR*0.5}`;
-
-        const dsp = dispPos[pid] ?? { x: cx, y: cy };
-        const arc = arcY[pid]   ?? 0;
-        const isH = hopping[pid] ?? false;
-
+      {/* ── Pieces ── each PawnToken manages its own dual-control animation ── */}
+      {piecePositions.map(({ player, index, xy: [fx, fy] }) => {
+        const pid = E.pieceId(player, index);
+        const hop = pieceHops[pid];
         return (
-          <motion.g key={pid}
-            animate={{ x: dsp.x, y: dsp.y - arc }}
-            initial={{ x: cx, y: cy }}
-            transition={isH ? HOP_SPRING : { type: 'spring', ...springCfg }}
-            onClick={() => isMovable && !isH && onPieceClick(pid)}
-            style={{ cursor: isMovable && !isH ? 'pointer' : 'default' }}>
-
-            {/* Ambient neon bloom */}
-            <circle cx={0} cy={0} r={HR*1.55} fill={neon} fillOpacity="0.042"/>
-
-            {/* Movable hex pulse ring */}
-            {isMovable && (
-              <motion.polygon points={pulsePts}
-                fill="none" stroke={neon} strokeWidth="0.076"
-                animate={{ opacity: [0.15, 0.88, 0.15] }}
-                transition={{ duration: 0.88, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            )}
-
-            {/* Drop shadow */}
-            <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
-              fill="rgba(0,0,0,0.62)"/>
-
-            {/* Hex body */}
-            <polygon points={hexPts}
-              fill={`url(#pgcp${player})`}
-              filter={isMovable ? `url(#pglow${player})` : undefined}
-            />
-
-            {/* Neon hex rim */}
-            <polygon points={hexPts}
-              fill="none"
-              stroke={isMovable ? neon : `url(#pgrim${player})`}
-              strokeWidth={isMovable ? 0.056 : 0.028}
-            />
-
-            {/* Inner hex frame */}
-            <polygon points={innerPts}
-              fill="none" stroke={neon} strokeWidth="0.012" strokeOpacity="0.26"
-            />
-
-            {/* 3 internal circuit trace lines */}
-            <line x1={0} y1={-HR*0.86} x2={0} y2={HR*0.86}
-              stroke={neon} strokeWidth="0.010" strokeOpacity="0.22"/>
-            <line x1={-h3*0.86} y1={-HR*0.5*0.86} x2={h3*0.86} y2={HR*0.5*0.86}
-              stroke={neon} strokeWidth="0.010" strokeOpacity="0.17"/>
-            <line x1={h3*0.86} y1={-HR*0.5*0.86} x2={-h3*0.86} y2={HR*0.5*0.86}
-              stroke={neon} strokeWidth="0.010" strokeOpacity="0.17"/>
-
-            {/* Vertex tick marks (5 — skip top, reserved for antenna) */}
-            {([[h3,-HR*0.5],[h3,HR*0.5],[0,HR],[-h3,HR*0.5],[-h3,-HR*0.5]] as [number,number][])
-              .map(([vx,vy], vi) => (
-                <line key={vi}
-                  x1={vx} y1={vy}
-                  x2={vx*(1+0.068/HR)} y2={vy*(1+0.068/HR)}
-                  stroke={neon} strokeWidth="0.018" strokeOpacity="0.66"
-                />
-              ))}
-
-            {/* Top antenna spike + signal dot */}
-            <line x1={0} y1={-HR} x2={0} y2={-HR-0.172}
-              stroke={neon} strokeWidth="0.015" strokeOpacity="0.84" strokeLinecap="round"/>
-            <circle cx={0} cy={-HR-0.172} r="0.026"
-              fill={neon} opacity="0.92"/>
-
-            {/* Central targeting crosshair */}
-            <line x1={-0.118} y1={0} x2={0.118} y2={0}
-              stroke="white" strokeWidth="0.013" strokeOpacity="0.60"/>
-            <line x1={0} y1={-0.118} x2={0} y2={0.118}
-              stroke="white" strokeWidth="0.013" strokeOpacity="0.60"/>
-            <circle cx={0} cy={0} r="0.054"
-              fill="none" stroke="white" strokeWidth="0.011" strokeOpacity="0.44"/>
-
-            {/* Specular highlight along upper-left edge */}
-            <line
-              x1={-h3*0.48} y1={-HR*0.5*0.48}
-              x2={-h3*0.04} y2={-HR*0.88}
-              stroke="white" strokeWidth="0.028" strokeOpacity="0.56" strokeLinecap="round"
-            />
-            <circle cx={-h3*0.27} cy={-HR*0.68} r="0.019" fill="white" opacity="0.46"/>
-          </motion.g>
+          <PawnToken
+            key={pid}
+            pid={pid}
+            player={player}
+            finalX={fx}
+            finalY={fy}
+            hopSteps={hop !== undefined ? hop : null}
+            hopMs={hopMs}
+            springCfg={springCfg}
+            isMovable={game.movable.includes(pid)}
+            onPieceClick={() => onPieceClick(pid)}
+          />
         );
       })}
     </svg>
