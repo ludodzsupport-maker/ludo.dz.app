@@ -1,54 +1,67 @@
 # Ludo DZ
 
-A mobile-first Ludo board game app with French/Arabic language support.
-
-## Run & Operate
-
-Workflows (managed by Replit):
-- `artifacts/ludo-dz: web` — Vite dev server (port 21341, preview at `/`)
-- `artifacts/api-server: API Server` — Express API (port 8080, paths under `/api`)
-
-Imported project: after a fresh import/checkout, run `pnpm install` at the repo root before starting the workflows — both fail with "vite: not found" / "Cannot find package 'esbuild'" until dependencies are installed. `DATABASE_URL` and `SESSION_SECRET` are already provisioned.
-
-Useful commands:
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-
-Environment:
-- `DATABASE_URL` — auto-provisioned by Replit's built-in PostgreSQL (no manual setup needed)
-- `SESSION_SECRET` — stored as a Replit Secret
+A full-stack Ludo board game built with React + Vite (frontend) and Express (backend), managed as a pnpm monorepo.
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- **Frontend:** React 19, Vite, TypeScript, Tailwind CSS, Framer Motion, Radix UI, Wouter (routing), TanStack Query
+- **Backend:** Node.js + Express 5, TypeScript, esbuild
+- **Database:** PostgreSQL (Replit-managed) via Drizzle ORM
+- **API layer:** OpenAPI spec → Orval codegen → typed React Query hooks + Zod schemas
+- **Monorepo:** pnpm workspaces
 
-## Where things live
+## Project Structure
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+```
+artifacts/
+  ludo-dz/          React + Vite frontend (the game)
+  api-server/       Express API backend
+  mockup-sandbox/   UI prototyping sandbox (dev-only)
+lib/
+  db/               Drizzle ORM config + PostgreSQL schema
+  api-spec/         OpenAPI spec (openapi.yaml) + Orval config
+  api-zod/          Generated Zod schemas
+  api-client-react/ Generated TanStack Query hooks
+```
 
-## Architecture decisions
+## Running the project
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+Dependencies are managed by pnpm. Install once:
 
-## Product
+```bash
+pnpm install
+```
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Both services start automatically via Replit workflows:
+- **Frontend** (`artifacts/ludo-dz: web`) — Vite dev server on port 21341
+- **API Server** (`artifacts/api-server: API Server`) — Express on port 8080
+
+## Environment variables
+
+| Variable       | Description                              |
+|----------------|------------------------------------------|
+| `DATABASE_URL` | PostgreSQL connection string (auto-set by Replit) |
+| `SESSION_SECRET` | Secret for session signing (set as a Replit Secret) |
+| `PORT`         | Service port (injected by artifact workflows) |
+| `BASE_PATH`    | URL prefix for frontend routing (injected by artifact workflows) |
+
+## API development
+
+1. Edit `lib/api-spec/openapi.yaml` to add/change endpoints
+2. Run codegen: `pnpm --filter @workspace/api-spec run codegen`
+3. Implement routes in `artifacts/api-server/src/routes/`
+4. Use generated hooks from `@workspace/api-client-react` in the frontend
+
+## Database
+
+Schema lives in `lib/db/src/schema/`. After editing:
+
+```bash
+pnpm --filter @workspace/db run push
+```
+
+`DATABASE_URL` is runtime-managed by Replit — no manual setup needed.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- Keep the existing monorepo structure; do not restructure or migrate it.
