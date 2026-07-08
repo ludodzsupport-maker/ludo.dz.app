@@ -495,11 +495,46 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
       style={{ width: '100%', height: '100%', display: 'block' }}
       xmlns="http://www.w3.org/2000/svg">
       <defs>
+        {/* ── Deep gem body gradient (white highlight → neon → color) ── */}
         {E.PLAYER_COLORS.map((c, i) => (
-          <radialGradient key={i} id={`pg${i}`} cx="35%" cy="28%" r="65%">
-            <stop offset="0%"   stopColor="white" stopOpacity="0.80"/>
-            <stop offset="30%"  stopColor={c}/>
-            <stop offset="100%" stopColor={c} stopOpacity="0.85"/>
+          <radialGradient key={i} id={`pg${i}`} cx="30%" cy="22%" r="80%">
+            <stop offset="0%"   stopColor="white"            stopOpacity="0.98"/>
+            <stop offset="15%"  stopColor={E.PLAYER_NEONS[i]} stopOpacity="0.90"/>
+            <stop offset="48%"  stopColor={c}/>
+            <stop offset="100%" stopColor={c}               stopOpacity="0.50"/>
+          </radialGradient>
+        ))}
+        {/* ── Metallic rim gradient (diagonal light sweep) ── */}
+        {E.PLAYER_NEONS.map((n, i) => (
+          <linearGradient key={i} id={`pgrim${i}`} x1="15%" y1="15%" x2="90%" y2="90%">
+            <stop offset="0%"   stopColor="white" stopOpacity="0.98"/>
+            <stop offset="30%"  stopColor={n}     stopOpacity="0.80"/>
+            <stop offset="65%"  stopColor="#000000" stopOpacity="0.20"/>
+            <stop offset="100%" stopColor={n}     stopOpacity="0.38"/>
+          </linearGradient>
+        ))}
+        {/* ── Inner jewel table gradient ── */}
+        {E.PLAYER_NEONS.map((n, i) => (
+          <radialGradient key={i} id={`jewel${i}`} cx="32%" cy="25%" r="75%">
+            <stop offset="0%"   stopColor="white" stopOpacity="1.0"/>
+            <stop offset="28%"  stopColor={n}/>
+            <stop offset="100%" stopColor={E.PLAYER_COLORS[i]} stopOpacity="0.80"/>
+          </radialGradient>
+        ))}
+        {/* ── Crown spike gradient (white tip → neon → color base) ── */}
+        {E.PLAYER_NEONS.map((n, i) => (
+          <linearGradient key={i} id={`pgcrwn${i}`} x1="50%" y1="0%" x2="50%" y2="100%">
+            <stop offset="0%"   stopColor="white" stopOpacity="0.98"/>
+            <stop offset="45%"  stopColor={n}     stopOpacity="0.92"/>
+            <stop offset="100%" stopColor={E.PLAYER_COLORS[i]} stopOpacity="0.70"/>
+          </linearGradient>
+        ))}
+        {/* ── Home base atmospheric radial gradient ── */}
+        {E.PLAYER_COLORS.map((c, i) => (
+          <radialGradient key={i} id={`hbg${i}`} cx="50%" cy="50%" r="75%">
+            <stop offset="0%"   stopColor={c} stopOpacity="0.22"/>
+            <stop offset="55%"  stopColor={c} stopOpacity="0.10"/>
+            <stop offset="100%" stopColor={c} stopOpacity="0.01"/>
           </radialGradient>
         ))}
         {E.PLAYER_NEONS.map((_, i) => (
@@ -525,44 +560,130 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
       {/* ── Background ── */}
       <rect width="15" height="15" fill="#030b16"/>
 
-      {/* ── Home zones — correct corners: Red=TL, Blue=TR, Yellow=BR, Green=BL ── */}
+      {/* ── Home zones — Crystal Nexus Chambers ── */}
       {[0,1,2,3].map(player => {
-        // Zone top-left corners aligned to path start positions
         const [zr, zc] = [[0,0],[0,9],[9,9],[9,0]][player] as [number,number];
         const col  = E.PLAYER_COLORS[player];
         const neon = E.PLAYER_NEONS[player];
-        const exists   = player < game.numPlayers;
+        const exists    = player < game.numPlayers;
         const isCurrent = player === game.activePlayer && game.phase !== 'done';
+        const bLen = 0.85;
+        const corners: [[number,number],[number,number],[number,number]][] = [
+          [[zc+bLen,zr],[zc,zr],[zc,zr+bLen]],
+          [[zc+6-bLen,zr],[zc+6,zr],[zc+6,zr+bLen]],
+          [[zc,zr+6-bLen],[zc,zr+6],[zc+bLen,zr+6]],
+          [[zc+6-bLen,zr+6],[zc+6,zr+6],[zc+6,zr+6-bLen]],
+        ];
         return (
           <g key={`hz-${player}`}>
+            {/* Dark crystalline base */}
+            <rect x={zc} y={zr} width="6" height="6" fill="#020912" fillOpacity="0.96"/>
+            {/* Radial color atmosphere */}
             <rect x={zc} y={zr} width="6" height="6"
-              fill={col}
-              fillOpacity={isCurrent ? 0.20 : exists ? 0.10 : 0.02}
+              fill={`url(#hbg${player})`}
+              fillOpacity={isCurrent ? 1.0 : exists ? 0.55 : 0.14}
+            />
+            {/* Outer border */}
+            <rect x={zc} y={zr} width="6" height="6" fill="none"
               stroke={neon}
               strokeWidth={isCurrent ? 0.09 : 0.05}
-              strokeOpacity={isCurrent ? 0.90 : exists ? 0.45 : 0.12}
+              strokeOpacity={isCurrent ? 0.82 : exists ? 0.36 : 0.10}
             />
-            <circle cx={zc+3} cy={zr+3} r="2.32"
-              fill={col}
-              fillOpacity={isCurrent ? 0.28 : exists ? 0.14 : 0.03}
-              stroke={neon}
-              strokeWidth={isCurrent ? 0.11 : 0.07}
-              strokeOpacity={isCurrent ? 0.85 : exists ? 0.40 : 0.10}
-            />
-            {/* Piece slots — symmetric ±1.5 SVG units from zone center */}
-            {E.HOME_BASES[player].map(([br, bc], si) => (
-              <circle key={si}
-                cx={bc+0.5} cy={br+0.5} r="0.44"
-                fill="rgba(0,0,0,0.45)"
-                stroke={neon} strokeWidth="0.055"
-                strokeOpacity={exists ? 0.40 : 0.08}
+            {/* HUD corner brackets */}
+            {corners.map(([[x1,y1],[x2,y2],[x3,y3]], ci) => (
+              <polyline key={ci}
+                points={`${x1},${y1} ${x2},${y2} ${x3},${y3}`}
+                stroke={neon} strokeWidth="0.11"
+                strokeOpacity={isCurrent ? 0.95 : exists ? 0.52 : 0.14}
+                fill="none" strokeLinecap="round" strokeLinejoin="round"
               />
             ))}
-            {/* Player initial */}
+            {/* Outer dashed orbital ring */}
+            <circle cx={zc+3} cy={zr+3} r="2.26"
+              fill="none" stroke={neon} strokeWidth="0.028"
+              strokeOpacity={isCurrent ? 0.42 : exists ? 0.18 : 0.05}
+              strokeDasharray="0.20 0.13"
+            />
+            {/* Middle solid orbital ring */}
+            <circle cx={zc+3} cy={zr+3} r="1.56"
+              fill="none" stroke={neon} strokeWidth="0.052"
+              strokeOpacity={isCurrent ? 0.62 : exists ? 0.28 : 0.07}
+            />
+            {/* 8 tick marks on middle ring */}
+            {Array.from({length: 8}, (_, ti) => {
+              const a = (ti * Math.PI) / 4;
+              return (
+                <line key={ti}
+                  x1={zc+3 + Math.cos(a)*1.46} y1={zr+3 + Math.sin(a)*1.46}
+                  x2={zc+3 + Math.cos(a)*1.66} y2={zr+3 + Math.sin(a)*1.66}
+                  stroke={neon} strokeWidth="0.038"
+                  strokeOpacity={isCurrent ? 0.68 : exists ? 0.30 : 0.08}
+                />
+              );
+            })}
+            {/* Inner glow ring */}
+            <circle cx={zc+3} cy={zr+3} r="0.84"
+              fill={col} fillOpacity={isCurrent ? 0.24 : exists ? 0.10 : 0.03}
+              stroke={neon} strokeWidth="0.068"
+              strokeOpacity={isCurrent ? 0.85 : exists ? 0.38 : 0.09}
+            />
+            {/* Energy lines from center to slot positions */}
+            {E.HOME_BASES[player].map(([br, bc], si) => (
+              <line key={si}
+                x1={zc+3} y1={zr+3} x2={bc+0.5} y2={br+0.5}
+                stroke={neon} strokeWidth="0.024"
+                strokeOpacity={exists ? 0.20 : 0.04}
+              />
+            ))}
+            {/* Center nexus — pulses when active */}
+            {isCurrent ? (
+              <motion.circle cx={zc+3} cy={zr+3} r={0.22} fill={neon}
+                animate={{ r: [0.17, 0.27, 0.17], fillOpacity: [0.80, 1.0, 0.80] }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            ) : (
+              <circle cx={zc+3} cy={zr+3} r="0.20"
+                fill={neon} fillOpacity={exists ? 0.62 : 0.10}
+              />
+            )}
+            {/* Slot landing pads */}
+            {E.HOME_BASES[player].map(([br, bc], si) => {
+              const sx = bc+0.5, sy = br+0.5;
+              return (
+                <g key={si}>
+                  {/* Outer glow halo */}
+                  <circle cx={sx} cy={sy} r="0.56"
+                    fill={neon} fillOpacity={exists ? 0.07 : 0.015}/>
+                  {/* Outer dark ring */}
+                  <circle cx={sx} cy={sy} r="0.46"
+                    fill="#020912" fillOpacity="0.88"
+                    stroke={neon} strokeWidth="0.058"
+                    strokeOpacity={exists ? 0.55 : 0.10}
+                  />
+                  {/* Mid colored ring */}
+                  <circle cx={sx} cy={sy} r="0.31"
+                    fill={col} fillOpacity={exists ? 0.18 : 0.04}
+                    stroke={neon} strokeWidth="0.034"
+                    strokeOpacity={exists ? 0.40 : 0.08}
+                  />
+                  {/* Deep concave well */}
+                  <circle cx={sx} cy={sy} r="0.17" fill="rgba(0,0,0,0.80)"/>
+                  {/* Inner jewel dot */}
+                  <circle cx={sx} cy={sy} r="0.076"
+                    fill={neon} fillOpacity={exists ? 0.92 : 0.12}
+                  />
+                  {/* Specular glint */}
+                  <circle cx={sx-0.05} cy={sy-0.05} r="0.032"
+                    fill="white" opacity={exists ? 0.58 : 0.08}
+                  />
+                </g>
+              );
+            })}
+            {/* Player label */}
             {exists && (
               <text
                 x={zc+3}
-                y={zr + (player >= 2 ? 5.60 : 0.90)}
+                y={zr + (player >= 2 ? 5.62 : 0.88)}
                 textAnchor="middle" fontSize="0.42"
                 fontFamily="Rajdhani, sans-serif" fontWeight="700"
                 fill={neon} opacity={isCurrent ? 1 : 0.42}
@@ -664,7 +785,7 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
         transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
       />
 
-      {/* ── Pieces ── */}
+      {/* ── Pieces — Crystal Crown Gems ── */}
       {piecePositions.map(({ player, index, xy: [cx, cy] }) => {
         const pid       = E.pieceId(player, index);
         const isMovable = game.movable.includes(pid);
@@ -678,6 +799,8 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
             transition={{ type: 'spring', ...springCfg }}
             onClick={() => isMovable && onPieceClick(pid)}
             style={{ cursor: isMovable ? 'pointer' : 'default' }}>
+            {/* Ambient glow aura */}
+            <circle cx={0} cy={0} r={R*1.60} fill={neon} fillOpacity="0.05"/>
             {/* Movable pulse ring */}
             {isMovable && (
               <motion.circle cx={0} cy={0} r={R+0.16} fill="none"
@@ -687,18 +810,48 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
               />
             )}
             {/* Drop shadow */}
-            <ellipse cx={0.04} cy={0.12} rx={R*0.82} ry={R*0.30}
-              fill="rgba(0,0,0,0.42)"/>
-            {/* Body */}
+            <ellipse cx={0.03} cy={R*0.92} rx={R*0.76} ry={R*0.22}
+              fill="rgba(0,0,0,0.68)"/>
+            {/* Gem body */}
             <circle cx={0} cy={0} r={R}
               fill={`url(#pg${player})`}
-              stroke={isMovable ? neon : 'rgba(0,0,0,0.28)'}
-              strokeWidth={isMovable ? 0.08 : 0.04}
               filter={isMovable ? `url(#pglow${player})` : undefined}
             />
-            {/* Specular */}
-            <circle cx={-R*0.37} cy={-R*0.40} r={R*0.26}
-              fill="white" opacity="0.65"/>
+            {/* Metallic outer rim */}
+            <circle cx={0} cy={0} r={R - 0.018}
+              fill="none"
+              stroke={isMovable ? neon : `url(#pgrim${player})`}
+              strokeWidth={isMovable ? 0.060 : 0.036}
+            />
+            {/* Internal gem facets */}
+            <line x1={-R*0.52} y1={-R*0.72} x2={R*0.22} y2={R*0.72}
+              stroke="white" strokeWidth="0.013" strokeOpacity="0.18"/>
+            <line x1={-R*0.82} y1={-R*0.08} x2={R*0.82} y2={R*0.08}
+              stroke="white" strokeWidth="0.010" strokeOpacity="0.12"/>
+            <line x1={R*0.52} y1={-R*0.72} x2={-R*0.22} y2={R*0.72}
+              stroke="white" strokeWidth="0.011" strokeOpacity="0.10"/>
+            {/* Crown spikes — 3 points emerging from top of gem */}
+            <polygon
+              points="-0.127,-0.348 -0.212,-0.453 -0.080,-0.371 0,-0.500 0.080,-0.371 0.212,-0.453 0.127,-0.348"
+              fill={`url(#pgcrwn${player})`}
+              stroke={neon} strokeWidth="0.014" strokeOpacity="0.72"
+              strokeLinejoin="round"
+            />
+            {/* Inner jewel table */}
+            <circle cx={0} cy={-R*0.07} r={R*0.41}
+              fill={`url(#jewel${player})`} opacity="0.88"/>
+            {/* Jewel setting ring */}
+            <circle cx={0} cy={-R*0.07} r={R*0.41}
+              fill="none" stroke="white" strokeWidth="0.014" strokeOpacity="0.22"/>
+            {/* Primary specular catchlight */}
+            <ellipse cx={-R*0.24} cy={-R*0.36} rx={R*0.19} ry={R*0.13}
+              fill="white" opacity="0.88"/>
+            {/* Secondary specular */}
+            <circle cx={R*0.16} cy={-R*0.50} r={R*0.08}
+              fill="white" opacity="0.62"/>
+            {/* Micro rim glint */}
+            <circle cx={-R*0.70} cy={-R*0.16} r={R*0.05}
+              fill="white" opacity="0.50"/>
           </motion.g>
         );
       })}
