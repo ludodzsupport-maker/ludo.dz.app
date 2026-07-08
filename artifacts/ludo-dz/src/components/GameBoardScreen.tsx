@@ -555,12 +555,25 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
           <feGaussianBlur stdDeviation="0.12" result="b"/>
           <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
+        {/* ── Cyberpunk pawn body gradient: dark core → player colour → neon rim ── */}
+        {E.PLAYER_COLORS.map((c, i) => (
+          <radialGradient key={i} id={`pgcp${i}`} cx="28%" cy="20%" r="90%">
+            <stop offset="0%"   stopColor="#0b1220"/>
+            <stop offset="38%"  stopColor={c} stopOpacity="0.78"/>
+            <stop offset="78%"  stopColor={c}/>
+            <stop offset="100%" stopColor={E.PLAYER_NEONS[i]} stopOpacity="0.90"/>
+          </radialGradient>
+        ))}
+        {/* ── Scanline CRT texture pattern ── */}
+        <pattern id="cpscan" x="0" y="0" width="15" height="0.22" patternUnits="userSpaceOnUse">
+          <line x1="0" y1="0" x2="15" y2="0" stroke="white" strokeWidth="0.017" strokeOpacity="0.024"/>
+        </pattern>
       </defs>
 
       {/* ── Background ── */}
       <rect width="15" height="15" fill="#030b16"/>
 
-      {/* ── Home zones — Lapidary Court ── */}
+      {/* ── Home zones — Cyberpunk Neon Launchpad ── */}
       {[0,1,2,3].map(player => {
         const [zr, zc] = [[0,0],[0,9],[9,9],[9,0]][player] as [number,number];
         const neon      = E.PLAYER_NEONS[player];
@@ -568,164 +581,182 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
         const isCurrent = player === game.activePlayer && game.phase !== 'done';
         const cx = zc + 3, cy = zr + 3;
 
-        // Opacity scaler: active > inactive > missing
+        // Opacity helper
         const ao = (base: number) =>
-          exists ? (isCurrent ? Math.min(base * 1.55, 1) : base) : base * 0.18;
+          exists ? (isCurrent ? Math.min(base * 1.55, 1) : base) : base * 0.15;
 
-        // Diamond polygon points string
-        const diam = (x: number, y: number, d: number): string =>
-          `${x},${y-d} ${x+d},${y} ${x},${y+d} ${x-d},${y}`;
+        // Hex polygon points string: pointy-top, centered at (x,y), radius R
+        const hexStr = (x: number, y: number, R: number): string => {
+          const s = R * 0.866;
+          return `${x},${y-R} ${x+s},${y-R*0.5} ${x+s},${y+R*0.5} ${x},${y+R} ${x-s},${y+R*0.5} ${x-s},${y-R*0.5}`;
+        };
 
         return (
           <g key={`hz-${player}`}>
 
-            {/* ── 0 · Background void ── */}
-            <rect x={zc} y={zr} width="6" height="6" fill="#04101e"/>
+            {/* 0 · void base + atmospheric colour tint */}
+            <rect x={zc} y={zr} width="6" height="6" fill="#03070e"/>
             <rect x={zc} y={zr} width="6" height="6"
               fill={`url(#hbg${player})`}
-              fillOpacity={isCurrent ? 0.90 : exists ? 0.44 : 0.10}
+              fillOpacity={isCurrent ? 0.88 : exists ? 0.42 : 0.09}
             />
 
-            {/* ── 1 · Ghost monogram watermark ── */}
-            <text
-              x={cx} y={cy + 0.90}
-              textAnchor="middle" dominantBaseline="middle"
-              fontSize="3.40" fontFamily="Rajdhani, sans-serif"
-              fontWeight="900" letterSpacing="-0.05"
-              fill={neon} fillOpacity={ao(0.058)}
-              style={{ userSelect: 'none', pointerEvents: 'none' }}
-            >
-              {['R','B','J','V'][player]}
-            </text>
+            {/* 1 · CRT scanline texture */}
+            <rect x={zc} y={zr} width="6" height="6" fill="url(#cpscan)"/>
 
-            {/* ── 2 · 8-spoke structural asterisk ── */}
-            {[0, 45, 90, 135].map(angle => (
-              <rect key={angle}
-                x={cx - 2.60} y={cy - 0.068}
-                width={5.20} height={0.136}
-                fill={neon} fillOpacity={ao(0.09)}
-                transform={`rotate(${angle} ${cx} ${cy})`}
-                rx="0.068"
-              />
+            {/* 2 · Neon floor grid */}
+            {[1,2,3,4,5].map(n => (
+              <g key={n}>
+                <line x1={zc} y1={zr+n} x2={zc+6} y2={zr+n}
+                  stroke={neon} strokeWidth="0.014" strokeOpacity={ao(0.16)}/>
+                <line x1={zc+n} y1={zr} x2={zc+n} y2={zr+6}
+                  stroke={neon} strokeWidth="0.014" strokeOpacity={ao(0.16)}/>
+              </g>
             ))}
 
-            {/* ── 3 · Structural grid (cross + diagonals) ── */}
-            <line x1={zc+0.28} y1={cy} x2={zc+5.72} y2={cy}
-              stroke={neon} strokeWidth="0.016" strokeOpacity={ao(0.26)}/>
-            <line x1={cx} y1={zr+0.28} x2={cx} y2={zr+5.72}
-              stroke={neon} strokeWidth="0.016" strokeOpacity={ao(0.26)}/>
-            <line x1={zc+0.36} y1={zr+0.36} x2={zc+5.64} y2={zr+5.64}
-              stroke={neon} strokeWidth="0.013" strokeOpacity={ao(0.16)}/>
-            <line x1={zc+5.64} y1={zr+0.36} x2={zc+0.36} y2={zr+5.64}
-              stroke={neon} strokeWidth="0.013" strokeOpacity={ao(0.16)}/>
+            {/* 3 · LED edge strips — top/bottom/sides */}
+            <rect x={zc}      y={zr}      width="6"     height="0.062"
+              fill={neon} fillOpacity={isCurrent ? 0.85 : exists ? 0.46 : 0.08}/>
+            <rect x={zc}      y={zr+5.938} width="6"    height="0.062"
+              fill={neon} fillOpacity={isCurrent ? 0.85 : exists ? 0.46 : 0.08}/>
+            <rect x={zc}      y={zr}      width="0.062" height="6"
+              fill={neon} fillOpacity={isCurrent ? 0.62 : exists ? 0.32 : 0.06}/>
+            <rect x={zc+5.938} y={zr}     width="0.062" height="6"
+              fill={neon} fillOpacity={isCurrent ? 0.62 : exists ? 0.32 : 0.06}/>
 
-            {/* ── 4 · Chamfered inner inset frame ── */}
-            {(() => {
-              const m = 0.26, cut = 0.30;
-              const x0 = zc+m, x1 = zc+6-m, y0 = zr+m, y1 = zr+6-m;
+            {/* 4 · HUD corner brackets */}
+            {([[zc,zr],[zc+6,zr],[zc+6,zr+6],[zc,zr+6]] as [number,number][]).map(([bx,by], i) => {
+              const arm = 0.84;
+              const sx2 = bx === zc ? 1 : -1;
+              const sy2 = by === zr ? 1 : -1;
               return (
-                <polygon
-                  points={[
-                    `${x0+cut},${y0}`, `${x1-cut},${y0}`,
-                    `${x1},${y0+cut}`, `${x1},${y1-cut}`,
-                    `${x1-cut},${y1}`, `${x0+cut},${y1}`,
-                    `${x0},${y1-cut}`, `${x0},${y0+cut}`,
-                  ].join(' ')}
-                  fill="none"
-                  stroke={neon} strokeWidth="0.026"
-                  strokeOpacity={isCurrent ? 0.62 : exists ? 0.26 : 0.06}
+                <polyline key={i}
+                  points={`${bx+sx2*arm},${by} ${bx},${by} ${bx},${by+sy2*arm}`}
+                  fill="none" stroke={neon}
+                  strokeWidth={isCurrent ? 0.092 : 0.058}
+                  strokeOpacity={isCurrent ? 0.96 : exists ? 0.58 : 0.12}
+                  strokeLinecap="square" strokeLinejoin="miter"
                 />
               );
-            })()}
+            })}
 
-            {/* ── 5 · Mid-edge accent diamonds ── */}
-            {([[cx, zr+0.14],[zc+5.86, cy],[cx, zr+5.86],[zc+0.14, cy]] as [number,number][]).map(([ax, ay], i) => (
-              <polygon key={i} points={diam(ax, ay, 0.14)}
-                fill={neon} fillOpacity={ao(0.62)}
-              />
-            ))}
-
-            {/* ── 6 · Outer border ── */}
-            <rect x={zc} y={zr} width="6" height="6" fill="none"
-              stroke={neon}
-              strokeWidth={isCurrent ? 0.076 : 0.040}
-              strokeOpacity={isCurrent ? 0.90 : exists ? 0.38 : 0.08}
-            />
-
-            {/* ── 7 · Pawn slots — diamond-frame gem settings ── */}
+            {/* 5 · Diagonal dashed conduits: center reticle → each hex bay */}
             {E.HOME_BASES[player].map(([br, bc], si) => {
-              const sx = bc + 0.5, sy = br + 0.5;
+              const sx = bc+0.5, sy = br+0.5;
+              const dx = cx-sx, dy = cy-sy;
+              const dist = Math.sqrt(dx*dx + dy*dy);
+              const nx = dx/dist, ny = dy/dist;
+              return (
+                <line key={si}
+                  x1={cx - nx*0.24} y1={cy - ny*0.24}
+                  x2={sx + nx*0.44} y2={sy + ny*0.44}
+                  stroke={neon} strokeWidth="0.020"
+                  strokeOpacity={ao(0.52)}
+                  strokeDasharray="0.088 0.058"
+                />
+              );
+            })}
+
+            {/* 6 · Scan sweep (active player) */}
+            {isCurrent && (
+              <motion.rect
+                x={zc} width="6" height="0.18"
+                fill={neon} fillOpacity="0.10"
+                animate={{ y: [zr+0.07, zr+5.75] }}
+                transition={{ duration: 2.8, repeat: Infinity, ease: 'linear', repeatDelay: 1.0 }}
+              />
+            )}
+
+            {/* 7 · Hexagonal pawn bays */}
+            {E.HOME_BASES[player].map(([br, bc], si) => {
+              const sx = bc+0.5, sy = br+0.5;
+              const HR = 0.385, HR2 = HR*0.60;
+              const verts = [[0,-HR],[HR*0.866,-HR*0.5],[HR*0.866,HR*0.5],
+                             [0,HR],[-HR*0.866,HR*0.5],[-HR*0.866,-HR*0.5]] as [number,number][];
               return (
                 <g key={si}>
-                  {/* Outer diamond ambient glow */}
-                  <polygon points={diam(sx, sy, 0.50)}
-                    fill={neon} fillOpacity={exists ? 0.055 : 0.010}
+                  {/* Outer neon glow */}
+                  <polygon points={hexStr(sx, sy, HR+0.065)}
+                    fill={neon} fillOpacity={exists ? 0.065 : 0.010}
                   />
-                  {/* Diamond frame */}
-                  <polygon points={diam(sx, sy, 0.44)}
-                    fill="#04101e" fillOpacity="0.92"
+                  {/* Main hex frame */}
+                  <polygon points={hexStr(sx, sy, HR)}
+                    fill="#03070e" fillOpacity="0.94"
                     stroke={neon} strokeWidth="0.050"
-                    strokeOpacity={isCurrent ? 0.92 : exists ? 0.55 : 0.11}
+                    strokeOpacity={isCurrent ? 0.97 : exists ? 0.60 : 0.12}
                   />
-                  {/* Tip accent diamonds at 4 points of the frame */}
-                  {([[sx, sy-0.56],[sx+0.56, sy],[sx, sy+0.56],[sx-0.56, sy]] as [number,number][]).map(([ax,ay], ti) => (
-                    <polygon key={ti} points={diam(ax, ay, 0.075)}
-                      fill={neon} fillOpacity={exists ? 0.72 : 0.08}
+                  {/* Inner hex ring */}
+                  <polygon points={hexStr(sx, sy, HR2)}
+                    fill="none" stroke={neon} strokeWidth="0.016"
+                    strokeOpacity={ao(0.28)}
+                  />
+                  {/* Vertex tick marks */}
+                  {verts.map(([vx,vy], vi) => (
+                    <line key={vi}
+                      x1={sx+vx} y1={sy+vy}
+                      x2={sx+vx*(1+0.075/HR)} y2={sy+vy*(1+0.075/HR)}
+                      stroke={neon} strokeWidth="0.022"
+                      strokeOpacity={exists ? 0.65 : 0.08}
                     />
                   ))}
-                  {/* Inner circular socket */}
-                  <circle cx={sx} cy={sy} r="0.23"
-                    fill="#020810"
-                    stroke={neon} strokeWidth="0.028"
-                    strokeOpacity={exists ? 0.52 : 0.09}
-                  />
-                  {/* Center gem diamond */}
-                  <polygon points={diam(sx, sy, 0.092)}
-                    fill={neon} fillOpacity={exists ? 0.96 : 0.12}
-                  />
-                  {/* Specular glint */}
-                  <circle cx={sx-0.030} cy={sy-0.030} r="0.036"
-                    fill="white" opacity={exists ? 0.72 : 0.08}
+                  {/* Crosshair */}
+                  <line x1={sx-0.17} y1={sy} x2={sx+0.17} y2={sy}
+                    stroke={neon} strokeWidth="0.018" strokeOpacity={ao(0.72)}/>
+                  <line x1={sx} y1={sy-0.17} x2={sx} y2={sy+0.17}
+                    stroke={neon} strokeWidth="0.018" strokeOpacity={ao(0.72)}/>
+                  {/* Targeting circle */}
+                  <circle cx={sx} cy={sy} r="0.10"
+                    fill="none" stroke={neon} strokeWidth="0.014"
+                    strokeOpacity={ao(0.55)}
                   />
                 </g>
               );
             })}
 
-            {/* ── 8 · Center sigil ── */}
-            {/* Axis cross arms */}
-            <line x1={cx-0.42} y1={cy} x2={cx+0.42} y2={cy}
-              stroke={neon} strokeWidth="0.034" strokeOpacity={ao(0.80)} strokeLinecap="round"/>
-            <line x1={cx} y1={cy-0.42} x2={cx} y2={cy+0.42}
-              stroke={neon} strokeWidth="0.034" strokeOpacity={ao(0.80)} strokeLinecap="round"/>
-            {/* Pulsing/static diamond sigil */}
-            {isCurrent ? (
-              <motion.polygon
-                points={diam(cx, cy, 0.20)}
-                fill={neon}
-                animate={{ fillOpacity: [0.65, 1.0, 0.65] }}
-                transition={{ duration: 1.35, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            ) : (
-              <polygon points={diam(cx, cy, 0.18)}
-                fill={neon} fillOpacity={ao(0.70)}
-              />
-            )}
-            {/* Center white glint */}
-            <circle cx={cx} cy={cy} r="0.055"
-              fill="white" opacity={ao(0.82)}
+            {/* 8 · Center targeting reticle (4 L-bracket corners) */}
+            {(() => {
+              const arm = 0.36, gap = 0.13;
+              const brackets: [number,number,number,number,number,number][] = [
+                [cx-arm, cy-gap,  cx-arm, cy-arm,  cx-gap, cy-arm],
+                [cx+arm, cy-gap,  cx+arm, cy-arm,  cx+gap, cy-arm],
+                [cx-arm, cy+gap,  cx-arm, cy+arm,  cx-gap, cy+arm],
+                [cx+arm, cy+gap,  cx+arm, cy+arm,  cx+gap, cy+arm],
+              ];
+              return brackets.map(([x1,y1,x2,y2,x3,y3], i) =>
+                isCurrent ? (
+                  <motion.polyline key={i}
+                    points={`${x1},${y1} ${x2},${y2} ${x3},${y3}`}
+                    fill="none" stroke={neon}
+                    strokeWidth="0.056" strokeLinecap="square" strokeLinejoin="miter"
+                    animate={{ strokeOpacity: [0.70, 1.0, 0.70] }}
+                    transition={{ duration: 1.15, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                ) : (
+                  <polyline key={i}
+                    points={`${x1},${y1} ${x2},${y2} ${x3},${y3}`}
+                    fill="none" stroke={neon}
+                    strokeWidth="0.040" strokeLinecap="square" strokeLinejoin="miter"
+                    strokeOpacity={exists ? 0.58 : 0.12}
+                  />
+                )
+              );
+            })()}
+
+            {/* 9 · Outer neon border */}
+            <rect x={zc} y={zr} width="6" height="6" fill="none"
+              stroke={neon} strokeWidth={isCurrent ? 0.070 : 0.038}
+              strokeOpacity={isCurrent ? 0.90 : exists ? 0.38 : 0.08}
             />
 
-            {/* ── 9 · Player label ── */}
+            {/* 10 · Player ID chip label */}
             {exists && (
               <text
-                x={cx}
-                y={zr + (player >= 2 ? 5.66 : 0.82)}
-                textAnchor="middle" fontSize="0.36"
-                fontFamily="Rajdhani, sans-serif" fontWeight="700"
-                fill={neon} opacity={isCurrent ? 0.90 : 0.34}
+                x={zc+0.20} y={zr + (player >= 2 ? 5.72 : 0.58)}
+                fontSize="0.24" fontFamily="'Courier New', Courier, monospace"
+                fill={neon} fillOpacity={isCurrent ? 0.90 : 0.44}
                 style={{ userSelect: 'none', pointerEvents: 'none' }}
               >
-                {['R','B','J','V'][player]}
+                {['PLR-1','PLR-2','PLR-3','PLR-4'][player]}
               </text>
             )}
 
@@ -823,12 +854,20 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
         transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
       />
 
-      {/* ── Pieces — Crystal Crown Gems ── */}
+      {/* ── Pieces — Cyberpunk Hex Drone ── */}
       {piecePositions.map(({ player, index, xy: [cx, cy] }) => {
         const pid       = E.pieceId(player, index);
         const isMovable = game.movable.includes(pid);
         const neon      = E.PLAYER_NEONS[player];
-        const R         = 0.37;
+        const HR        = 0.325;                  // hex radius
+        const h3        = HR * 0.866;             // √3/2 factor
+        const hexPts    = `0,${-HR} ${h3},${-HR*0.5} ${h3},${HR*0.5} 0,${HR} ${-h3},${HR*0.5} ${-h3},${-HR*0.5}`;
+        const hr2       = HR * 0.62;              // inner hex radius
+        const h32       = hr2 * 0.866;
+        const innerPts  = `0,${-hr2} ${h32},${-hr2*0.5} ${h32},${hr2*0.5} 0,${hr2} ${-h32},${hr2*0.5} ${-h32},${-hr2*0.5}`;
+        const pR        = HR + 0.148;             // pulse hex radius
+        const ph3       = pR * 0.866;
+        const pulsePts  = `0,${-pR} ${ph3},${-pR*0.5} ${ph3},${pR*0.5} 0,${pR} ${-ph3},${pR*0.5} ${-ph3},${-pR*0.5}`;
 
         return (
           <motion.g key={pid}
@@ -837,59 +876,80 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
             transition={{ type: 'spring', ...springCfg }}
             onClick={() => isMovable && onPieceClick(pid)}
             style={{ cursor: isMovable ? 'pointer' : 'default' }}>
-            {/* Ambient glow aura */}
-            <circle cx={0} cy={0} r={R*1.60} fill={neon} fillOpacity="0.05"/>
-            {/* Movable pulse ring */}
+
+            {/* Ambient neon bloom */}
+            <circle cx={0} cy={0} r={HR*1.55} fill={neon} fillOpacity="0.042"/>
+
+            {/* Movable hex pulse ring */}
             {isMovable && (
-              <motion.circle cx={0} cy={0} r={R+0.16} fill="none"
-                stroke={neon} strokeWidth="0.09"
-                animate={{ opacity: [0.20, 0.90, 0.20], r: [R+0.09, R+0.26, R+0.09] }}
-                transition={{ duration: 0.90, repeat: Infinity, ease: 'easeInOut' }}
+              <motion.polygon points={pulsePts}
+                fill="none" stroke={neon} strokeWidth="0.076"
+                animate={{ opacity: [0.15, 0.88, 0.15] }}
+                transition={{ duration: 0.88, repeat: Infinity, ease: 'easeInOut' }}
               />
             )}
+
             {/* Drop shadow */}
-            <ellipse cx={0.03} cy={R*0.92} rx={R*0.76} ry={R*0.22}
-              fill="rgba(0,0,0,0.68)"/>
-            {/* Gem body */}
-            <circle cx={0} cy={0} r={R}
-              fill={`url(#pg${player})`}
+            <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
+              fill="rgba(0,0,0,0.62)"/>
+
+            {/* Hex body */}
+            <polygon points={hexPts}
+              fill={`url(#pgcp${player})`}
               filter={isMovable ? `url(#pglow${player})` : undefined}
             />
-            {/* Metallic outer rim */}
-            <circle cx={0} cy={0} r={R - 0.018}
+
+            {/* Neon hex rim */}
+            <polygon points={hexPts}
               fill="none"
               stroke={isMovable ? neon : `url(#pgrim${player})`}
-              strokeWidth={isMovable ? 0.060 : 0.036}
+              strokeWidth={isMovable ? 0.056 : 0.028}
             />
-            {/* Internal gem facets */}
-            <line x1={-R*0.52} y1={-R*0.72} x2={R*0.22} y2={R*0.72}
-              stroke="white" strokeWidth="0.013" strokeOpacity="0.18"/>
-            <line x1={-R*0.82} y1={-R*0.08} x2={R*0.82} y2={R*0.08}
-              stroke="white" strokeWidth="0.010" strokeOpacity="0.12"/>
-            <line x1={R*0.52} y1={-R*0.72} x2={-R*0.22} y2={R*0.72}
-              stroke="white" strokeWidth="0.011" strokeOpacity="0.10"/>
-            {/* Crown spikes — 3 points emerging from top of gem */}
-            <polygon
-              points="-0.127,-0.348 -0.212,-0.453 -0.080,-0.371 0,-0.500 0.080,-0.371 0.212,-0.453 0.127,-0.348"
-              fill={`url(#pgcrwn${player})`}
-              stroke={neon} strokeWidth="0.014" strokeOpacity="0.72"
-              strokeLinejoin="round"
+
+            {/* Inner hex frame */}
+            <polygon points={innerPts}
+              fill="none" stroke={neon} strokeWidth="0.012" strokeOpacity="0.26"
             />
-            {/* Inner jewel table */}
-            <circle cx={0} cy={-R*0.07} r={R*0.41}
-              fill={`url(#jewel${player})`} opacity="0.88"/>
-            {/* Jewel setting ring */}
-            <circle cx={0} cy={-R*0.07} r={R*0.41}
-              fill="none" stroke="white" strokeWidth="0.014" strokeOpacity="0.22"/>
-            {/* Primary specular catchlight */}
-            <ellipse cx={-R*0.24} cy={-R*0.36} rx={R*0.19} ry={R*0.13}
-              fill="white" opacity="0.88"/>
-            {/* Secondary specular */}
-            <circle cx={R*0.16} cy={-R*0.50} r={R*0.08}
-              fill="white" opacity="0.62"/>
-            {/* Micro rim glint */}
-            <circle cx={-R*0.70} cy={-R*0.16} r={R*0.05}
-              fill="white" opacity="0.50"/>
+
+            {/* 3 internal circuit trace lines */}
+            <line x1={0} y1={-HR*0.86} x2={0} y2={HR*0.86}
+              stroke={neon} strokeWidth="0.010" strokeOpacity="0.22"/>
+            <line x1={-h3*0.86} y1={-HR*0.5*0.86} x2={h3*0.86} y2={HR*0.5*0.86}
+              stroke={neon} strokeWidth="0.010" strokeOpacity="0.17"/>
+            <line x1={h3*0.86} y1={-HR*0.5*0.86} x2={-h3*0.86} y2={HR*0.5*0.86}
+              stroke={neon} strokeWidth="0.010" strokeOpacity="0.17"/>
+
+            {/* Vertex tick marks (5 — skip top, reserved for antenna) */}
+            {([[h3,-HR*0.5],[h3,HR*0.5],[0,HR],[-h3,HR*0.5],[-h3,-HR*0.5]] as [number,number][])
+              .map(([vx,vy], vi) => (
+                <line key={vi}
+                  x1={vx} y1={vy}
+                  x2={vx*(1+0.068/HR)} y2={vy*(1+0.068/HR)}
+                  stroke={neon} strokeWidth="0.018" strokeOpacity="0.66"
+                />
+              ))}
+
+            {/* Top antenna spike + signal dot */}
+            <line x1={0} y1={-HR} x2={0} y2={-HR-0.172}
+              stroke={neon} strokeWidth="0.015" strokeOpacity="0.84" strokeLinecap="round"/>
+            <circle cx={0} cy={-HR-0.172} r="0.026"
+              fill={neon} opacity="0.92"/>
+
+            {/* Central targeting crosshair */}
+            <line x1={-0.118} y1={0} x2={0.118} y2={0}
+              stroke="white" strokeWidth="0.013" strokeOpacity="0.60"/>
+            <line x1={0} y1={-0.118} x2={0} y2={0.118}
+              stroke="white" strokeWidth="0.013" strokeOpacity="0.60"/>
+            <circle cx={0} cy={0} r="0.054"
+              fill="none" stroke="white" strokeWidth="0.011" strokeOpacity="0.44"/>
+
+            {/* Specular highlight along upper-left edge */}
+            <line
+              x1={-h3*0.48} y1={-HR*0.5*0.48}
+              x2={-h3*0.04} y2={-HR*0.88}
+              stroke="white" strokeWidth="0.028" strokeOpacity="0.56" strokeLinecap="round"
+            />
+            <circle cx={-h3*0.27} cy={-HR*0.68} r="0.019" fill="white" opacity="0.46"/>
           </motion.g>
         );
       })}
