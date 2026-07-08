@@ -1,0 +1,2 @@
+- [Ludo DZ path-corner alignment](ludo-path-corners.md) — HOME_BASES must match PLAYER_STARTS; Red=TL, Blue=TR, Yellow=BR, Green=BL.
+- [Ludo DZ board layout](ludo-board-layout.md) — side-column dice panels (52px) flank the board; only homecol cells colored; strip cells neutral.
