@@ -34,7 +34,8 @@ pnpm install
 
 Both services start automatically via Replit workflows:
 - **Frontend** (`artifacts/ludo-dz: web`) — Vite dev server on port 21341
-- **API Server** (`artifacts/api-server: API Server`) — Express on port 8080
+- **API Server** (`artifacts/api-server: API Server`) — Express on port 8080 (build-then-start; no hot reload on backend changes — restart the workflow to pick up API edits)
+- **Canvas / Mockup Sandbox** (`artifacts/mockup-sandbox: Component Preview Server`) — dev-only UI prototyping environment; start manually when needed
 
 ## Environment variables
 
