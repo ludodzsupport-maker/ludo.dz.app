@@ -889,7 +889,7 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
       </div>
 
       {/* ── Header ── */}
-      <div className="relative z-10 flex-shrink-0 flex items-center gap-2 px-3 pt-10 pb-2">
+      <div className="relative z-10 flex-shrink-0 flex items-center gap-2 px-3 pt-10 pb-3">
         {/* Back */}
         <motion.button onClick={onBack}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
@@ -950,7 +950,28 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
           </div>
 
           {/* ── Board ── */}
-          <motion.div style={{ flex: 1, aspectRatio: '1', borderRadius: 14, overflow: 'hidden' }}
+          {/* Outer "frame" card: fixed width (unchanged), but taller than a plain
+              square via generous top/bottom padding — reads as a premium tabletop
+              rail around the felt rather than a stretched/distorted grid. */}
+          <motion.div
+            style={{
+              flex: 1,
+              boxSizing: 'border-box',
+              borderRadius: 20,
+              overflow: 'hidden',
+              // Vertical rail is a % of width (grows the frame taller without touching
+              // board width); horizontal is a hairline so the playable width is
+              // effectively unchanged. maxHeight is a viewport-relative safety cap so
+              // the frame can never grow tall enough to overlap the header or status
+              // text on short/landscape viewports.
+              padding: '17% 3px',
+              maxHeight: 'clamp(200px, 62vh, 640px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'radial-gradient(ellipse 130% 110% at 50% 38%, #0d2544 0%, #030b16 72%)',
+              border: '1px solid rgba(255,255,255,0.06)',
+            }}
             animate={{
               boxShadow: [
                 `0 0 22px ${activeColor}22, 0 0 50px rgba(0,0,0,0.60)`,
@@ -959,7 +980,21 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
               ],
             }}
             transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}>
-            <BoardSVG game={game} onPieceClick={handlePieceClick} springCfg={springCfg}/>
+            {/* Inner "felt" — the actual square grid, recessed within the frame.
+                maxHeight keeps it from overflowing the frame's own maxHeight cap on
+                short viewports; the SVG's own viewBox + default preserveAspectRatio
+                ("meet") then letterboxes to stay square and fully visible/uncropped
+                even if this box briefly becomes wider than tall. */}
+            <div style={{
+              width: '100%',
+              aspectRatio: '1',
+              maxHeight: '100%',
+              borderRadius: 12,
+              overflow: 'hidden',
+              boxShadow: 'inset 0 3px 16px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(255,255,255,0.04)',
+            }}>
+              <BoardSVG game={game} onPieceClick={handlePieceClick} springCfg={springCfg}/>
+            </div>
           </motion.div>
 
           {/* ── Right dice column (Blue top, Yellow bottom) ── */}
@@ -979,7 +1014,7 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
       </div>
 
       {/* ── Status bar ── */}
-      <div className="relative z-10 flex-shrink-0 px-4 pt-2 pb-8">
+      <div className="relative z-10 flex-shrink-0 px-4 pt-3 pb-8">
         <AnimatePresence mode="wait">
           {statusMsg ? (
             <motion.div key={statusMsg}
