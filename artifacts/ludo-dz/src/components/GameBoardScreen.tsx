@@ -17,9 +17,9 @@ type AnimSpeed = 'fast' | 'normal' | 'slow';
 
 // ─── Animation speed presets ──────────────────────────────────────────────────
 const ANIM = {
-  fast:   { cycles: 8,  baseMs: 32, stepMs: 15, stiffness: 520, damping: 32, mass: 0.60 },
-  normal: { cycles: 11, baseMs: 50, stepMs: 24, stiffness: 400, damping: 30, mass: 0.75 },
-  slow:   { cycles: 16, baseMs: 80, stepMs: 42, stiffness: 180, damping: 22, mass: 1.20 },
+  fast:   { cycles: 8,  baseMs: 32, stepMs: 15, stiffness: 520, damping: 32, mass: 0.60, hopMs:  90 },
+  normal: { cycles: 11, baseMs: 50, stepMs: 24, stiffness: 400, damping: 30, mass: 0.75, hopMs: 150 },
+  slow:   { cycles: 16, baseMs: 80, stepMs: 42, stiffness: 180, damping: 22, mass: 1.20, hopMs: 240 },
 } as const;
 
 // ─── Dice dot positions (SVG viewBox −3…3) ───────────────────────────────────
@@ -109,7 +109,7 @@ function DieFace({
   rolling?: boolean; justLanded?: boolean; dim?: boolean;
 }) {
   const dots = DOTS[Math.max(1, Math.min(6, value))] ?? DOTS[1];
-  const opacity = dim ? 0.28 : 1;
+  const opacity = dim ? 0.82 : 1;
 
   const anim =
     rolling    ? { rotate: [0, 22, -18, 14, -10, 6, -3, 0] }
@@ -128,18 +128,19 @@ function DieFace({
       animate={anim} transition={trans}>
       <defs>
         <radialGradient id={`dg-${neon.replace('#','')}`} cx="35%" cy="28%" r="75%">
-          <stop offset="0%"  stopColor="rgba(255,255,255,0.16)" />
-          <stop offset="100%" stopColor={col} stopOpacity="0.08" />
+          <stop offset="0%"   stopColor="rgba(255,255,255,0.24)" />
+          <stop offset="42%"  stopColor={neon} stopOpacity="0.22" />
+          <stop offset="100%" stopColor={col}  stopOpacity="0.18" />
         </radialGradient>
-        <filter id={`df-${neon.replace('#','')}`} x="-80%" y="-80%" width="260%" height="260%">
-          <feGaussianBlur stdDeviation="0.20" result="b"/>
+        <filter id={`df-${neon.replace('#','')}`} x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur stdDeviation="0.40" result="b"/>
           <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
       </defs>
       {/* Body */}
       <rect x="-3" y="-3" width="6" height="6" rx="0.90"
         fill={`url(#dg-${neon.replace('#','')})`}
-        stroke={neon} strokeWidth={dim ? 0.12 : 0.22}
+        stroke={neon} strokeWidth={dim ? 0.19 : 0.26}
       />
       {/* Sheen */}
       <rect x="-2.6" y="-2.7" width="2.0" height="0.75" rx="0.30"
@@ -271,7 +272,7 @@ function CornerDice({
           `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
         ],
       } : {
-        boxShadow: `0 2px 10px rgba(0,0,0,0.55)`,
+        boxShadow: `0 2px 12px rgba(0,0,0,0.55), 0 0 10px ${col}40`,
       }}
       transition={{ duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
       style={{
@@ -283,8 +284,8 @@ function CornerDice({
         cursor: canTap ? 'pointer' : 'default',
         background: isActive
           ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
-          : `linear-gradient(145deg, ${col}16 0%, rgba(4,12,26,0.90) 100%)`,
-        border: `1.5px solid ${isActive ? neon : col + '38'}`,
+          : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`,
+        border: `1.5px solid ${isActive ? neon : col + '55'}`,
         backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)',
         transition: 'background 0.4s, border-color 0.4s',
@@ -466,9 +467,10 @@ interface BoardSVGProps {
   game: E.GameState;
   onPieceClick: (pid: string) => void;
   springCfg: { stiffness: number; damping: number; mass: number };
+  hopMs: number;
 }
 
-function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
+function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   const pieces      = game.pieces;
@@ -490,6 +492,121 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
       return [{ col: gp[1], row: gp[0], neon: E.PLAYER_NEONS[piece.player] }];
     });
   }, [game.movable, game.phase, pieces]);
+
+  // ── Sequential hop animation ──────────────────────────────────────────────
+  // Each piece step gets a mini parabolic arc: piece lifts ARC_H SVG units
+  // on the way to each cell, then drops and settles at the canonical position.
+  const ARC_H      = 0.72; // SVG units the piece lifts at the peak of each hop
+  const HOP_SPRING = { type: 'spring' as const, stiffness: 500, damping: 26, mass: 0.65 };
+
+  // dispPos: displayed (x,y) per piece — initialised to canonical positions
+  const [dispPos, setDispPos] = useState<Record<string, { x: number; y: number }>>(() => {
+    const m: Record<string, { x: number; y: number }> = {};
+    pieces.forEach(p => {
+      const [x, y] = getPieceXY(p, pieces);
+      m[E.pieceId(p.player, p.index)] = { x, y };
+    });
+    return m;
+  });
+  const [arcY,    setArcY]    = useState<Record<string, number>>({});
+  const [hopping, setHopping] = useState<Record<string, boolean>>({});
+  const prevPRef = useRef<E.Piece[]>([]);
+  const hopTRef  = useRef<Record<string, ReturnType<typeof setTimeout>[]>>({});
+
+  useEffect(() => {
+    const prev = prevPRef.current;
+    prevPRef.current = pieces;
+
+    // Cancel ALL in-flight hop timers whenever the game state changes
+    Object.values(hopTRef.current).flat().forEach(clearTimeout);
+    hopTRef.current = {};
+
+    if (!prev.length) return; // first render — initialiser already set dispPos
+
+    // Find the single piece that moved this turn (only one can move per turn in Ludo)
+    let movedPiece: E.Piece | null = null;
+    let movedPrev:  E.Piece | null = null;
+    for (const piece of pieces) {
+      const prevP = prev.find(p => p.player === piece.player && p.index === piece.index);
+      if (prevP && prevP.relPos !== piece.relPos) {
+        movedPiece = piece; movedPrev = prevP; break;
+      }
+    }
+
+    // Immediately resync all non-hopping pieces to canonical getPieceXY.
+    // This keeps stacking offsets correct when a neighbour joins or leaves a cell.
+    const movingPid = movedPiece ? E.pieceId(movedPiece.player, movedPiece.index) : null;
+    setDispPos(d => {
+      const next = { ...d };
+      pieces.forEach(p => {
+        const pid = E.pieceId(p.player, p.index);
+        if (pid === movingPid) return; // will be animated by hop sequence below
+        const [x, y] = getPieceXY(p, pieces);
+        next[pid] = { x, y };
+      });
+      return next;
+    });
+    setHopping({});
+    setArcY({});
+
+    if (!movedPiece || !movedPrev) return;
+
+    const pid    = movingPid!;
+    const pFrom  = movedPrev.relPos;
+    const pTo    = movedPiece.relPos;
+    hopTRef.current[pid] = [];
+    const push = (t: ReturnType<typeof setTimeout>) => hopTRef.current[pid].push(t);
+
+    // Captured piece (relPos → -1): snap to home base with a spring, no hop
+    if (pTo === -1) {
+      const [x, y] = getPieceXY(movedPiece, pieces);
+      setDispPos(d => ({ ...d, [pid]: { x, y } }));
+      return;
+    }
+
+    // Build one grid position per cell the piece visits on its way to pTo
+    const steps: { x: number; y: number }[] = [];
+    if (pFrom === -1) {
+      // Exiting home base → single hop to track start
+      const gp = E.getGridPos(movedPiece.player, 0);
+      if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
+    } else {
+      const trackEnd = pTo === E.FINISHED_POS ? E.FINISHED_POS - 1 : pTo;
+      for (let r = pFrom + 1; r <= trackEnd; r++) {
+        const gp = E.getGridPos(movedPiece.player, r);
+        if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
+      }
+      if (pTo === E.FINISHED_POS) steps.push({ x: 7.5, y: 7.5 });
+    }
+
+    if (!steps.length) return;
+
+    setHopping(h => ({ ...h, [pid]: true }));
+    const capturedPiece = movedPiece; // stable reference for closure
+
+    steps.forEach((pos, i) => {
+      push(setTimeout(() => {
+        setDispPos(d => ({ ...d, [pid]: pos }));
+        setArcY(a => ({ ...a, [pid]: ARC_H }));
+        // Drop arc back after the peak → parabolic landing
+        push(setTimeout(() => setArcY(a => ({ ...a, [pid]: 0 })), hopMs * 0.46));
+        if (i === steps.length - 1) {
+          // After landing: mark done and reconcile to canonical getPieceXY
+          // (accounts for stacking offsets at the destination cell)
+          push(setTimeout(() => {
+            setHopping(h => ({ ...h, [pid]: false }));
+            const [fx, fy] = getPieceXY(capturedPiece, pieces);
+            setDispPos(d => ({ ...d, [pid]: { x: fx, y: fy } }));
+          }, hopMs));
+        }
+      }, i * hopMs));
+    });
+  }, [pieces, hopMs]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cleanup all hop timers on unmount
+  useEffect(() => () => {
+    Object.values(hopTRef.current).flat().forEach(clearTimeout);
+  }, []);
 
   return (
     <svg viewBox="0 0 15 15"
@@ -945,13 +1062,17 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
         const ph3       = pR * 0.866;
         const pulsePts  = `0,${-pR} ${ph3},${-pR*0.5} ${ph3},${pR*0.5} 0,${pR} ${-ph3},${pR*0.5} ${-ph3},${-pR*0.5}`;
 
+        const dsp = dispPos[pid] ?? { x: cx, y: cy };
+        const arc = arcY[pid]   ?? 0;
+        const isH = hopping[pid] ?? false;
+
         return (
           <motion.g key={pid}
-            animate={{ x: cx, y: cy }}
+            animate={{ x: dsp.x, y: dsp.y - arc }}
             initial={{ x: cx, y: cy }}
-            transition={{ type: 'spring', ...springCfg }}
-            onClick={() => isMovable && onPieceClick(pid)}
-            style={{ cursor: isMovable ? 'pointer' : 'default' }}>
+            transition={isH ? HOP_SPRING : { type: 'spring', ...springCfg }}
+            onClick={() => isMovable && !isH && onPieceClick(pid)}
+            style={{ cursor: isMovable && !isH ? 'pointer' : 'default' }}>
 
             {/* Ambient neon bloom */}
             <circle cx={0} cy={0} r={HR*1.55} fill={neon} fillOpacity="0.042"/>
@@ -1359,7 +1480,7 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
             overflow: 'hidden',
             boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.60), inset 0 0 0 1px rgba(255,255,255,0.05)',
           }}>
-            <BoardSVG game={game} onPieceClick={handlePieceClick} springCfg={springCfg}/>
+            <BoardSVG game={game} onPieceClick={handlePieceClick} springCfg={springCfg} hopMs={cfg.hopMs}/>
           </div>
 
           {/* ── Corner dice panels — outside the board, adjacent to each corner ── */}
