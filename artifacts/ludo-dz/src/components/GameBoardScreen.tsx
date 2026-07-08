@@ -806,9 +806,12 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
         // in the owning player's colour, layered on top of the base cell.
         const exitActive = isStart && player >= 0 && player < game.numPlayers;
 
-        const starNeon = isStart
-          ? E.PLAYER_NEONS[(E.PLAYER_STARTS as readonly number[]).indexOf(pathPos as number)]
+        const exitPlayerIdx = isStart ? (E.PLAYER_STARTS as readonly number[]).indexOf(pathPos as number) : -1;
+        const starNeon = exitPlayerIdx >= 0
+          ? E.PLAYER_NEONS[exitPlayerIdx]
           : 'rgba(255,255,255,0.82)';
+        // Rotation so chevrons point in the exit direction: Red→right, Blue→down, Yellow→left, Green→up
+        const exitRotDeg = [0, 90, 180, 270][exitPlayerIdx] ?? 0;
 
         return (
           <g key={`${r}-${c}`}>
@@ -837,50 +840,51 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
                     transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
                   />
                 )}
+                {/* Neon direction portal — double-chevron pointing in the exit direction */}
+                <g transform={`rotate(${exitRotDeg}, ${c+0.5}, ${r+0.5})`}>
+                  {/* Back chevron (dimmer) */}
+                  <motion.path
+                    d={`M ${c+0.28},${r+0.26} L ${c+0.48},${r+0.50} L ${c+0.28},${r+0.74}`}
+                    fill="none" stroke={starNeon} strokeWidth="0.060" strokeLinecap="round" strokeLinejoin="round"
+                    animate={{ strokeOpacity: [0.28, 0.55, 0.28] }}
+                    transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
+                    filter="url(#star-glow)"
+                  />
+                  {/* Front chevron (brighter) */}
+                  <motion.path
+                    d={`M ${c+0.46},${r+0.26} L ${c+0.66},${r+0.50} L ${c+0.46},${r+0.74}`}
+                    fill="none" stroke={starNeon} strokeWidth="0.060" strokeLinecap="round" strokeLinejoin="round"
+                    animate={{ strokeOpacity: [0.65, 1.0, 0.65] }}
+                    transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
+                    filter="url(#star-glow)"
+                  />
+                </g>
               </>
             )}
 
-            {isStar && (() => {
+            {isStar && !isStart && (() => {
               const T = `translate(${c},${r})`;
               const seed = (r * 15 + c) * 0.06;
               return (
-                // NOTE: the static position (T) must live on a plain, non-animated
-                // <g> ancestor. Framer Motion manages animated transform-related
-                // props (scale, x, y, rotate) via the CSS `transform` property,
-                // which — per the CSS Transforms spec — completely overrides an
-                // SVG element's `transform` *attribute* when both are present on
-                // the same node. Putting transform={T} directly on an animated
-                // motion.g (animating `scale`) silently discards the translate,
-                // collapsing every star onto the SVG's local (0,0) origin.
-                <g transform={T} style={{ color: starNeon } as React.CSSProperties} filter="url(#star-glow)">
-                  {/* outer hex containment ring — echoes the home-base hex motif */}
-                  <polygon
-                    points="0.5,0.06 0.881,0.28 0.881,0.72 0.5,0.94 0.119,0.72 0.119,0.28"
-                    fill="none" stroke="currentColor" strokeWidth="0.032" strokeOpacity="0.50"
-                  />
+                // NOTE: static translate must live on a plain <g> ancestor — see
+                // the comment above about Framer Motion overriding SVG transform attributes.
+                <g transform={T} filter="url(#star-glow)">
                   {/* soft ambient halo */}
-                  <motion.circle cx="0.5" cy="0.5" r="0.30"
-                    fill="currentColor"
-                    animate={{ opacity: [0.10, 0.24, 0.10] }}
+                  <motion.circle cx="0.5" cy="0.5" r="0.28"
+                    fill="white" fillOpacity="0.10"
+                    animate={{ opacity: [0.08, 0.22, 0.08] }}
                     transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut', delay: seed }}
                   />
-                  {/* hexagram energy emblem — two interlocking triangles */}
-                  <motion.g
-                    animate={{ opacity: [0.80, 1, 0.80], scale: [0.94, 1.0, 0.94] }}
-                    transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                  {/* 5-pointed star — R=0.30, r=0.12, tip pointing up */}
+                  <motion.polygon
+                    points="0.500,0.200 0.571,0.403 0.785,0.407 0.614,0.537 0.676,0.743 0.500,0.620 0.324,0.743 0.386,0.537 0.215,0.407 0.429,0.403"
+                    fill="white" fillOpacity="0.92"
+                    animate={{ opacity: [0.78, 1, 0.78], scale: [0.93, 1.02, 0.93] }}
+                    transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut', delay: seed }}
                     style={{ transformOrigin: '0.5px 0.5px' }}
-                  >
-                    <polygon points="0.5,0.16 0.7944,0.67 0.2056,0.67"
-                      fill="currentColor" fillOpacity="0.95"/>
-                    <polygon points="0.5,0.84 0.2056,0.33 0.7944,0.33"
-                      fill="currentColor" fillOpacity="0.95"/>
-                    <polygon points="0.5,0.16 0.7944,0.67 0.2056,0.67"
-                      fill="none" stroke="white" strokeOpacity="0.55" strokeWidth="0.014"/>
-                    <polygon points="0.5,0.84 0.2056,0.33 0.7944,0.33"
-                      fill="none" stroke="white" strokeOpacity="0.55" strokeWidth="0.014"/>
-                    {/* white-hot core */}
-                    <circle cx="0.5" cy="0.5" r="0.075" fill="white" fillOpacity="0.95"/>
-                  </motion.g>
+                  />
+                  {/* white-hot core */}
+                  <circle cx="0.5" cy="0.5" r="0.055" fill="white" fillOpacity="0.95"/>
                 </g>
               );
             })()}
