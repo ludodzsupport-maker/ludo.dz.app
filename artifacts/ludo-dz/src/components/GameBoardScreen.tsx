@@ -156,31 +156,40 @@ function DieFace({
 }
 
 // ─── Corner dice container ────────────────────────────────────────────────────
-// One panel per player, absolutely placed at the matching corner of the board
-// frame (Red=TL, Blue=TR, Yellow=BR, Green=BL). Sits atop the home-zone corner
-// of the SVG — no side columns needed, freeing the board to fill full width.
+// One dedicated "player zone" per player, absolutely positioned at each corner
+// of the GAME AREA — fully outside and independent of the board frame.
+// Layout: game area uses CSS padding (PAD_TB × PAD_LR) to carve out corner
+// zones. Board sits as a flex child in the padded centre; dice panels are
+// position:absolute children anchored to the four corners of the same div.
+//
+//   PAD_LR = PANEL_W + GAP = 56 + 12 = 68 px   (left / right padding)
+//   PAD_TB = PANEL_H + GAP = 90 + 12 = 102 px  (top  / bottom padding)
+//   → Board fills min(game_area_w − 136, game_area_h − 204) ≈ 278 px
+//   → Gap between every panel edge and board border = 12 px (clean breathing room)
 type Corner = 'tl' | 'tr' | 'br' | 'bl';
 
-// Dice panels sit just outside the board frame (negative offsets), so they
-// frame the corners without ever covering the home-zone piece slots.
+// Panels anchor to the game area corners (position:absolute, top/bottom/left/right = 0).
+// The game area padding guarantees they never overlap the board frame.
 const CORNER_POS: Record<Corner, { top?: number; bottom?: number; left?: number; right?: number }> = {
-  tl: { top: -6, left: -6 },
-  tr: { top: -6, right: -6 },
-  br: { bottom: -6, right: -6 },
-  bl: { bottom: -6, left: -6 },
+  tl: { top: 0, left: 0 },
+  tr: { top: 0, right: 0 },
+  br: { bottom: 0, right: 0 },
+  bl: { bottom: 0, left: 0 },
 };
 
-// Gradient flows from the corner toward the board centre
+// Gradient sweeps from the game-area corner inward toward the board — creates
+// the impression that each zone "points at" its home quadrant.
 const CORNER_GRAD: Record<Corner, string> = {
   tl: '135deg', tr: '225deg', br: '315deg', bl: '45deg',
 };
 
-// Border-radius: outer corner of the container is fully rounded, inner edges subtler
+// Outermost corner (screen edge) gets the most rounding; inner corners facing
+// the board are subtler so the panel reads as "attached" to that corner zone.
 const CORNER_RADIUS: Record<Corner, string> = {
-  tl: '14px 6px 12px 6px',
-  tr: '6px 14px 6px 12px',
-  br: '12px 6px 14px 6px',
-  bl: '6px 12px 6px 14px',
+  tl: '16px 6px 12px 6px',
+  tr: '6px 16px 6px 12px',
+  br: '12px 6px 16px 6px',
+  bl: '6px 12px 6px 16px',
 };
 
 function CornerDice({
@@ -203,21 +212,23 @@ function CornerDice({
   const diceVal     = isActive ? animDice : (lastDice[player] || 1);
   const canTap      = canRoll && isActive;
 
+  // Panel is now fully outside the board frame; width matches PAD_LR − GAP = 56 px.
+  // Height is content-driven but capped implicitly by PAD_TB = 102 px available.
   const baseStyle = {
     position: 'absolute' as const,
     ...CORNER_POS[corner],
-    width: 72,
+    width: 56,
     zIndex: 12,
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '8px 7px',
+    padding: '8px 5px',
     borderRadius: CORNER_RADIUS[corner],
-    // Apply blur only on the active panel; inactive panels have near-transparent
-    // backgrounds and a blur would visually smear the board content behind them.
-    backdropFilter: isActive ? 'blur(10px)' : 'none',
-    WebkitBackdropFilter: isActive ? 'blur(10px)' : 'none',
+    // Blur is safe on external panels — they no longer share a stacking context
+    // with the board SVG, so backdrop-filter cannot wash out board content.
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
   };
 
   if (!exists) {
@@ -250,17 +261,16 @@ function CornerDice({
       style={{
         ...baseStyle,
         cursor: canTap ? 'pointer' : 'default',
-        // Inactive panels are mostly transparent so home-zone pieces are visible
-        // through them. Only the active player's panel has a solid background.
+        // Panels are now fully external — no board overlap, so all can have solid
+        // backgrounds. Active panel glows; inactive is a dark neon-card variant.
         background: isActive
-          ? `linear-gradient(${CORNER_GRAD[corner]}, ${col}30 0%, ${col}0c 100%)`
-          : `rgba(4,12,26,0.42)`,
-        border: `1.5px solid ${isActive ? neon : col + '22'}`,
-        transition: 'background 0.35s, border-color 0.35s',
+          ? `linear-gradient(${CORNER_GRAD[corner]}, ${col}38 0%, ${col}10 100%)`
+          : `linear-gradient(${CORNER_GRAD[corner]}, ${col}14 0%, rgba(4,12,26,0.88) 100%)`,
+        border: `1.5px solid ${isActive ? neon : col + '40'}`,
+        transition: 'background 0.4s, border-color 0.4s',
         overflow: 'hidden',
-        // Inactive panels must not block clicks on home-zone piece slots below.
-        // Only the active panel (the one the user taps to roll) captures events.
-        pointerEvents: isActive ? 'auto' : 'none',
+        // All panels capture clicks (no board overlap to worry about).
+        pointerEvents: 'auto',
       }}
     >
       {/* Active shimmer line across outer edge */}
