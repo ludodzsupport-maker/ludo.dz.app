@@ -478,6 +478,7 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
     [pieces]
   );
 
+
   const movableHighlights = useMemo(() => {
     if (game.phase !== 'selecting' || !game.movable.length) return [];
     return game.movable.flatMap(pid => {
@@ -537,14 +538,22 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
             <stop offset="100%" stopColor={c} stopOpacity="0.01"/>
           </radialGradient>
         ))}
+        {/* ── Exit-square (start cell) premium neon tint ── */}
+        {E.PLAYER_NEONS.map((n, i) => (
+          <radialGradient key={i} id={`exitcell${i}`} cx="50%" cy="32%" r="80%">
+            <stop offset="0%"   stopColor="white"               stopOpacity="0.55"/>
+            <stop offset="38%"  stopColor={n}                   stopOpacity="0.85"/>
+            <stop offset="100%" stopColor={E.PLAYER_COLORS[i]}  stopOpacity="0.60"/>
+          </radialGradient>
+        ))}
         {E.PLAYER_NEONS.map((_, i) => (
           <filter key={i} id={`pglow${i}`} x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="0.18" result="b"/>
             <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
           </filter>
         ))}
-        <filter id="star-glow" x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation="0.08" result="b"/>
+        <filter id="star-glow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="0.11" result="b"/>
           <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
         <filter id="tile-glow" x="-60%" y="-60%" width="220%" height="220%">
@@ -790,11 +799,16 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
           stroke  = player < game.numPlayers ? E.PLAYER_NEONS[player] : 'transparent';
           useGlow = player < game.numPlayers && t > 0.5;
         }
-        // strip + path → remain the neutral dark fill defined above
+        // strip + path → remain the neutral dark fill defined above,
+        // EXCEPT the 4 exit squares (below), which get their house tint.
+
+        // Exit square (where pieces land leaving home) — premium neon tint
+        // in the owning player's colour, layered on top of the base cell.
+        const exitActive = isStart && player >= 0 && player < game.numPlayers;
 
         const starNeon = isStart
           ? E.PLAYER_NEONS[(E.PLAYER_STARTS as readonly number[]).indexOf(pathPos as number)]
-          : 'rgba(255,255,255,0.50)';
+          : 'rgba(255,255,255,0.82)';
 
         return (
           <g key={`${r}-${c}`}>
@@ -806,12 +820,70 @@ function BoardSVG({ game, onPieceClick, springCfg }: BoardSVGProps) {
             {/* Subtle glass sheen */}
             <rect x={c+0.04} y={r+0.04} width="0.28" height="0.13" rx="0.05"
               fill="rgba(255,255,255,0.07)"/>
-            {isStar && (
-              <text x={c+0.5} y={r+0.68} textAnchor="middle"
-                fontSize="0.42" fill={starNeon} filter="url(#star-glow)">
-                ✦
-              </text>
+
+            {isStart && (
+              <>
+                {/* House-coloured neon fill for the exit square */}
+                <rect x={c} y={r} width="1" height="1"
+                  fill={`url(#exitcell${player})`}
+                  fillOpacity={exitActive ? 0.62 : 0.14}
+                  filter={exitActive ? `url(#pglow${player})` : undefined}
+                />
+                {/* Pulsing house-colour frame — reads instantly as "start here" */}
+                {exitActive && (
+                  <motion.rect x={c+0.035} y={r+0.035} width="0.93" height="0.93" rx="0.06"
+                    fill="none" stroke={E.PLAYER_NEONS[player]} strokeWidth="0.055"
+                    animate={{ strokeOpacity: [0.45, 1, 0.45] }}
+                    transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                )}
+              </>
             )}
+
+            {isStar && (() => {
+              const T = `translate(${c},${r})`;
+              const seed = (r * 15 + c) * 0.06;
+              return (
+                // NOTE: the static position (T) must live on a plain, non-animated
+                // <g> ancestor. Framer Motion manages animated transform-related
+                // props (scale, x, y, rotate) via the CSS `transform` property,
+                // which — per the CSS Transforms spec — completely overrides an
+                // SVG element's `transform` *attribute* when both are present on
+                // the same node. Putting transform={T} directly on an animated
+                // motion.g (animating `scale`) silently discards the translate,
+                // collapsing every star onto the SVG's local (0,0) origin.
+                <g transform={T} style={{ color: starNeon } as React.CSSProperties} filter="url(#star-glow)">
+                  {/* outer hex containment ring — echoes the home-base hex motif */}
+                  <polygon
+                    points="0.5,0.06 0.881,0.28 0.881,0.72 0.5,0.94 0.119,0.72 0.119,0.28"
+                    fill="none" stroke="currentColor" strokeWidth="0.032" strokeOpacity="0.50"
+                  />
+                  {/* soft ambient halo */}
+                  <motion.circle cx="0.5" cy="0.5" r="0.30"
+                    fill="currentColor"
+                    animate={{ opacity: [0.10, 0.24, 0.10] }}
+                    transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                  />
+                  {/* hexagram energy emblem — two interlocking triangles */}
+                  <motion.g
+                    animate={{ opacity: [0.80, 1, 0.80], scale: [0.94, 1.0, 0.94] }}
+                    transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                    style={{ transformOrigin: '0.5px 0.5px' }}
+                  >
+                    <polygon points="0.5,0.16 0.7944,0.67 0.2056,0.67"
+                      fill="currentColor" fillOpacity="0.95"/>
+                    <polygon points="0.5,0.84 0.2056,0.33 0.7944,0.33"
+                      fill="currentColor" fillOpacity="0.95"/>
+                    <polygon points="0.5,0.16 0.7944,0.67 0.2056,0.67"
+                      fill="none" stroke="white" strokeOpacity="0.55" strokeWidth="0.014"/>
+                    <polygon points="0.5,0.84 0.2056,0.33 0.7944,0.33"
+                      fill="none" stroke="white" strokeOpacity="0.55" strokeWidth="0.014"/>
+                    {/* white-hot core */}
+                    <circle cx="0.5" cy="0.5" r="0.075" fill="white" fillOpacity="0.95"/>
+                  </motion.g>
+                </g>
+              );
+            })()}
           </g>
         );
       }))}
