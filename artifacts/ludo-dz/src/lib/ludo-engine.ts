@@ -32,11 +32,14 @@ export const HOME_COLS: readonly (readonly [number, number][])[] = [
 ];
 
 // ── Piece spawn positions inside each corner home zone ─────────────────────
+// Slots are placed ±1.5 SVG units from zone center so all four are perfectly
+// symmetric inside the inner circle (r=2.3) of each home zone.
+// Zone centres (SVG x,y): Red=(3,12) Blue=(3,3) Yellow=(12,3) Green=(12,12)
 export const HOME_BASES: readonly (readonly [number, number][])[] = [
-  [[10,1],[10,3],[12,1],[12,3]],     // Red
-  [[1,1],[1,3],[3,1],[3,3]],         // Blue
-  [[1,10],[1,12],[3,10],[3,12]],     // Yellow
-  [[10,10],[10,12],[12,10],[12,12]], // Green
+  [[10,1],[10,4],[13,1],[13,4]],     // Red    — rows 9-14, cols 0-5
+  [[1,1],[1,4],[4,1],[4,4]],         // Blue   — rows 0-5,  cols 0-5
+  [[1,10],[1,13],[4,10],[4,13]],     // Yellow — rows 0-5,  cols 9-14
+  [[10,10],[10,13],[13,10],[13,13]], // Green  — rows 9-14, cols 9-14
 ];
 
 // ── Player starts (absolute track index) ───────────────────────────────────
