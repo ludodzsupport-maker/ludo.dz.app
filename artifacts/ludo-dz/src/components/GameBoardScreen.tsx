@@ -466,9 +466,15 @@ function PlayerChip({ game, player, isAI, lang }: {
 interface HopStep { x: number; y: number }
 // Premium cubic-bezier easing: snappy ease-out-quart for lateral movement
 const STEP_EASE: [number, number, number, number] = [0.22, 1.0, 0.36, 1.0];
-const ARC_H     = 0.80; // SVG units — arc peak height per hop
-const INTER_MS  = 50;   // ms pause between consecutive steps ("tap" feel)
+const ARC_H       = 0.80; // SVG units — arc peak height per hop
+const INTER_MS    = 50;   // ms pause between consecutive steps ("tap" feel)
 const LAND_SPRING = { type: 'spring' as const, stiffness: 680, damping: 34, mass: 0.55 };
+// ── Squash & stretch on landing ──────────────────────────────────────────────
+const SQUASH_X  = 1.09; // scaleX at squash peak (wider on impact)
+const SQUASH_Y  = 0.91; // scaleY at squash peak (shorter on impact)
+const SQUASH_MS = 46;   // ms — fits within INTER_MS, plays during the pause gap
+// ── Capture: defeat arc (captured piece flies home) ──────────────────────────
+const DEFEAT_ARC_H = 3.20; // SVG units — dramatic high parabolic arc
 
 // ─── PawnToken ────────────────────────────────────────────────────────────────
 // Self-animating piece using two nested motion groups:
@@ -479,81 +485,126 @@ const LAND_SPRING = { type: 'spring' as const, stiffness: 680, damping: 34, mass
 // 45% of step duration, then descends and snaps to canonical stacking position.
 function PawnToken({
   pid, player, finalX, finalY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
+  onLastHopLand, onDefeatArrived,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
-  hopSteps: HopStep[] | null;   // null=spring; []=capture-snap; [...n]=hop sequence
+  hopSteps: HopStep[] | null | 'defeat'; // null=spring; 'defeat'=capture arc; [...]=hops
   hopMs: number;
   springCfg: { stiffness: number; damping: number; mass: number };
   isMovable: boolean;
   onPieceClick: () => void;
+  onLastHopLand?: () => void;   // fires when captor's final hop lands → shockwave
+  onDefeatArrived?: () => void; // fires when defeated piece reaches home → impact flash
 }) {
-  const baseCtrl = useAnimationControls(); // drives outer x/y position
-  const arcCtrl  = useAnimationControls(); // drives inner y-arc offset
+  const baseCtrl = useAnimationControls();
+  const arcCtrl  = useAnimationControls();
   const [isHopping, setIsHopping] = useState(false);
 
-  // Stable refs so async closures always see the latest values
+  // Stable refs so async closures always see latest values
   const seqKeyRef      = useRef(0);
   const finalRef       = useRef({ x: finalX, y: finalY });
   const springCfgRef   = useRef(springCfg);
+  const onLastHopRef   = useRef(onLastHopLand);
+  const onDefeatRef    = useRef(onDefeatArrived);
   finalRef.current     = { x: finalX, y: finalY };
   springCfgRef.current = springCfg;
+  onLastHopRef.current = onLastHopLand;
+  onDefeatRef.current  = onDefeatArrived;
 
-  // ── Effect 1: hop sequence ──────────────────────────────────────────────────
-  // Fires whenever hopSteps changes to a new non-null value (i.e., this piece moved)
+  // ── Effect 1: hop sequence or defeat arc ────────────────────────────────────
   useEffect(() => {
-    if (hopSteps === null) return; // Effect 2 handles non-moving pieces
+    if (hopSteps === null) return;
 
     const key   = ++seqKeyRef.current;
     const stale = () => seqKeyRef.current !== key;
 
-    arcCtrl.set({ y: 0 }); // reset arc before new sequence
+    arcCtrl.set({ y: 0, scaleX: 1, scaleY: 1, rotate: 0 });
 
-    if (!hopSteps.length) {
-      // Capture — spring-snap directly to home base, no hop
-      const { x, y } = finalRef.current;
-      baseCtrl.start({ x, y, transition: { type: 'spring', ...springCfgRef.current } });
+    // ── Defeat arc: captured piece spins and flies home on a high parabola ────
+    if (hopSteps === 'defeat') {
+      setIsHopping(true);
+      (async () => {
+        // Brief delay so the shockwave renders first
+        await new Promise<void>(r => setTimeout(r, 95));
+        if (stale()) return;
+        const { x, y } = finalRef.current;
+        const defMs = Math.max(hopMs * 2.6, 420);
+        await Promise.all([
+          baseCtrl.start({
+            x, y,
+            transition: { duration: defMs / 1000, ease: [0.10, 0, 0.68, 1] },
+          }),
+          arcCtrl.start({
+            y:      [0, -DEFEAT_ARC_H, 0],
+            rotate: [0, 540],               // 1.5 dramatic spins
+            transition: {
+              duration: defMs / 1000,
+              y:      { times: [0, 0.36, 1], ease: ['easeOut', 'easeIn'] },
+              rotate: { ease: 'easeIn' },
+            },
+          }),
+        ]);
+        if (stale()) return;
+        arcCtrl.set({ y: 0, rotate: 0, scaleX: 1, scaleY: 1 });
+        onDefeatRef.current?.();   // trigger home-pad impact flash
+        setIsHopping(false);
+      })();
       return;
     }
 
+    // ── Normal hop sequence ──────────────────────────────────────────────────
     setIsHopping(true);
-
     (async () => {
-      const dur = hopMs / 1000; // step duration in seconds
+      const dur = hopMs / 1000;
 
       for (let i = 0; i < hopSteps.length; i++) {
         if (stale()) return;
-        const step = hopSteps[i];
+        const step   = hopSteps[i];
+        const isLast = i === hopSteps.length - 1;
 
-        // Move base position to next cell (smooth ease-out-quart) while
-        // simultaneously running a parabolic arc on the inner group.
-        // Promise.all ensures both transitions complete before the next step.
+        // Lateral movement + parabolic arc run in parallel
         await Promise.all([
           baseCtrl.start({
             x: step.x, y: step.y,
             transition: { duration: dur, ease: STEP_EASE },
           }),
           arcCtrl.start({
-            // Keyframes: ground → peak → ground (true parabolic shape)
             y: [0, -ARC_H, 0],
             transition: {
               duration: dur,
-              times: [0, 0.45, 1],       // peak at 45% of step duration
-              ease: ['easeIn', 'easeOut'], // natural gravity: accelerate up, decelerate down
+              times: [0, 0.45, 1],
+              ease: ['easeIn', 'easeOut'],
             },
           }),
         ]);
 
-        // Brief inter-step pause for premium "tap" feel between hops
-        if (i < hopSteps.length - 1) {
+        // ── Squash & stretch on landing ──────────────────────────────────────
+        // Fired but NOT awaited — plays concurrently with the inter-step pause
+        if (!stale()) {
+          arcCtrl.start({
+            scaleX: [1, SQUASH_X, 1],
+            scaleY: [1, SQUASH_Y, 1],
+            transition: {
+              duration: (isLast ? SQUASH_MS * 1.6 : SQUASH_MS) / 1000,
+              times:    [0, 0.28, 1],
+              ease:     'easeOut',
+            },
+          });
+        }
+
+        if (isLast) {
+          onLastHopRef.current?.();   // notify shockwave (capture detection)
+          await new Promise<void>(r => setTimeout(r, Math.ceil(SQUASH_MS * 1.6)));
+          if (!stale()) arcCtrl.set({ scaleX: 1, scaleY: 1 });
+        } else {
           if (stale()) return;
           await new Promise<void>(r => setTimeout(r, INTER_MS));
+          if (!stale()) arcCtrl.set({ scaleX: 1, scaleY: 1 });
         }
       }
 
       if (stale()) return;
-
-      // Final reconcile: spring-snap to canonical stacking position
       const { x, y } = finalRef.current;
       await baseCtrl.start({ x, y, transition: LAND_SPRING });
       if (!stale()) setIsHopping(false);
@@ -561,15 +612,13 @@ function PawnToken({
   }, [hopSteps]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Effect 2: non-hop position updates ─────────────────────────────────────
-  // When hopSteps is null (this piece didn't move), spring to the new canonical
-  // position. This handles stacking reflows when a neighbour arrives/departs.
   useEffect(() => {
-    if (hopSteps !== null) return; // Effect 1 owns the hopping case
+    if (hopSteps !== null) return;
     baseCtrl.start({ x: finalX, y: finalY,
       transition: { type: 'spring', ...springCfgRef.current } });
   }, [finalX, finalY, hopSteps]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Visual geometry (identical to original — no style changes) ───────────────
+  // ── Visual geometry (unchanged) ──────────────────────────────────────────────
   const neon     = E.PLAYER_NEONS[player];
   const HR       = 0.325;
   const h3       = HR * 0.866;
@@ -668,6 +717,44 @@ function PawnToken({
   );
 }
 
+// ─── Shockwave burst — neon ripple rings that emanate from the capture tile ────
+function ShockwaveEffect({
+  x, y, neon, onDone,
+}: { x: number; y: number; neon: string; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 750);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <g pointerEvents="none">
+      {/* Three expanding neon rings, staggered */}
+      {[0, 1, 2].map(i => (
+        <motion.circle
+          key={i}
+          cx={x} cy={y} r={0.10}
+          fill="none"
+          stroke={neon}
+          strokeWidth={0.09 - i * 0.022}
+          style={{ transformOrigin: `${x}px ${y}px` }}
+          initial={{ scale: 1, opacity: 0.88 - i * 0.08 }}
+          animate={{ scale: 12 + i * 3, opacity: 0 }}
+          transition={{ duration: 0.46 + i * 0.11, delay: i * 0.07, ease: 'easeOut' }}
+        />
+      ))}
+      {/* Hot core — bright filled disc that implodes inward */}
+      <motion.circle
+        cx={x} cy={y} r={0.42}
+        fill={neon}
+        style={{ transformOrigin: `${x}px ${y}px` }}
+        initial={{ scale: 1, fillOpacity: 0.72 }}
+        animate={{ scale: 0.08, fillOpacity: 0 }}
+        transition={{ duration: 0.22, ease: 'easeOut' }}
+      />
+    </g>
+  );
+}
+
 // ─── BoardSVG — pure game board ───────────────────────────────────────────────
 interface BoardSVGProps {
   game: E.GameState;
@@ -699,54 +786,92 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
     });
   }, [game.movable, game.phase, pieces]);
 
-  // ── Piece hop state — which piece is hopping and its cell-by-cell path ────────
-  const [pieceHops, setPieceHops] = useState<Record<string, HopStep[] | null>>({});
+  // ── Piece animation state ─────────────────────────────────────────────────────
+  // Each entry holds the hop sequence (or defeat-arc) + optional effect callbacks.
+  // Callbacks live in state so they persist for the full duration of the animation.
+  type PieceAnim = {
+    steps: HopStep[] | 'defeat' | null;
+    onLastHop?: () => void;   // captor → shockwave
+    onArrival?: () => void;   // captured piece → home impact flash
+  };
+  const [pieceAnims, setPieceAnims] = useState<Record<string, PieceAnim>>({});
   const prevPiecesRef = useRef<E.Piece[]>([]);
+
+  // ── Capture visual effects ────────────────────────────────────────────────────
+  type ShockwaveEvent = { x: number; y: number; neon: string; id: number };
+  const [shockwave,  setShockwave]  = useState<ShockwaveEvent | null>(null);
+  const [homeImpact, setHomeImpact] = useState<{ player: number; index: number; id: number } | null>(null);
 
   useEffect(() => {
     const prev = prevPiecesRef.current;
     prevPiecesRef.current = pieces;
     if (!prev.length) return;
 
-    // Find the single piece that moved this turn
-    let movedPiece: E.Piece | null = null;
-    let movedPrev:  E.Piece | null = null;
+    // Detect both the captor (relPos advanced) and the captured piece (relPos → -1)
+    let captorPiece:   E.Piece | null = null;
+    let captorPrev:    E.Piece | null = null;
+    let capturedPiece: E.Piece | null = null;
+
     for (const piece of pieces) {
       const prevP = prev.find(p => p.player === piece.player && p.index === piece.index);
-      if (prevP && prevP.relPos !== piece.relPos) {
-        movedPiece = piece; movedPrev = prevP; break;
-      }
-    }
-    if (!movedPiece || !movedPrev) return;
-
-    const pid   = E.pieceId(movedPiece.player, movedPiece.index);
-    const pFrom = movedPrev.relPos;
-    const pTo   = movedPiece.relPos;
-
-    // Build the cell-by-cell hop path
-    // pTo === -1 (capture) → empty steps array → PawnToken spring-snaps to home
-    const steps: HopStep[] = [];
-    if (pTo !== -1) {
-      if (pFrom === -1) {
-        // Exiting home base: single hop to track start
-        const gp = E.getGridPos(movedPiece.player, 0);
-        if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
+      if (!prevP || prevP.relPos === piece.relPos) continue;
+      if (piece.relPos === -1) {
+        capturedPiece = piece;          // this piece was eaten
       } else {
-        const trackEnd = pTo === E.FINISHED_POS ? E.FINISHED_POS - 1 : pTo;
-        for (let r = pFrom + 1; r <= trackEnd; r++) {
-          const gp = E.getGridPos(movedPiece.player, r);
-          if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
-        }
-        if (pTo === E.FINISHED_POS) steps.push({ x: 7.5, y: 7.5 });
+        captorPiece = piece;
+        captorPrev  = prevP;
       }
     }
 
-    // Give this piece its new hop sequence; reset all others to null so they
-    // spring directly to their new canonical positions via Effect 2 in PawnToken.
-    setPieceHops(() => {
-      const next: Record<string, HopStep[] | null> = {};
-      pieces.forEach(p => { next[E.pieceId(p.player, p.index)] = null; });
-      next[pid] = steps;
+    if (!captorPiece || !captorPrev) return;
+
+    const pid   = E.pieceId(captorPiece.player, captorPiece.index);
+    const pFrom = captorPrev.relPos;
+    const pTo   = captorPiece.relPos;
+
+    // Build cell-by-cell hop path for the captor
+    const steps: HopStep[] = [];
+    if (pFrom === -1) {
+      // Exiting home base: single hop to track start
+      const gp = E.getGridPos(captorPiece.player, 0);
+      if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
+    } else {
+      const trackEnd = pTo === E.FINISHED_POS ? E.FINISHED_POS - 1 : pTo;
+      for (let r = pFrom + 1; r <= trackEnd; r++) {
+        const gp = E.getGridPos(captorPiece.player, r);
+        if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
+      }
+      if (pTo === E.FINISHED_POS) steps.push({ x: 7.5, y: 7.5 });
+    }
+
+    const capturedPid = capturedPiece
+      ? E.pieceId(capturedPiece.player, capturedPiece.index)
+      : null;
+
+    // Build effect callbacks (closures capture stable data at time of turn)
+    const capturedSnapshot = capturedPiece; // stable ref for closures below
+    const captorNeon       = E.PLAYER_NEONS[captorPiece.player];
+    const lastStep         = steps[steps.length - 1];
+
+    const onLastHop: (() => void) | undefined =
+      capturedPid && lastStep
+        ? () => setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() })
+        : undefined;
+
+    const onArrival: (() => void) | undefined =
+      capturedSnapshot
+        ? () => {
+            setHomeImpact({ player: capturedSnapshot.player, index: capturedSnapshot.index, id: Date.now() });
+            setTimeout(() => setHomeImpact(null), 750);
+          }
+        : undefined;
+
+    // Commit: captor hops, captured piece defeat-arcs, all others spring to position
+    setPieceAnims(() => {
+      const next: Record<string, PieceAnim> = {};
+      pieces.forEach(p => { next[E.pieceId(p.player, p.index)] = { steps: null }; });
+      next[pid] = { steps, onLastHop };
+      if (capturedPid) next[capturedPid] = { steps: 'defeat', onArrival };
       return next;
     });
   }, [pieces]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -978,6 +1103,19 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
                     fill="none" stroke={neon} strokeWidth="0.014"
                     strokeOpacity={ao(0.55)}
                   />
+                  {/* Home-impact neon flash — fires when a defeated piece arrives */}
+                  {homeImpact?.player === player && homeImpact?.index === si && (
+                    <motion.circle
+                      key={homeImpact.id}
+                      cx={sx} cy={sy}
+                      r={HR + 0.09}
+                      fill={neon}
+                      style={{ transformOrigin: `${sx}px ${sy}px` }}
+                      initial={{ scale: 1.55, fillOpacity: 0.80 }}
+                      animate={{ scale: 1,    fillOpacity: 0 }}
+                      transition={{ duration: 0.55, ease: 'easeOut' }}
+                    />
+                  )}
                 </g>
               );
             })}
@@ -1190,10 +1328,21 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
         transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
       />
 
+      {/* ── Shockwave burst — rendered above board, below pieces ── */}
+      {shockwave && (
+        <ShockwaveEffect
+          key={shockwave.id}
+          x={shockwave.x}
+          y={shockwave.y}
+          neon={shockwave.neon}
+          onDone={() => setShockwave(null)}
+        />
+      )}
+
       {/* ── Pieces ── each PawnToken manages its own dual-control animation ── */}
       {piecePositions.map(({ player, index, xy: [fx, fy] }) => {
-        const pid = E.pieceId(player, index);
-        const hop = pieceHops[pid];
+        const pid  = E.pieceId(player, index);
+        const anim = pieceAnims[pid] ?? { steps: null };
         return (
           <PawnToken
             key={pid}
@@ -1201,11 +1350,13 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
             player={player}
             finalX={fx}
             finalY={fy}
-            hopSteps={hop !== undefined ? hop : null}
+            hopSteps={anim.steps}
             hopMs={hopMs}
             springCfg={springCfg}
             isMovable={game.movable.includes(pid)}
             onPieceClick={() => onPieceClick(pid)}
+            onLastHopLand={anim.onLastHop}
+            onDefeatArrived={anim.onArrival}
           />
         );
       })}
