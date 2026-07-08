@@ -1,50 +1,50 @@
 # Ludo DZ
 
-A full-stack Ludo board game built with React and Express, using a contract-first API approach.
+A full-stack Ludo board game built with React + Vite (frontend) and Express (backend), managed as a pnpm monorepo.
 
-## Tech Stack
+## Stack
 
-- **Frontend:** React 19, Vite, TypeScript, Tailwind CSS 4, Framer Motion, Radix UI, Wouter, TanStack Query
-- **Backend:** Node.js, Express 5, TypeScript, esbuild
-- **Database:** PostgreSQL via Drizzle ORM
-- **API Tooling:** OpenAPI spec (YAML) with Orval for codegen (Zod schemas + React Query hooks)
+- **Frontend**: React 19, Vite, TypeScript, Tailwind CSS 4, Framer Motion, Radix UI, Wouter, TanStack Query
+- **Backend**: Node.js, Express 5, TypeScript, esbuild
+- **Database**: PostgreSQL (Replit built-in) with Drizzle ORM
+- **API**: Contract-first with OpenAPI YAML + Orval codegen (Zod schemas + React Query hooks)
 
 ## Project Structure
 
 ```
-artifacts/ludo-dz/       # React frontend (Vite, served at /)
-artifacts/api-server/    # Express backend (served at /api)
-artifacts/mockup-sandbox/# UI prototyping environment
-lib/db/                  # Database schema and Drizzle config
-lib/api-spec/            # OpenAPI definitions and Orval config
-lib/api-zod/             # Generated Zod schemas (do not edit)
-lib/api-client-react/    # Generated React Query hooks (do not edit)
+artifacts/
+  ludo-dz/        # React frontend (port 21341)
+  api-server/     # Express backend (port 8080)
+  mockup-sandbox/ # UI prototyping
+lib/
+  api-spec/       # openapi.yaml + Orval config
+  api-zod/        # Generated Zod schemas (do not edit)
+  api-client-react/ # Generated React Query hooks (do not edit)
+  db/             # Drizzle schema and config
+scripts/          # Internal workspace tools
 ```
 
-## Running the Project
+## How to Run
 
-Both services start automatically via Replit workflows:
+Both workflows start automatically:
+- **Frontend**: `artifacts/ludo-dz: web` — Vite dev server on port 21341
+- **Backend**: `artifacts/api-server: API Server` — Express on port 8080
 
-- **Frontend:** `pnpm --filter @workspace/ludo-dz run dev` (port 21341, preview at `/`)
-- **Backend:** `pnpm --filter @workspace/api-server run dev` (port 8080, routed at `/api`)
+To install dependencies: `pnpm install` (from root)
 
-## Required Environment Variables
+To push DB schema changes: `pnpm --filter @workspace/db run push`
 
-| Variable       | Source                        | Notes                          |
-|----------------|-------------------------------|--------------------------------|
-| `DATABASE_URL` | Auto-provided by Replit       | PostgreSQL connection string   |
-| `SESSION_SECRET` | Replit secret (already set) | Used for session signing       |
-| `PORT`         | Injected by workflow          | Do not hardcode                |
+To regenerate API client code: `pnpm --filter @workspace/api-spec run codegen`
 
-## Development Workflow
+## Environment
 
-### API Changes
-1. Edit `lib/api-spec/openapi.yaml` (single source of truth)
-2. Run codegen: `pnpm run --filter @workspace/api-spec codegen`
-3. Implement route in `artifacts/api-server/src/routes/`
+- `DATABASE_URL` — auto-provided by Replit (PostgreSQL)
+- `SESSION_SECRET` — set as a Replit Secret
 
-### Database Changes
-- Edit schema in `lib/db/src/schema/index.ts`
-- Push changes: `pnpm --filter @workspace/db run push`
+## Development Conventions
+
+- API changes must start in `lib/api-spec/openapi.yaml`, then run codegen
+- Do not edit files in `lib/api-zod/` or `lib/api-client-react/` directly
+- Use pnpm only (a `preinstall` script rejects npm/yarn)
 
 ## User Preferences
