@@ -68,6 +68,17 @@ const PATH_POS_MAP = new Map<string, number>(
   E.MAIN_PATH.map(([r, c], i) => [`${r},${c}`, i])
 );
 
+// ─── Fixed resting slots for finished pawns inside each player's center triangle ──
+// Center 3×3 spans columns/rows 6–9, apex at (7.5, 7.5). [x, y] = [col, row].
+// Red=left, Blue=top, Yellow=right, Green=bottom.
+// Each triangle has 4 slots keyed by piece.index (0-3), arranged in a 2×2 pattern.
+const HOME_FINISH_SLOTS: readonly (readonly [number, number][])[] = [
+  [[6.30, 6.95], [6.30, 8.05], [6.75, 7.20], [6.75, 7.80]], // Red   — left triangle
+  [[6.95, 6.30], [8.05, 6.30], [7.20, 6.75], [7.80, 6.75]], // Blue  — top triangle
+  [[8.70, 6.95], [8.70, 8.05], [8.25, 7.20], [8.25, 7.80]], // Yellow — right triangle
+  [[6.95, 8.70], [8.05, 8.70], [7.20, 8.25], [7.80, 8.25]], // Green — bottom triangle
+];
+
 // ─── Piece display position ───────────────────────────────────────────────────
 function getPieceXY(piece: E.Piece, all: E.Piece[]): [number, number] {
   if (piece.relPos === -1) {
@@ -75,11 +86,8 @@ function getPieceXY(piece: E.Piece, all: E.Piece[]): [number, number] {
     return [bc + 0.5, br + 0.5];
   }
   if (piece.relPos === E.FINISHED_POS) {
-    const done = all.filter(p => p.relPos === E.FINISHED_POS);
-    const idx  = done.indexOf(piece);
-    const off: [number,number][] = [[-0.22,-0.22],[0.22,-0.22],[-0.22,0.22],[0.22,0.22]];
-    const [dx, dy] = off[idx % 4] || [0, 0];
-    return [7.5 + dx, 7.5 + dy];
+    const [x, y] = HOME_FINISH_SLOTS[piece.player][piece.index];
+    return [x, y];
   }
   const gp = E.getGridPos(piece.player, piece.relPos);
   if (!gp) return [7.5, 7.5];
@@ -550,7 +558,10 @@ function buildHopPath(
       const gp = E.getGridPos(player, r);
       if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
     }
-    if (pTo === E.FINISHED_POS) steps.push({ x: 7.5, y: 7.5 });
+    if (pTo === E.FINISHED_POS) {
+      const [fx, fy] = HOME_FINISH_SLOTS[player][index];
+      steps.push({ x: fx, y: fy });
+    }
   }
 
   return steps;
