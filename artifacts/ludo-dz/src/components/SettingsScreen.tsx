@@ -37,6 +37,7 @@ const T = {
     boardStyle:      "Style du plateau",
     boardStyleSub:   "Choisissez l'apparence visuelle du plateau",
     neonBoard:       "Neon Board",
+    classicBoard:    "Classic Board",
 
     sectionAbout: "À propos",
     about:       "Ludo DZ",
@@ -68,6 +69,7 @@ const T = {
     boardStyle:      "نمط اللوحة",
     boardStyleSub:   "اختر المظهر البصري للوحة",
     neonBoard:       "نيون بورد",
+    classicBoard:    "بورد كلاسيكي",
 
     sectionAbout: "حول اللعبة",
     about:       "لودو DZ",
@@ -506,9 +508,12 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
               {/* Current style badge */}
               <span
                 className="flex-shrink-0 text-[11px] font-heading font-bold px-2.5 py-1 rounded-full"
-                style={{ background: "rgba(0,255,238,0.15)", color: "#00FFEE", border: "1px solid rgba(0,255,238,0.32)", letterSpacing: "0.08em" }}
+                style={boardStyle === 'neon'
+                  ? { background: "rgba(0,255,238,0.15)", color: "#00FFEE", border: "1px solid rgba(0,255,238,0.32)", letterSpacing: "0.08em" }
+                  : { background: "rgba(180,130,40,0.18)", color: "#C8960A", border: "1px solid rgba(180,130,40,0.40)", letterSpacing: "0.08em" }
+                }
               >
-                {t.neonBoard}
+                {boardStyle === 'neon' ? t.neonBoard : t.classicBoard}
               </span>
 
               <motion.div
@@ -604,7 +609,93 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                         className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 relative z-10"
                         style={{ background: "#00FFEE" }}
                       >
-                        <Check className="w-3 h-3 text-black" strokeWidth={3} />
+                        {boardStyle === 'neon' ? <Check className="w-3 h-3 text-black" strokeWidth={3} /> : null}
+                      </div>
+                    </motion.button>
+
+                    {/* ── Classic Board option ── */}
+                    <motion.button
+                      onClick={() => { setBoardStyle("classic"); setBoardOpen(false); }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl relative overflow-hidden mt-2"
+                      style={boardStyle === 'classic' ? {
+                        background: "rgba(180,130,40,0.14)",
+                        border: "1px solid rgba(180,130,40,0.50)",
+                        boxShadow: "0 0 18px rgba(180,130,40,0.16)",
+                      } : {
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                      }}
+                    >
+                      {boardStyle === 'classic' && (
+                        <motion.div
+                          className="absolute inset-0"
+                          layoutId="activeBoardBg"
+                          style={{ background: "rgba(180,130,40,0.06)" }}
+                        />
+                      )}
+                      {/* Mini Classic board thumbnail */}
+                      <div className="relative z-10 flex-shrink-0 rounded-lg overflow-hidden"
+                        style={boardStyle === 'classic'
+                          ? { boxShadow: "0 0 10px rgba(180,130,40,0.35)", border: "1px solid rgba(180,130,40,0.35)" }
+                          : { border: "1px solid rgba(255,255,255,0.14)" }}>
+                        <svg viewBox="0 0 60 60" width="42" height="42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect width="60" height="60" fill="#EDD9A3"/>
+                          <rect x="1"  y="1"  width="22" height="22" rx="2" fill="#C41E2A" opacity="0.80"/>
+                          <rect x="37" y="1"  width="22" height="22" rx="2" fill="#1055A0" opacity="0.80"/>
+                          <rect x="1"  y="37" width="22" height="22" rx="2" fill="#1A7838" opacity="0.80"/>
+                          <rect x="37" y="37" width="22" height="22" rx="2" fill="#C89600" opacity="0.80"/>
+                          <rect x="2.5"  y="2.5"  width="19" height="19" rx="1.5" fill="#F8D8D8" opacity="0.90"/>
+                          <rect x="38.5" y="2.5"  width="19" height="19" rx="1.5" fill="#D0DCF8" opacity="0.90"/>
+                          <rect x="2.5"  y="38.5" width="19" height="19" rx="1.5" fill="#C8F0D8" opacity="0.90"/>
+                          <rect x="38.5" y="38.5" width="19" height="19" rx="1.5" fill="#F8ECC4" opacity="0.90"/>
+                          <circle cx="8"  cy="8"  r="3" fill="#C41E2A" opacity="0.70"/>
+                          <circle cx="16" cy="8"  r="3" fill="#C41E2A" opacity="0.70"/>
+                          <circle cx="8"  cy="16" r="3" fill="#C41E2A" opacity="0.70"/>
+                          <circle cx="16" cy="16" r="3" fill="#C41E2A" opacity="0.70"/>
+                          <circle cx="44" cy="8"  r="3" fill="#1055A0" opacity="0.70"/>
+                          <circle cx="52" cy="8"  r="3" fill="#1055A0" opacity="0.70"/>
+                          <circle cx="44" cy="16" r="3" fill="#1055A0" opacity="0.70"/>
+                          <circle cx="52" cy="16" r="3" fill="#1055A0" opacity="0.70"/>
+                          <circle cx="8"  cy="44" r="3" fill="#1A7838" opacity="0.70"/>
+                          <circle cx="16" cy="44" r="3" fill="#1A7838" opacity="0.70"/>
+                          <circle cx="8"  cy="52" r="3" fill="#1A7838" opacity="0.70"/>
+                          <circle cx="16" cy="52" r="3" fill="#1A7838" opacity="0.70"/>
+                          <circle cx="44" cy="44" r="3" fill="#C89600" opacity="0.70"/>
+                          <circle cx="52" cy="44" r="3" fill="#C89600" opacity="0.70"/>
+                          <circle cx="44" cy="52" r="3" fill="#C89600" opacity="0.70"/>
+                          <circle cx="52" cy="52" r="3" fill="#C89600" opacity="0.70"/>
+                          <rect x="23" y="1"  width="14" height="58" fill="#F5EDD0"/>
+                          <rect x="1"  y="23" width="58" height="14" fill="#F5EDD0"/>
+                          <rect x="25" y="1"  width="10" height="20" fill="#C41E2A" opacity="0.20"/>
+                          <rect x="25" y="39" width="10" height="20" fill="#1055A0" opacity="0.20"/>
+                          <rect x="1"  y="25" width="20" height="10" fill="#1A7838" opacity="0.20"/>
+                          <rect x="39" y="25" width="20" height="10" fill="#C89600" opacity="0.20"/>
+                          <rect x="23" y="23" width="14" height="14" rx="1.5" fill="#EDD9A3"/>
+                          <polygon points="23,23 37,23 30,30" fill="#1055A0" opacity="0.76"/>
+                          <polygon points="37,23 37,37 30,30" fill="#C89600" opacity="0.76"/>
+                          <polygon points="37,37 23,37 30,30" fill="#1A7838" opacity="0.76"/>
+                          <polygon points="23,37 23,23 30,30" fill="#C41E2A" opacity="0.76"/>
+                          <polygon points="30,25.5 31.4,28.8 35,28.8 32.3,30.9 33.3,34.1 30,32.2 26.7,34.1 27.7,30.9 25,28.8 28.6,28.8" fill="#7A5018" opacity="0.80"/>
+                          <line x1="23" y1="0" x2="23" y2="60" stroke="#9B7630" strokeWidth="0.7" opacity="0.30"/>
+                          <line x1="37" y1="0" x2="37" y2="60" stroke="#9B7630" strokeWidth="0.7" opacity="0.30"/>
+                          <line x1="0" y1="23" x2="60" y2="23" stroke="#9B7630" strokeWidth="0.7" opacity="0.30"/>
+                          <line x1="0" y1="37" x2="60" y2="37" stroke="#9B7630" strokeWidth="0.7" opacity="0.30"/>
+                          <rect x="0.5" y="0.5" width="59" height="59" stroke="#7A5018" strokeWidth="1" fill="none" opacity="0.62"/>
+                        </svg>
+                      </div>
+                      <span
+                        className="font-heading font-bold relative z-10 flex-1 px-3"
+                        style={{ fontSize: "14px", color: boardStyle === 'classic' ? "#C8960A" : "rgba(255,255,255,0.55)", letterSpacing: "0.08em" }}
+                      >
+                        {t.classicBoard}
+                      </span>
+                      <div
+                        className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 relative z-10"
+                        style={{ background: boardStyle === 'classic' ? "#C8960A" : "rgba(255,255,255,0.12)" }}
+                      >
+                        {boardStyle === 'classic' ? <Check className="w-3 h-3 text-black" strokeWidth={3} /> : null}
                       </div>
                     </motion.button>
                   </div>

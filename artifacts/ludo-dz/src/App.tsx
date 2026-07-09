@@ -12,7 +12,7 @@ import { AnimatePresence } from 'framer-motion';
 import type { GameConfig } from '@/components/GameConfigOverlay';
 
 type Screen = 'welcome' | 'mode-select' | 'settings' | 'game';
-export type BoardStyle = 'neon';
+export type BoardStyle = 'neon' | 'classic';
 
 function AppContent() {
   const [showSplash, setShowSplash]   = useState(true);

@@ -975,15 +975,23 @@ interface BoardSVGProps {
   homeImpact: HomeImpactEvent | null;
   homeFinishVFX: ShockwaveEvent | null;
   onHomeFinishDone: () => void;
+  boardStyle?: BoardStyle;
 }
 
 function BoardSVG({
   game, onPieceClick, springCfg, hopMs,
   pieceAnims, shockwave, onShockwaveDone,
   homeImpact, homeFinishVFX, onHomeFinishDone,
+  boardStyle,
 }: BoardSVGProps) {
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
+  const isClassic   = boardStyle === 'classic';
+  // Classic palette constants (unused in neon mode)
+  const CL_SOLID  = ['#C41E2A','#1055A0','#C89600','#1A7838'] as const;
+  const CL_LIGHT  = ['#F8D8D8','#D0DCF8','#F8ECC4','#C8F0D8'] as const;
+  const CL_BORDER = ['#8B1414','#0A3080','#8B6A00','#0E5020'] as const;
+  const CL_ARROW  = ['#8B1010','#083078','#8B6400','#0D5020'] as const;
   const pieces      = game.pieces;
 
   const piecePositions = useMemo(
@@ -1092,9 +1100,9 @@ function BoardSVG({
       </defs>
 
       {/* ── Background ── */}
-      <rect width="15" height="15" fill="#030b16"/>
+      <rect width="15" height="15" fill={isClassic ? '#EDD9A3' : '#030b16'}/>
 
-      {/* ── Home zones — Cyberpunk Neon Launchpad ── */}
+      {/* ── Home zones ── */}
       {[0,1,2,3].map(player => {
         const [zr, zc] = [[0,0],[0,9],[9,9],[9,0]][player] as [number,number];
         const neon      = E.PLAYER_NEONS[player];
@@ -1111,6 +1119,50 @@ function BoardSVG({
           const s = R * 0.866;
           return `${x},${y-R} ${x+s},${y-R*0.5} ${x+s},${y+R*0.5} ${x},${y+R} ${x-s},${y+R*0.5} ${x-s},${y-R*0.5}`;
         };
+
+        if (isClassic) {
+          const solid  = CL_SOLID[player as 0|1|2|3];
+          const light  = CL_LIGHT[player as 0|1|2|3];
+          const border = CL_BORDER[player as 0|1|2|3];
+          const mainOp = exists ? (isCurrent ? 0.92 : 0.78) : 0.22;
+          return (
+            <g key={`hz-${player}`}>
+              {/* Solid coloured background */}
+              <rect x={zc} y={zr} width="6" height="6" fill={solid} fillOpacity={mainOp}/>
+              {/* Inner cream panel */}
+              <rect x={zc+0.32} y={zr+0.32} width="5.36" height="5.36" rx="0.22"
+                fill={light} fillOpacity={exists ? 0.95 : 0.55}/>
+              {/* Pawn bays — classic circles */}
+              {E.HOME_BASES[player].map(([br, bc], si) => (
+                <g key={si}>
+                  <circle cx={bc+0.5} cy={br+0.5} r={0.42}
+                    fill={solid} fillOpacity={exists ? 0.55 : 0.12}
+                    stroke={border} strokeWidth="0.042" strokeOpacity={exists ? 0.65 : 0.18}/>
+                  <circle cx={bc+0.5} cy={br+0.5} r={0.22}
+                    fill="white" fillOpacity={exists ? 0.30 : 0.08}/>
+                  {homeImpact?.player === player && homeImpact?.index === si && (
+                    <motion.circle
+                      key={homeImpact.id}
+                      cx={bc+0.5} cy={br+0.5} r={0.52}
+                      fill={solid}
+                      initial={{ scale: 1.5, fillOpacity: 0.80 }}
+                      animate={{ scale: 1, fillOpacity: 0 }}
+                      transition={{ duration: 0.55, ease: 'easeOut' }}
+                    />
+                  )}
+                </g>
+              ))}
+              {/* Center mark */}
+              <circle cx={cx} cy={cy} r="0.28"
+                fill={solid} fillOpacity={0.28} stroke={border} strokeWidth="0.036" strokeOpacity={0.45}/>
+              {/* Border */}
+              <rect x={zc} y={zr} width="6" height="6" fill="none"
+                stroke={border}
+                strokeWidth={isCurrent ? 0.095 : 0.045}
+                strokeOpacity={isCurrent ? 0.92 : exists ? 0.62 : 0.18}/>
+            </g>
+          );
+        }
 
         return (
           <g key={`hz-${player}`}>
@@ -1308,9 +1360,9 @@ function BoardSVG({
 
         // Visual rule: ONLY homecol (middle lane) cells get player color.
         // Strip and path cells stay neutral/dark for clean contrast.
-        let fill    = '#0d1f38';
+        let fill    = isClassic ? '#F5EDD0' : '#0d1f38';
         let fillOp  = 1;
-        let stroke  = 'rgba(255,255,255,0.06)';
+        let stroke  = isClassic ? 'rgba(120,88,20,0.28)' : 'rgba(255,255,255,0.06)';
         let useGlow = false;
 
         if (cell.kind === 'homecol') {
@@ -1319,10 +1371,14 @@ function BoardSVG({
             ? (player === 0 ? c - 1 : 13 - c)   // horizontal arms
             : (player === 1 ? r - 1 : 13 - r);   // vertical arms
           const t = Math.max(0, Math.min(1, depth / 5));
-          fill    = E.PLAYER_COLORS[player];
-          fillOp  = game.playerSlots.includes(player) ? 0.18 + t * 0.52 : 0.04;
-          stroke  = game.playerSlots.includes(player) ? E.PLAYER_NEONS[player] : 'transparent';
-          useGlow = game.playerSlots.includes(player) && t > 0.5;
+          fill    = isClassic ? CL_SOLID[player as 0|1|2|3] : E.PLAYER_COLORS[player];
+          fillOp  = game.playerSlots.includes(player)
+            ? (isClassic ? 0.52 + t * 0.30 : 0.18 + t * 0.52)
+            : (isClassic ? 0.14 : 0.04);
+          stroke  = game.playerSlots.includes(player)
+            ? (isClassic ? 'rgba(60,30,0,0.42)' : E.PLAYER_NEONS[player])
+            : 'transparent';
+          useGlow = !isClassic && game.playerSlots.includes(player) && t > 0.5;
         }
         // strip + path → remain the neutral dark fill defined above,
         // EXCEPT the 4 exit squares (below), which get their house tint.
@@ -1345,49 +1401,81 @@ function BoardSVG({
               stroke={stroke} strokeWidth="0.028"
               filter={useGlow ? 'url(#lane-glow)' : undefined}
             />
-            {/* Subtle glass sheen */}
-            <rect x={c+0.04} y={r+0.04} width="0.28" height="0.13" rx="0.05"
-              fill="rgba(255,255,255,0.07)"/>
+            {/* Subtle glass sheen — neon mode only */}
+            {!isClassic && (
+              <rect x={c+0.04} y={r+0.04} width="0.28" height="0.13" rx="0.05"
+                fill="rgba(255,255,255,0.07)"/>
+            )}
 
             {isStart && (
               <>
-                {/* House-coloured neon fill for the exit square */}
-                <rect x={c} y={r} width="1" height="1"
-                  fill={`url(#exitcell${player})`}
-                  fillOpacity={exitActive ? 0.62 : 0.14}
-                  filter={exitActive ? `url(#pglow${player})` : undefined}
-                />
-                {/* Pulsing house-colour frame — reads instantly as "start here" */}
-                {exitActive && (
-                  <motion.rect x={c+0.035} y={r+0.035} width="0.93" height="0.93" rx="0.06"
-                    fill="none" stroke={E.PLAYER_NEONS[player]} strokeWidth="0.055"
-                    animate={{ strokeOpacity: [0.45, 1, 0.45] }}
-                    transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
-                  />
+                {isClassic ? (
+                  <>
+                    {/* Classic: player-coloured tint + solid direction arrow */}
+                    <rect x={c} y={r} width="1" height="1"
+                      fill={player >= 0 ? CL_SOLID[player as 0|1|2|3] : 'transparent'}
+                      fillOpacity={exitActive ? 0.26 : 0.10}/>
+                    <g transform={`rotate(${exitRotDeg}, ${c+0.5}, ${r+0.5})`}>
+                      <path
+                        d={`M ${c+0.30},${r+0.26} L ${c+0.54},${r+0.50} L ${c+0.30},${r+0.74}`}
+                        fill="none"
+                        stroke={player >= 0 ? CL_ARROW[player as 0|1|2|3] : 'rgba(80,50,10,0.70)'}
+                        strokeWidth="0.078" strokeLinecap="round" strokeLinejoin="round"
+                        strokeOpacity={exitActive ? 0.88 : 0.50}
+                      />
+                    </g>
+                  </>
+                ) : (
+                  <>
+                    {/* House-coloured neon fill for the exit square */}
+                    <rect x={c} y={r} width="1" height="1"
+                      fill={`url(#exitcell${player})`}
+                      fillOpacity={exitActive ? 0.62 : 0.14}
+                      filter={exitActive ? `url(#pglow${player})` : undefined}
+                    />
+                    {/* Pulsing house-colour frame — reads instantly as "start here" */}
+                    {exitActive && (
+                      <motion.rect x={c+0.035} y={r+0.035} width="0.93" height="0.93" rx="0.06"
+                        fill="none" stroke={E.PLAYER_NEONS[player]} strokeWidth="0.055"
+                        animate={{ strokeOpacity: [0.45, 1, 0.45] }}
+                        transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
+                      />
+                    )}
+                    {/* Neon direction portal — double-chevron pointing in the exit direction */}
+                    <g transform={`rotate(${exitRotDeg}, ${c+0.5}, ${r+0.5})`}>
+                      <motion.path
+                        d={`M ${c+0.28},${r+0.26} L ${c+0.48},${r+0.50} L ${c+0.28},${r+0.74}`}
+                        fill="none" stroke={starNeon} strokeWidth="0.060" strokeLinecap="round" strokeLinejoin="round"
+                        animate={{ strokeOpacity: [0.28, 0.55, 0.28] }}
+                        transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
+                        filter="url(#star-glow)"
+                      />
+                      <motion.path
+                        d={`M ${c+0.46},${r+0.26} L ${c+0.66},${r+0.50} L ${c+0.46},${r+0.74}`}
+                        fill="none" stroke={starNeon} strokeWidth="0.060" strokeLinecap="round" strokeLinejoin="round"
+                        animate={{ strokeOpacity: [0.65, 1.0, 0.65] }}
+                        transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
+                        filter="url(#star-glow)"
+                      />
+                    </g>
+                  </>
                 )}
-                {/* Neon direction portal — double-chevron pointing in the exit direction */}
-                <g transform={`rotate(${exitRotDeg}, ${c+0.5}, ${r+0.5})`}>
-                  {/* Back chevron (dimmer) */}
-                  <motion.path
-                    d={`M ${c+0.28},${r+0.26} L ${c+0.48},${r+0.50} L ${c+0.28},${r+0.74}`}
-                    fill="none" stroke={starNeon} strokeWidth="0.060" strokeLinecap="round" strokeLinejoin="round"
-                    animate={{ strokeOpacity: [0.28, 0.55, 0.28] }}
-                    transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
-                    filter="url(#star-glow)"
-                  />
-                  {/* Front chevron (brighter) */}
-                  <motion.path
-                    d={`M ${c+0.46},${r+0.26} L ${c+0.66},${r+0.50} L ${c+0.46},${r+0.74}`}
-                    fill="none" stroke={starNeon} strokeWidth="0.060" strokeLinecap="round" strokeLinejoin="round"
-                    animate={{ strokeOpacity: [0.65, 1.0, 0.65] }}
-                    transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
-                    filter="url(#star-glow)"
-                  />
-                </g>
               </>
             )}
 
             {isStar && !isStart && (() => {
+              if (isClassic) {
+                return (
+                  <g transform={`translate(${c},${r})`}>
+                    {/* Classic amber star — static, no glow */}
+                    <polygon
+                      points="0.500,0.200 0.571,0.403 0.785,0.407 0.614,0.537 0.676,0.743 0.500,0.620 0.324,0.743 0.386,0.537 0.215,0.407 0.429,0.403"
+                      fill="#8B6414" fillOpacity="0.78"
+                    />
+                    <circle cx="0.5" cy="0.5" r="0.052" fill="#8B6414" fillOpacity="0.90"/>
+                  </g>
+                );
+              }
               const T = `translate(${c},${r})`;
               const seed = (r * 15 + c) * 0.06;
               return (
@@ -1428,32 +1516,41 @@ function BoardSVG({
       ))}
 
       {/* ── Center 3×3 — triangles point toward each player's home column ── */}
-      {/* top  → Blue  (home col goes DOWN from TR) */}
       <polygon points="6,6 9,6 7.5,7.5"
-        fill={E.PLAYER_COLORS[1]} opacity={game.playerSlots.includes(1) ? 0.58 : 0.14}/>
-      {/* right → Yellow (home col goes LEFT from BR) */}
+        fill={E.PLAYER_COLORS[1]} opacity={game.playerSlots.includes(1) ? (isClassic ? 0.82 : 0.58) : (isClassic ? 0.22 : 0.14)}/>
       <polygon points="9,6 9,9 7.5,7.5"
-        fill={E.PLAYER_COLORS[2]} opacity={game.playerSlots.includes(2) ? 0.58 : 0.14}/>
-      {/* bottom → Green (home col goes UP from BL) */}
+        fill={E.PLAYER_COLORS[2]} opacity={game.playerSlots.includes(2) ? (isClassic ? 0.82 : 0.58) : (isClassic ? 0.22 : 0.14)}/>
       <polygon points="9,9 6,9 7.5,7.5"
-        fill={E.PLAYER_COLORS[3]} opacity={game.playerSlots.includes(3) ? 0.58 : 0.14}/>
-      {/* left  → Red   (home col goes RIGHT from TL) */}
+        fill={E.PLAYER_COLORS[3]} opacity={game.playerSlots.includes(3) ? (isClassic ? 0.82 : 0.58) : (isClassic ? 0.22 : 0.14)}/>
       <polygon points="6,9 6,6 7.5,7.5"
-        fill={E.PLAYER_COLORS[0]} opacity="0.58"/>
+        fill={E.PLAYER_COLORS[0]} opacity={isClassic ? 0.82 : 0.58}/>
       <rect x="6" y="6" width="3" height="3" fill="none"
-        stroke="rgba(255,255,255,0.12)" strokeWidth="0.055"/>
-      <circle cx="7.5" cy="7.5" r="0.52" fill="white" opacity="0.16"/>
+        stroke={isClassic ? 'rgba(80,50,10,0.40)' : 'rgba(255,255,255,0.12)'} strokeWidth="0.055"/>
+      {isClassic ? (
+        /* Classic: amber 5-point star */
+        <polygon
+          points="7.500,6.950 7.704,7.390 8.188,7.394 7.812,7.662 7.951,8.106 7.500,7.840 7.049,8.106 7.188,7.662 6.812,7.394 7.296,7.390"
+          fill="#7A5018" fillOpacity="0.84"/>
+      ) : (
+        /* Neon: white glow dot */
+        <circle cx="7.5" cy="7.5" r="0.52" fill="white" opacity="0.16"/>
+      )}
 
-      {/* ── Active-player board border pulse ── */}
-      <motion.rect x="0.05" y="0.05" width="14.90" height="14.90"
-        fill="none" rx="0.20"
-        animate={{
-          stroke: activeNeon,
-          strokeOpacity: [0.40, 0.78, 0.40],
-          strokeWidth:   [0.08, 0.12, 0.08],
-        }}
-        transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-      />
+      {/* ── Board border ── */}
+      {isClassic ? (
+        <rect x="0.08" y="0.08" width="14.84" height="14.84"
+          fill="none" rx="0.10" stroke="#7A5018" strokeWidth="0.14" strokeOpacity="0.70"/>
+      ) : (
+        <motion.rect x="0.05" y="0.05" width="14.90" height="14.90"
+          fill="none" rx="0.20"
+          animate={{
+            stroke: activeNeon,
+            strokeOpacity: [0.40, 0.78, 0.40],
+            strokeWidth:   [0.08, 0.12, 0.08],
+          }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      )}
 
       {/* ── Shockwave burst — rendered above board, below pieces ── */}
       {shockwave && (
@@ -1612,7 +1709,7 @@ function SettingsOverlay({ lang, animSpeed, onSpeed, onClose }: {
 }
 
 // ─── Main GameBoardScreen ─────────────────────────────────────────────────────
-export function GameBoardScreen({ config, lang, onBack }: Props) {
+export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const playerSlots = config.players === 2 ? [0, 2] : Array.from({ length: config.players }, (_, i) => i);
   const [game, setGame]             = useState<E.GameState>(() => E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
   const [rolling, setRolling]       = useState(false);
@@ -2001,6 +2098,7 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
               homeImpact={homeImpact}
               homeFinishVFX={homeFinishVFX}
               onHomeFinishDone={() => setHomeFinishVFX(null)}
+              boardStyle={boardStyle}
             />
           </div>
 
