@@ -150,7 +150,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) 
       </div>
 
       {/* ── Main content ── */}
-      <div className="relative z-20 flex flex-col items-center justify-between h-full w-full pt-10 pb-6 px-4 overflow-y-auto">
+      <div className="relative z-20 flex flex-col items-center justify-start h-full w-full pt-10 pb-6 px-4 overflow-y-auto">
 
         {/* ══ HERO ══ */}
         <motion.div
@@ -427,7 +427,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) 
 
         {/* ══ NAVIGATION ══ */}
         <motion.div
-          className="w-full flex flex-col gap-3 mt-auto"
+          className="w-full flex flex-col gap-3 mt-8"
           variants={containerVariants}
           initial="hidden"
           animate="visible"
