@@ -674,17 +674,24 @@ function PawnToken({
         if (dX) moveTarget.x = step.x;
         if (dY) moveTarget.y = step.y;
 
-        // Lateral movement + parabolic arc run in parallel
+        // Lateral movement + parabolic arc run in parallel.
+        // Skip the arc for pure downward-vertical steps: the arc animates the
+        // inner group's Y upward [0, -ARC_H, 0], which directly opposes the
+        // outer group's downward Y translation and causes visible stutter.
+        // All other directions (horizontal, upward, diagonal corners) are unaffected.
+        const isDownward = !dX && dY && (step.y - prevY) > 0.001;
         await Promise.all([
           baseCtrl.start(moveTarget as Parameters<typeof baseCtrl.start>[0]),
-          arcCtrl.start({
-            y: [0, -ARC_H, 0],
-            transition: {
-              duration: dur,
-              times: [0, 0.45, 1],
-              ease: ['easeIn', 'easeOut'],
-            },
-          }),
+          isDownward
+            ? Promise.resolve()
+            : arcCtrl.start({
+                y: [0, -ARC_H, 0],
+                transition: {
+                  duration: dur,
+                  times: [0, 0.45, 1],
+                  ease: ['easeIn', 'easeOut'],
+                },
+              }),
         ]);
 
         prevX = step.x;
