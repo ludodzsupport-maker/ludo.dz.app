@@ -364,7 +364,7 @@ function CornerDice({
         borderRadius: 12,
         cursor: canTap ? 'pointer' : 'default',
         background: isClassic
-          ? `linear-gradient(170deg, #FFFFFF 10%, ${clLight} 100%)`
+          ? `linear-gradient(160deg, #FFFFFF 20%, ${clSolid}18 100%)`
           : (isActive
             ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
             : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`),
@@ -1049,11 +1049,7 @@ function BoardSVG({
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   const isClassic   = boardStyle === 'classic';
-  // Classic palette constants (unused in neon mode)
-  const CL_SOLID  = ['#C41E2A','#1055A0','#C89600','#1A7838'] as const;
-  const CL_LIGHT  = ['#F8D8D8','#D0DCF8','#F8ECC4','#C8F0D8'] as const;
-  const CL_BORDER = ['#8B1414','#0A3080','#8B6A00','#0E5020'] as const;
-  const CL_ARROW  = ['#8B1010','#083078','#8B6400','#0D5020'] as const;
+  // Classic palette: uses module-level CL_SOLID / CL_LIGHT / CL_BORDER / CL_ARROW
   const pieces      = game.pieces;
 
   const piecePositions = useMemo(
@@ -1162,7 +1158,7 @@ function BoardSVG({
       </defs>
 
       {/* ── Background ── */}
-      <rect width="15" height="15" fill={isClassic ? '#EDD9A3' : '#030b16'}/>
+      <rect width="15" height="15" fill={isClassic ? '#F0EEE8' : '#030b16'}/>
 
       {/* ── Home zones ── */}
       {[0,1,2,3].map(player => {
@@ -1191,17 +1187,23 @@ function BoardSVG({
             <g key={`hz-${player}`}>
               {/* Solid coloured background */}
               <rect x={zc} y={zr} width="6" height="6" fill={solid} fillOpacity={mainOp}/>
-              {/* Inner cream panel */}
+              {/* Inner white panel — clean Ludo King style */}
               <rect x={zc+0.32} y={zr+0.32} width="5.36" height="5.36" rx="0.22"
-                fill={light} fillOpacity={exists ? 0.95 : 0.55}/>
+                fill="white" fillOpacity={exists ? 0.97 : 0.65}/>
+              {/* Glossy sheen */}
+              <rect x={zc+0.32} y={zr+0.32} width="5.36" height="1.30" rx="0.22"
+                fill="white" fillOpacity={exists ? 0.28 : 0.10}/>
               {/* Pawn bays — classic circles */}
               {E.HOME_BASES[player].map(([br, bc], si) => (
                 <g key={si}>
                   <circle cx={bc+0.5} cy={br+0.5} r={0.42}
-                    fill={solid} fillOpacity={exists ? 0.55 : 0.12}
-                    stroke={border} strokeWidth="0.042" strokeOpacity={exists ? 0.65 : 0.18}/>
-                  <circle cx={bc+0.5} cy={br+0.5} r={0.22}
-                    fill="white" fillOpacity={exists ? 0.30 : 0.08}/>
+                    fill={solid} fillOpacity={exists ? 0.88 : 0.15}
+                    stroke={border} strokeWidth="0.048" strokeOpacity={exists ? 0.90 : 0.20}/>
+                  {/* Glossy highlight on pawn bay */}
+                  <circle cx={bc+0.5} cy={br+0.5} r={0.27}
+                    fill="white" fillOpacity={exists ? 0.52 : 0.10}/>
+                  <circle cx={bc+0.36} cy={br+0.36} r={0.10}
+                    fill="white" fillOpacity={exists ? 0.80 : 0.15}/>
                   {homeImpact?.player === player && homeImpact?.index === si && (
                     <motion.circle
                       key={homeImpact.id}
@@ -1422,9 +1424,9 @@ function BoardSVG({
 
         // Visual rule: ONLY homecol (middle lane) cells get player color.
         // Strip and path cells stay neutral/dark for clean contrast.
-        let fill    = isClassic ? '#F5EDD0' : '#0d1f38';
+        let fill    = isClassic ? '#FFFFFF' : '#0d1f38';
         let fillOp  = 1;
-        let stroke  = isClassic ? 'rgba(120,88,20,0.28)' : 'rgba(255,255,255,0.06)';
+        let stroke  = isClassic ? 'rgba(40,40,70,0.18)' : 'rgba(255,255,255,0.06)';
         let useGlow = false;
 
         if (cell.kind === 'homecol') {
@@ -1435,10 +1437,10 @@ function BoardSVG({
           const t = Math.max(0, Math.min(1, depth / 5));
           fill    = isClassic ? CL_SOLID[player as 0|1|2|3] : E.PLAYER_COLORS[player];
           fillOp  = game.playerSlots.includes(player)
-            ? (isClassic ? 0.52 + t * 0.30 : 0.18 + t * 0.52)
-            : (isClassic ? 0.14 : 0.04);
+            ? (isClassic ? 0.80 + t * 0.16 : 0.18 + t * 0.52)
+            : (isClassic ? 0.16 : 0.04);
           stroke  = game.playerSlots.includes(player)
-            ? (isClassic ? 'rgba(60,30,0,0.42)' : E.PLAYER_NEONS[player])
+            ? (isClassic ? CL_BORDER[player as 0|1|2|3] : E.PLAYER_NEONS[player])
             : 'transparent';
           useGlow = !isClassic && game.playerSlots.includes(player) && t > 0.5;
         }
@@ -1529,12 +1531,13 @@ function BoardSVG({
               if (isClassic) {
                 return (
                   <g transform={`translate(${c},${r})`}>
-                    {/* Classic amber star — static, no glow */}
+                    {/* Classic golden star — clean, premium */}
                     <polygon
-                      points="0.500,0.200 0.571,0.403 0.785,0.407 0.614,0.537 0.676,0.743 0.500,0.620 0.324,0.743 0.386,0.537 0.215,0.407 0.429,0.403"
-                      fill="#8B6414" fillOpacity="0.78"
+                      points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
+                      fill="#FFD700" fillOpacity="0.95"
+                      stroke="#D4A000" strokeWidth="0.016" strokeOpacity="0.85"
                     />
-                    <circle cx="0.5" cy="0.5" r="0.052" fill="#8B6414" fillOpacity="0.90"/>
+                    <circle cx="0.5" cy="0.5" r="0.055" fill="#FFF8C0" fillOpacity="0.95"/>
                   </g>
                 );
               }
@@ -1579,20 +1582,28 @@ function BoardSVG({
 
       {/* ── Center 3×3 — triangles point toward each player's home column ── */}
       <polygon points="6,6 9,6 7.5,7.5"
-        fill={E.PLAYER_COLORS[1]} opacity={game.playerSlots.includes(1) ? (isClassic ? 0.82 : 0.58) : (isClassic ? 0.22 : 0.14)}/>
+        fill={isClassic ? CL_SOLID[1] : E.PLAYER_COLORS[1]} opacity={game.playerSlots.includes(1) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
       <polygon points="9,6 9,9 7.5,7.5"
-        fill={E.PLAYER_COLORS[2]} opacity={game.playerSlots.includes(2) ? (isClassic ? 0.82 : 0.58) : (isClassic ? 0.22 : 0.14)}/>
+        fill={isClassic ? CL_SOLID[2] : E.PLAYER_COLORS[2]} opacity={game.playerSlots.includes(2) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
       <polygon points="9,9 6,9 7.5,7.5"
-        fill={E.PLAYER_COLORS[3]} opacity={game.playerSlots.includes(3) ? (isClassic ? 0.82 : 0.58) : (isClassic ? 0.22 : 0.14)}/>
+        fill={isClassic ? CL_SOLID[3] : E.PLAYER_COLORS[3]} opacity={game.playerSlots.includes(3) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
       <polygon points="6,9 6,6 7.5,7.5"
-        fill={E.PLAYER_COLORS[0]} opacity={isClassic ? 0.82 : 0.58}/>
+        fill={isClassic ? CL_SOLID[0] : E.PLAYER_COLORS[0]} opacity={isClassic ? 0.96 : 0.58}/>
+      {/* Classic: glossy sheen over center triangles */}
+      {isClassic && (
+        <polygon points="6,6 9,6 7.5,7.5" fill="white" opacity="0.12"/>
+      )}
       <rect x="6" y="6" width="3" height="3" fill="none"
-        stroke={isClassic ? 'rgba(80,50,10,0.40)' : 'rgba(255,255,255,0.12)'} strokeWidth="0.055"/>
+        stroke={isClassic ? 'rgba(30,30,70,0.35)' : 'rgba(255,255,255,0.12)'} strokeWidth="0.055"/>
       {isClassic ? (
-        /* Classic: amber 5-point star */
-        <polygon
-          points="7.500,6.950 7.704,7.390 8.188,7.394 7.812,7.662 7.951,8.106 7.500,7.840 7.049,8.106 7.188,7.662 6.812,7.394 7.296,7.390"
-          fill="#7A5018" fillOpacity="0.84"/>
+        /* Classic: bold golden 5-point star */
+        <>
+          <polygon
+            points="7.500,6.880 7.740,7.400 8.310,7.406 7.892,7.714 8.049,8.228 7.500,7.920 6.951,8.228 7.108,7.714 6.690,7.406 7.260,7.400"
+            fill="#FFD700" fillOpacity="0.98"
+            stroke="#C8960C" strokeWidth="0.034" strokeOpacity="0.90"/>
+          <circle cx="7.5" cy="7.5" r="0.072" fill="#FFF8C0" fillOpacity="0.95"/>
+        </>
       ) : (
         /* Neon: white glow dot */
         <circle cx="7.5" cy="7.5" r="0.52" fill="white" opacity="0.16"/>
@@ -1601,7 +1612,7 @@ function BoardSVG({
       {/* ── Board border ── */}
       {isClassic ? (
         <rect x="0.08" y="0.08" width="14.84" height="14.84"
-          fill="none" rx="0.10" stroke="#7A5018" strokeWidth="0.14" strokeOpacity="0.70"/>
+          fill="none" rx="0.10" stroke="rgba(30,35,80,0.60)" strokeWidth="0.12" strokeOpacity="1"/>
       ) : (
         <motion.rect x="0.05" y="0.05" width="14.90" height="14.90"
           fill="none" rx="0.20"
