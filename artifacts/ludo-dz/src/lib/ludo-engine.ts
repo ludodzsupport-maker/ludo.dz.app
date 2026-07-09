@@ -74,6 +74,7 @@ export interface GameState {
   pieces:          Piece[];
   activePlayer:    number;
   numPlayers:      number;
+  playerSlots:     readonly number[]; // turn-order list of active color indices (e.g. [0,2] for diagonal 2-player)
   dice:            number;
   diceRolled:      boolean;
   winner:          number | null;
@@ -108,9 +109,10 @@ function calcMovable(pieces: Piece[], player: number, dice: number): string[] {
     .map(p => pieceId(p.player, p.index));
 }
 
-function nextPlayer(pieces: Piece[], current: number, total: number): number {
-  for (let i = 1; i < total; i++) {
-    const next = (current + i) % total;
+function nextPlayer(pieces: Piece[], current: number, slots: readonly number[]): number {
+  const idx = slots.indexOf(current);
+  for (let i = 1; i < slots.length; i++) {
+    const next = slots[(idx + i) % slots.length];
     if (!pieces.filter(p => p.player === next).every(p => p.relPos === FINISHED_POS)) {
       return next;
     }
@@ -119,13 +121,15 @@ function nextPlayer(pieces: Piece[], current: number, total: number): number {
 }
 
 // ── Game lifecycle ─────────────────────────────────────────────────────────
-export function createGame(numPlayers: number, pawnsPerPlayer = 4): GameState {
+export function createGame(numPlayers: number, pawnsPerPlayer = 4, playerSlots?: readonly number[]): GameState {
+  const slots = playerSlots ?? Array.from({ length: numPlayers }, (_, i) => i);
   const pieces: Piece[] = [];
   for (let p = 0; p < numPlayers; p++) {
-    for (let i = 0; i < pawnsPerPlayer; i++) pieces.push({ player: p, index: i, relPos: -1 });
+    for (let i = 0; i < pawnsPerPlayer; i++) pieces.push({ player: slots[p], index: i, relPos: -1 });
   }
   return {
-    pieces, activePlayer: 0, numPlayers,
+    pieces, activePlayer: slots[0], numPlayers,
+    playerSlots: slots,
     dice: 0, diceRolled: false, winner: null,
     phase: 'rolling', movable: [],
     consecutiveSixes: 0, lastCapture: false, message: '',
@@ -183,7 +187,7 @@ export function doMove(state: GameState, pid: string): GameState {
   if (!extraTurn) {
     return {
       ...state, pieces,
-      activePlayer: nextPlayer(pieces, state.activePlayer, state.numPlayers),
+      activePlayer: nextPlayer(pieces, state.activePlayer, state.playerSlots),
       dice: 0, diceRolled: false, movable: [], phase: 'rolling',
       consecutiveSixes: 0, lastCapture: captured, message,
     };
@@ -198,7 +202,7 @@ export function doMove(state: GameState, pid: string): GameState {
 export function autoPassTurn(state: GameState): GameState {
   return {
     ...state,
-    activePlayer: nextPlayer(state.pieces, state.activePlayer, state.numPlayers),
+    activePlayer: nextPlayer(state.pieces, state.activePlayer, state.playerSlots),
     dice: 0, diceRolled: false, movable: [], phase: 'rolling',
     consecutiveSixes: 0, lastCapture: false, message: '',
   };

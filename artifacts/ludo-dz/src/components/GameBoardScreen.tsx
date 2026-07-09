@@ -260,7 +260,7 @@ function CornerDice({
   const col         = E.PLAYER_COLORS[player];
   const neon        = E.PLAYER_NEONS[player];
   const isActive    = game.activePlayer === player && game.phase !== 'done';
-  const exists      = player < game.numPlayers;
+  const exists      = game.playerSlots.includes(player);
   const pieces      = game.pieces.filter(p => p.player === player);
   const name        = lang === 'ar' ? E.PLAYER_NAMES_AR[player] : E.PLAYER_NAMES_FR[player];
   const isRollingMe = rolling && isActive;
@@ -1097,7 +1097,7 @@ function BoardSVG({
       {[0,1,2,3].map(player => {
         const [zr, zc] = [[0,0],[0,9],[9,9],[9,0]][player] as [number,number];
         const neon      = E.PLAYER_NEONS[player];
-        const exists    = player < game.numPlayers;
+        const exists    = game.playerSlots.includes(player);
         const isCurrent = player === game.activePlayer && game.phase !== 'done';
         const cx = zc + 3, cy = zr + 3;
 
@@ -1319,16 +1319,16 @@ function BoardSVG({
             : (player === 1 ? r - 1 : 13 - r);   // vertical arms
           const t = Math.max(0, Math.min(1, depth / 5));
           fill    = E.PLAYER_COLORS[player];
-          fillOp  = player < game.numPlayers ? 0.18 + t * 0.52 : 0.04;
-          stroke  = player < game.numPlayers ? E.PLAYER_NEONS[player] : 'transparent';
-          useGlow = player < game.numPlayers && t > 0.5;
+          fillOp  = game.playerSlots.includes(player) ? 0.18 + t * 0.52 : 0.04;
+          stroke  = game.playerSlots.includes(player) ? E.PLAYER_NEONS[player] : 'transparent';
+          useGlow = game.playerSlots.includes(player) && t > 0.5;
         }
         // strip + path → remain the neutral dark fill defined above,
         // EXCEPT the 4 exit squares (below), which get their house tint.
 
         // Exit square (where pieces land leaving home) — premium neon tint
         // in the owning player's colour, layered on top of the base cell.
-        const exitActive = isStart && player >= 0 && player < game.numPlayers;
+        const exitActive = isStart && player >= 0 && game.playerSlots.includes(player);
 
         const exitPlayerIdx = isStart ? (E.PLAYER_STARTS as readonly number[]).indexOf(pathPos as number) : -1;
         const starNeon = exitPlayerIdx >= 0
@@ -1429,13 +1429,13 @@ function BoardSVG({
       {/* ── Center 3×3 — triangles point toward each player's home column ── */}
       {/* top  → Blue  (home col goes DOWN from TR) */}
       <polygon points="6,6 9,6 7.5,7.5"
-        fill={E.PLAYER_COLORS[1]} opacity={1 < game.numPlayers ? 0.58 : 0.14}/>
+        fill={E.PLAYER_COLORS[1]} opacity={game.playerSlots.includes(1) ? 0.58 : 0.14}/>
       {/* right → Yellow (home col goes LEFT from BR) */}
       <polygon points="9,6 9,9 7.5,7.5"
-        fill={E.PLAYER_COLORS[2]} opacity={2 < game.numPlayers ? 0.58 : 0.14}/>
+        fill={E.PLAYER_COLORS[2]} opacity={game.playerSlots.includes(2) ? 0.58 : 0.14}/>
       {/* bottom → Green (home col goes UP from BL) */}
       <polygon points="9,9 6,9 7.5,7.5"
-        fill={E.PLAYER_COLORS[3]} opacity={3 < game.numPlayers ? 0.58 : 0.14}/>
+        fill={E.PLAYER_COLORS[3]} opacity={game.playerSlots.includes(3) ? 0.58 : 0.14}/>
       {/* left  → Red   (home col goes RIGHT from TL) */}
       <polygon points="6,9 6,6 7.5,7.5"
         fill={E.PLAYER_COLORS[0]} opacity="0.58"/>
@@ -1612,7 +1612,8 @@ function SettingsOverlay({ lang, animSpeed, onSpeed, onClose }: {
 
 // ─── Main GameBoardScreen ─────────────────────────────────────────────────────
 export function GameBoardScreen({ config, lang, onBack }: Props) {
-  const [game, setGame]             = useState<E.GameState>(() => E.createGame(config.players, config.rule === 'quick' ? 2 : 4));
+  const playerSlots = config.players === 2 ? [0, 2] : Array.from({ length: config.players }, (_, i) => i);
+  const [game, setGame]             = useState<E.GameState>(() => E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
   const [rolling, setRolling]       = useState(false);
   const [animDice, setAnimDice]     = useState(1);
   const [justLanded, setJustLanded] = useState(false);
@@ -1870,7 +1871,7 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
     setShockwave(null);
     setHomeImpact(null);
     setHomeFinishVFX(null);
-    setGame(E.createGame(config.players, config.rule === 'quick' ? 2 : 4));
+    setGame(E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
     setRestartKey(k => k + 1);
   }, [config.players, config.rule]);
 
@@ -1921,9 +1922,9 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
 
         {/* Player chips — colour + name only; dice panels live at board corners */}
         <div className="flex-1 flex gap-1.5 overflow-x-auto min-w-0" style={{ scrollbarWidth: 'none' }}>
-          {Array.from({ length: game.numPlayers }, (_, i) => (
-            <PlayerChip key={i} game={game} player={i}
-              isAI={isComputer && i !== 0} lang={lang}/>
+          {game.playerSlots.map((slot) => (
+            <PlayerChip key={slot} game={game} player={slot}
+              isAI={isComputer && slot !== 0} lang={lang}/>
           ))}
         </div>
 
