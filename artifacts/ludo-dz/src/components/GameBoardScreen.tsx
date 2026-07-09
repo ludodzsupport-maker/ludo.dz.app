@@ -1612,7 +1612,7 @@ function SettingsOverlay({ lang, animSpeed, onSpeed, onClose }: {
 
 // ─── Main GameBoardScreen ─────────────────────────────────────────────────────
 export function GameBoardScreen({ config, lang, onBack }: Props) {
-  const [game, setGame]             = useState<E.GameState>(() => E.createGame(config.players));
+  const [game, setGame]             = useState<E.GameState>(() => E.createGame(config.players, config.rule === 'quick' ? 2 : 4));
   const [rolling, setRolling]       = useState(false);
   const [animDice, setAnimDice]     = useState(1);
   const [justLanded, setJustLanded] = useState(false);
@@ -1870,9 +1870,9 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
     setShockwave(null);
     setHomeImpact(null);
     setHomeFinishVFX(null);
-    setGame(E.createGame(config.players));
+    setGame(E.createGame(config.players, config.rule === 'quick' ? 2 : 4));
     setRestartKey(k => k + 1);
-  }, [config.players]);
+  }, [config.players, config.rule]);
 
   // ── Status text ───────────────────────────────────────────────────────────
   const statusMsg =

@@ -119,10 +119,10 @@ function nextPlayer(pieces: Piece[], current: number, total: number): number {
 }
 
 // ── Game lifecycle ─────────────────────────────────────────────────────────
-export function createGame(numPlayers: number): GameState {
+export function createGame(numPlayers: number, pawnsPerPlayer = 4): GameState {
   const pieces: Piece[] = [];
   for (let p = 0; p < numPlayers; p++) {
-    for (let i = 0; i < 4; i++) pieces.push({ player: p, index: i, relPos: -1 });
+    for (let i = 0; i < pawnsPerPlayer; i++) pieces.push({ player: p, index: i, relPos: -1 });
   }
   return {
     pieces, activePlayer: 0, numPlayers,
