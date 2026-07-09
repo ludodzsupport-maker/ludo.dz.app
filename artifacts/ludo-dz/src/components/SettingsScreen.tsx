@@ -636,12 +636,37 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
               <p className="text-white/40 font-sans" style={{ fontSize: "10px" }}>{t.aboutSub}</p>
             </div>
             {/* Algerian flag mini */}
-            <div className="flex-shrink-0 w-8 h-5 rounded overflow-hidden flex" style={{ border: "1px solid rgba(255,255,255,0.15)" }}>
-              <div className="flex-1 bg-[#006233]"/>
-              <div className="flex-1 bg-white flex items-center justify-center">
-                <span style={{ color: "#D21034", fontSize: "8px", lineHeight: 1 }}>☽★</span>
-              </div>
-            </div>
+            <svg
+              viewBox="0 0 30 20"
+              width="34"
+              height="23"
+              className="flex-shrink-0 rounded"
+              style={{ border: "1px solid rgba(255,255,255,0.18)", display: "block" }}
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <defs>
+                <mask id="dz-crescent-mask">
+                  <circle cx="14" cy="10" r="5.3" fill="white"/>
+                  <circle cx="15.9" cy="10" r="4.4" fill="black"/>
+                </mask>
+                <clipPath id="dz-flag-clip">
+                  <rect width="30" height="20" rx="2"/>
+                </clipPath>
+              </defs>
+              <g clipPath="url(#dz-flag-clip)">
+                {/* Green left half */}
+                <rect width="15" height="20" fill="#006233"/>
+                {/* White right half */}
+                <rect x="15" width="15" height="20" fill="#ffffff"/>
+                {/* Red crescent */}
+                <circle cx="14" cy="10" r="5.3" fill="#D21034" mask="url(#dz-crescent-mask)"/>
+                {/* Red 5-pointed star */}
+                <polygon
+                  points="17.5,8.2 17.92,9.42 19.21,9.44 18.19,10.22 18.56,11.46 17.5,10.72 16.44,11.46 16.82,10.22 15.79,9.44 17.08,9.42"
+                  fill="#D21034"
+                />
+              </g>
+            </svg>
           </motion.div>
 
         </motion.div>
