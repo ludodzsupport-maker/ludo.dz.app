@@ -306,6 +306,7 @@ interface ModeConfig {
   cardBg:   string;   // CSS gradient string for card fill
   tagColor: string;   // bg colour for the tag pill
   featured?: true;
+  wip?: true;
   Icon: React.FC<{ neon: string }>;
 }
 
@@ -316,6 +317,7 @@ const MODES: ModeConfig[] = [
     cardBg:   "linear-gradient(145deg,#040d22 0%,#071a45 100%)",
     tagColor: "#DC143C",
     featured: true,
+    wip: true,
     Icon: OnlineIcon,
   },
   {
@@ -330,6 +332,7 @@ const MODES: ModeConfig[] = [
     neon:     "#FFD700",
     cardBg:   "linear-gradient(145deg,#1a1200 0%,#352400 100%)",
     tagColor: "#CC8800",
+    wip: true,
     Icon: FriendsIcon,
   },
   {
@@ -416,6 +419,23 @@ function FeaturedCard({ mode, t, onClick }: {
         style={{
           background: `radial-gradient(circle at top left, ${mode.neon}1a, transparent 70%)`,
         }}/>
+
+      {/* WIP badge */}
+      {mode.wip && (
+        <div
+          className="absolute top-2.5 right-2.5 z-20 px-2 py-0.5 rounded-full font-heading font-semibold pointer-events-none"
+          style={{
+            fontSize: "9px",
+            letterSpacing: "0.05em",
+            background: "rgba(0,0,0,0.38)",
+            border: "1px solid rgba(255,255,255,0.13)",
+            color: "rgba(255,255,255,0.42)",
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          قيد التطوير
+        </div>
+      )}
 
       {/* Inner layout */}
       <div className="relative z-10 flex items-center gap-5 px-5 py-5">
@@ -530,6 +550,23 @@ function GridCard({ mode, t, onClick }: {
         style={{
           background: `radial-gradient(circle at top left, ${mode.neon}18, transparent 70%)`,
         }}/>
+
+      {/* WIP badge */}
+      {mode.wip && (
+        <div
+          className="absolute top-2 right-2 z-20 px-1.5 py-0.5 rounded-full font-heading font-semibold pointer-events-none"
+          style={{
+            fontSize: "8px",
+            letterSpacing: "0.04em",
+            background: "rgba(0,0,0,0.38)",
+            border: "1px solid rgba(255,255,255,0.13)",
+            color: "rgba(255,255,255,0.42)",
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          قيد التطوير
+        </div>
+      )}
 
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center justify-between h-full px-3 pt-5 pb-4">
