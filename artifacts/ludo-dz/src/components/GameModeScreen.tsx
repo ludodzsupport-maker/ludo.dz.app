@@ -41,6 +41,7 @@ const TRANSLATIONS = {
     passnplaySub:     "Même appareil, plusieurs joueurs",
     passnplayPlayers: "2–4 joueurs",
     passnplayTag:     "LOCAL",
+    wip:              "En développement",
   },
   ar: {
     screenTitle: "وضع اللعب",
@@ -71,6 +72,7 @@ const TRANSLATIONS = {
     passnplaySub:     "نفس الجهاز، عدة لاعبين",
     passnplayPlayers: "٢–٤ لاعبين",
     passnplayTag:     "محلي",
+    wip:              "قيد التطوير",
   },
 } as const;
 
@@ -433,7 +435,7 @@ function FeaturedCard({ mode, t, onClick }: {
             backdropFilter: "blur(6px)",
           }}
         >
-          قيد التطوير
+          {t.wip}
         </div>
       )}
 
@@ -564,7 +566,7 @@ function GridCard({ mode, t, onClick }: {
             backdropFilter: "blur(6px)",
           }}
         >
-          قيد التطوير
+          {t.wip}
         </div>
       )}
 
