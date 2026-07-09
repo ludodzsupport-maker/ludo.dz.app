@@ -69,6 +69,12 @@ const PATH_POS_MAP = new Map<string, number>(
   E.MAIN_PATH.map(([r, c], i) => [`${r},${c}`, i])
 );
 
+// ─── Classic theme palette — Ludo King quality ────────────────────────────────
+const CL_SOLID  = ['#E8192C','#1565C0','#FFD700','#2E7D32'] as const;
+const CL_LIGHT  = ['#FFECEE','#E3EEFF','#FFFDE7','#E8F5E9'] as const;
+const CL_BORDER = ['#B71C1C','#0D47A1','#F9A825','#1B5E20'] as const;
+const CL_ARROW  = ['#8B0000','#003087','#7A5000','#004D10'] as const;
+
 // ─── Fixed resting slots for finished pawns inside each player's center triangle ──
 // Center 3×3 spans columns/rows 6–9, apex at (7.5, 7.5). [x, y] = [col, row].
 // Red=left, Blue=top, Yellow=right, Green=bottom.
@@ -131,10 +137,10 @@ function cubeFaceTransform(fv: number, half: number): string {
 }
 
 function DieFace({
-  value, neon, col, size, rolling, justLanded, dim,
+  value, neon, col, size, rolling, justLanded, dim, classic,
 }: {
   value: number; neon: string; col: string; size: number;
-  rolling?: boolean; justLanded?: boolean; dim?: boolean;
+  rolling?: boolean; justLanded?: boolean; dim?: boolean; classic?: boolean;
 }) {
   const opacity = dim ? 0.82 : 1;
   const ctrl    = useAnimationControls();
@@ -195,8 +201,10 @@ function DieFace({
               transform: cubeFaceTransform(fv, half),
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
-              background: `radial-gradient(circle at 36% 28%, rgba(255,255,255,0.26), ${neon}28 42%, ${col}cc)`,
-              border: `${Math.max(1, Math.round(size * 0.038))}px solid ${neon}`,
+              background: classic
+                ? `linear-gradient(145deg, #FFFFFF 0%, #F0F0F0 100%)`
+                : `radial-gradient(circle at 36% 28%, rgba(255,255,255,0.26), ${neon}28 42%, ${col}cc)`,
+              border: `${Math.max(1, Math.round(size * 0.038))}px solid ${classic ? 'rgba(0,0,0,0.20)' : neon}`,
               borderRadius: `${size * 0.16}px`,
               overflow: 'hidden',
             }}>
@@ -204,10 +212,10 @@ function DieFace({
                 style={{ display: 'block', position: 'absolute', top: 0, left: 0 }}>
                 {/* Glass sheen */}
                 <rect x="-2.6" y="-2.7" width="2.1" height="0.76" rx="0.30"
-                  fill="white" opacity="0.20"/>
-                {/* Neon dots */}
+                  fill="white" opacity={classic ? "0.55" : "0.20"}/>
+                {/* Dots */}
                 {d.map(([dx, dy], i) => (
-                  <circle key={i} cx={dx} cy={dy} r="0.55" fill={neon}/>
+                  <circle key={i} cx={dx} cy={dy} r="0.55" fill={classic ? '#1A1A1A' : neon}/>
                 ))}
               </svg>
             </div>
@@ -248,7 +256,7 @@ const TAIL_GAP = 2;   // px — clear buffer between the tail tip and the frame 
 // floating. Vertical layout: colour dot + name → die face → TAP label →
 // progress dots.
 function CornerDice({
-  player, anchor, game, isAI, lang,
+  player, anchor, game, isAI, lang, boardStyle,
   rolling, animDice, justLanded, lastDice,
   onRoll, canRoll,
 }: {
@@ -257,6 +265,7 @@ function CornerDice({
   game: E.GameState; isAI: boolean; lang: 'fr' | 'ar';
   rolling: boolean; animDice: number; justLanded: boolean; lastDice: number[];
   onRoll: () => void; canRoll: boolean;
+  boardStyle?: BoardStyle;
 }) {
   const col         = E.PLAYER_COLORS[player];
   const neon        = E.PLAYER_NEONS[player];
@@ -268,6 +277,10 @@ function CornerDice({
   const diceVal     = isActive ? animDice : (lastDice[player] || 1);
   const canTap      = canRoll && isActive;
   const isTop       = anchor === 'tl' || anchor === 'tr';
+  const isClassic   = boardStyle === 'classic';
+  const clSolid     = CL_SOLID[player as 0|1|2|3];
+  const clLight     = CL_LIGHT[player as 0|1|2|3];
+  const clBorder    = CL_BORDER[player as 0|1|2|3];
 
   // Wrapper hovers entirely above/below the frame (outside the board vertically)
   // while hugging the frame's own left/right edge horizontally — this avoids
@@ -295,17 +308,17 @@ function CornerDice({
           width: 0, height: 0,
           borderLeft: `${TAIL_W}px solid transparent`,
           borderRight: `${TAIL_W}px solid transparent`,
-          [tailBorderSide]: `${TAIL_H}px solid rgba(255,255,255,0.05)`,
+          [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.05)'}`,
         }}/>
         <div style={{
           width: '100%', height: '100%',
           borderRadius: 12,
-          background: 'rgba(3,10,22,0.40)',
-          border: '1px solid rgba(255,255,255,0.04)',
+          background: isClassic ? 'rgba(240,240,240,0.55)' : 'rgba(3,10,22,0.40)',
+          border: `1px solid ${isClassic ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.04)'}`,
           opacity: 0.35,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1a2a40' }}/>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: isClassic ? 'rgba(0,0,0,0.18)' : '#1a2a40' }}/>
         </div>
       </div>
     );
@@ -319,15 +332,19 @@ function CornerDice({
         width: 0, height: 0,
         borderLeft: `${TAIL_W}px solid transparent`,
         borderRight: `${TAIL_W}px solid transparent`,
-        [tailBorderSide]: `${TAIL_H}px solid ${isActive ? neon : col + '55'}`,
-        filter: isActive ? `drop-shadow(0 0 3px ${neon})` : 'none',
+        [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? (isActive ? clSolid : clSolid + '88') : (isActive ? neon : col + '55')}`,
+        filter: isClassic ? 'none' : (isActive ? `drop-shadow(0 0 3px ${neon})` : 'none'),
         transition: 'border-color 0.4s',
         pointerEvents: 'none',
       }}/>
     <motion.div
       onClick={canTap ? onRoll : undefined}
       whileTap={canTap ? { scale: 0.91 } : {}}
-      animate={isActive ? {
+      animate={isClassic ? {
+        boxShadow: isActive
+          ? `0 4px 18px ${clSolid}55, 0 0 0 2px ${clSolid}`
+          : `0 2px 10px rgba(0,0,0,0.12)`,
+      } : isActive ? {
         boxShadow: [
           `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
           `0 0 28px ${neon}65, inset 0 0 18px ${col}28`,
@@ -336,7 +353,9 @@ function CornerDice({
       } : {
         boxShadow: `0 2px 12px rgba(0,0,0,0.55), 0 0 10px ${col}40`,
       }}
-      transition={{ duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
+      transition={isClassic
+        ? { duration: 0.25 }
+        : { duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
       style={{
         width: '100%', height: '100%',
         display: 'flex', flexDirection: 'column',
@@ -344,19 +363,23 @@ function CornerDice({
         padding: '6px 4px',
         borderRadius: 12,
         cursor: canTap ? 'pointer' : 'default',
-        background: isActive
-          ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
-          : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`,
-        border: `1.5px solid ${isActive ? neon : col + '55'}`,
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
+        background: isClassic
+          ? `linear-gradient(170deg, #FFFFFF 10%, ${clLight} 100%)`
+          : (isActive
+            ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
+            : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`),
+        border: isClassic
+          ? `${isActive ? 2.5 : 1.5}px solid ${isActive ? clSolid : clSolid + '70'}`
+          : `1.5px solid ${isActive ? neon : col + '55'}`,
+        backdropFilter: isClassic ? 'none' : 'blur(10px)',
+        WebkitBackdropFilter: isClassic ? 'none' : 'blur(10px)',
         transition: 'background 0.4s, border-color 0.4s',
         overflow: 'hidden',
         userSelect: 'none',
       }}
     >
-      {/* Active edge shimmer */}
-      {isActive && (
+      {/* Active edge shimmer — neon only */}
+      {isActive && !isClassic && (
         <motion.div style={{
           position: 'absolute',
           top: 0, left: 0, right: 0, height: 1.5,
@@ -367,25 +390,35 @@ function CornerDice({
           transition={{ duration: 1.4, repeat: Infinity }}
         />
       )}
+      {isActive && isClassic && (
+        <div style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, height: 2,
+          background: `linear-gradient(90deg, transparent, ${clSolid}, transparent)`,
+          pointerEvents: 'none', opacity: 0.55,
+        }}/>
+      )}
 
       {/* Colour dot + name row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <motion.div
-          animate={isActive
+          animate={isClassic ? {} : (isActive
             ? { boxShadow: [`0 0 3px ${neon}80`, `0 0 10px ${neon}`, `0 0 3px ${neon}80`] }
-            : {}}
+            : {})}
           transition={{ duration: 1.4, repeat: Infinity }}
-          style={{ width: 7, height: 7, borderRadius: '50%', background: col, flexShrink: 0 }}
+          style={{ width: 7, height: 7, borderRadius: '50%', background: isClassic ? clSolid : col, flexShrink: 0 }}
         />
         <span style={{
           fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 9,
-          color: isActive ? neon : col + '90',
+          color: isClassic
+            ? (isActive ? clSolid : 'rgba(0,0,0,0.55)')
+            : (isActive ? neon : col + '90'),
           letterSpacing: '0.05em', textTransform: 'uppercase',
           lineHeight: 1,
         }}>
           {name.slice(0, 4)}
         </span>
-        {isAI && <Bot size={8} color="rgba(255,255,255,0.30)" style={{ flexShrink: 0 }}/>}
+        {isAI && <Bot size={8} color={isClassic ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.30)'} style={{ flexShrink: 0 }}/>}
       </div>
 
       {/* Die face with pulse ring — perspective establishes the 3D rendering context */}
@@ -393,7 +426,7 @@ function CornerDice({
         {canTap && !rolling && (
           <motion.div style={{
             position: 'absolute', inset: -6, borderRadius: 10,
-            border: `1.5px solid ${neon}`,
+            border: `1.5px solid ${isClassic ? clSolid : neon}`,
             pointerEvents: 'none',
           }}
             animate={{ scale: [1, 1.22, 1], opacity: [0.80, 0, 0.80] }}
@@ -406,6 +439,7 @@ function CornerDice({
           rolling={isRollingMe}
           justLanded={justLanded && isActive}
           dim={!isActive}
+          classic={isClassic}
         />
       </div>
 
@@ -418,15 +452,15 @@ function CornerDice({
               exit={{ opacity: 0, y: -2 }}
               style={{
                 fontFamily: 'Rajdhani, sans-serif', fontSize: 9, fontWeight: 700,
-                color: neon, letterSpacing: '0.08em',
-                textShadow: `0 0 7px ${neon}`,
+                color: isClassic ? clSolid : neon, letterSpacing: '0.08em',
+                textShadow: isClassic ? 'none' : `0 0 7px ${neon}`,
               }}>
               {lang === 'ar' ? 'ارمِ' : 'TAP'}
             </motion.span>
           ) : isRollingMe ? (
             <motion.span key="roll"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 9, color: 'rgba(255,255,255,0.40)' }}>
+              style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 9, color: isClassic ? 'rgba(0,0,0,0.40)' : 'rgba(255,255,255,0.40)' }}>
               …
             </motion.span>
           ) : null}
@@ -444,9 +478,11 @@ function CornerDice({
           return (
             <div key={i} style={{
               width: 5, height: 5, borderRadius: '50%',
-              background: st === 'done' ? neon : st === 'on' ? col : `${col}35`,
-              border: `0.5px solid ${col}45`,
-              boxShadow: st === 'done' ? `0 0 5px ${neon}` : 'none',
+              background: isClassic
+                ? (st === 'done' ? clSolid : st === 'on' ? clSolid : `${clSolid}38`)
+                : (st === 'done' ? neon : st === 'on' ? col : `${col}35`),
+              border: `0.5px solid ${isClassic ? clSolid + '55' : col + '45'}`,
+              boxShadow: isClassic ? 'none' : (st === 'done' ? `0 0 5px ${neon}` : 'none'),
               transition: 'all 0.3s',
             }}/>
           );
@@ -458,31 +494,43 @@ function CornerDice({
 }
 
 // ─── Player chip (header bar — name + colour only, no dice) ───────────────────
-function PlayerChip({ game, player, isAI, lang }: {
-  game: E.GameState; player: number; isAI: boolean; lang: 'fr'|'ar';
+function PlayerChip({ game, player, isAI, lang, boardStyle }: {
+  game: E.GameState; player: number; isAI: boolean; lang: 'fr'|'ar'; boardStyle?: BoardStyle;
 }) {
-  const col      = E.PLAYER_COLORS[player];
-  const neon     = E.PLAYER_NEONS[player];
-  const isActive = game.activePlayer === player && game.phase !== 'done';
-  const pieces   = game.pieces.filter(p => p.player === player);
-  const name     = lang === 'ar' ? E.PLAYER_NAMES_AR[player] : E.PLAYER_NAMES_FR[player];
+  const col       = E.PLAYER_COLORS[player];
+  const neon      = E.PLAYER_NEONS[player];
+  const isActive  = game.activePlayer === player && game.phase !== 'done';
+  const pieces    = game.pieces.filter(p => p.player === player);
+  const name      = lang === 'ar' ? E.PLAYER_NAMES_AR[player] : E.PLAYER_NAMES_FR[player];
+  const isClassic = boardStyle === 'classic';
+  const clSolid   = CL_SOLID[player as 0|1|2|3];
+  const clBorder  = CL_BORDER[player as 0|1|2|3];
 
   return (
     <motion.div
       animate={{
         scale: isActive ? 1.06 : 1,
-        boxShadow: isActive
-          ? `0 0 12px ${neon}70, inset 0 0 6px ${col}18`
-          : '0 0 0px transparent',
+        boxShadow: isClassic
+          ? (isActive ? `0 3px 12px ${clSolid}55` : '0 1px 4px rgba(0,0,0,0.10)')
+          : (isActive
+            ? `0 0 12px ${neon}70, inset 0 0 6px ${col}18`
+            : '0 0 0px transparent'),
       }}
       transition={{ duration: 0.22 }}
-      style={{
+      style={isClassic ? {
+        background: isActive
+          ? `linear-gradient(135deg, ${clSolid} 0%, ${clBorder} 100%)`
+          : `linear-gradient(135deg, ${clSolid}22 0%, ${clSolid}0E 100%)`,
+        border: `${isActive ? 2 : 1.5}px solid ${isActive ? clSolid : clSolid + '55'}`,
+        borderRadius: 12, padding: '5px 8px', minWidth: 52,
+        position: 'relative', overflow: 'hidden', flexShrink: 0,
+      } : {
         background: `linear-gradient(135deg, ${col}18, ${col}08)`,
         border: `1.5px solid ${isActive ? neon : col + '25'}`,
         borderRadius: 12, padding: '5px 8px', minWidth: 52,
         position: 'relative', overflow: 'hidden', flexShrink: 0,
       }}>
-      {isActive && (
+      {isActive && !isClassic && (
         <motion.div style={{
           position: 'absolute', top: 0, left: 0, right: 0, height: 2,
           background: `linear-gradient(90deg, transparent, ${neon}, transparent)`,
@@ -491,19 +539,29 @@ function PlayerChip({ game, player, isAI, lang }: {
           transition={{ duration: 1.1, repeat: Infinity }}
         />
       )}
+      {isActive && isClassic && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+          background: `linear-gradient(90deg, transparent, rgba(255,255,255,0.65), transparent)`,
+        }}/>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
         <div style={{
-          width: 7, height: 7, borderRadius: '50%', background: col,
-          boxShadow: `0 0 4px ${neon}80`, flexShrink: 0,
+          width: 7, height: 7, borderRadius: '50%',
+          background: isClassic ? (isActive ? '#FFFFFF' : clSolid) : col,
+          boxShadow: isClassic ? 'none' : `0 0 4px ${neon}80`,
+          flexShrink: 0,
         }}/>
         <span style={{
           fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 10,
-          color: isActive ? '#fff' : 'rgba(255,255,255,0.50)',
+          color: isClassic
+            ? (isActive ? '#FFFFFF' : clSolid)
+            : (isActive ? '#fff' : 'rgba(255,255,255,0.50)'),
           letterSpacing: '0.05em',
         }}>
           {name.slice(0,4).toUpperCase()}
         </span>
-        {isAI && <Bot size={8} color="rgba(255,255,255,0.30)"/>}
+        {isAI && <Bot size={8} color={isClassic ? (isActive ? 'rgba(255,255,255,0.70)' : 'rgba(0,0,0,0.40)') : 'rgba(255,255,255,0.30)'}/>}
       </div>
       <div style={{ display: 'flex', gap: 2 }}>
         {[0,1,2,3].map(i => {
@@ -512,9 +570,13 @@ function PlayerChip({ game, player, isAI, lang }: {
           return (
             <div key={i} style={{
               width: 5, height: 5, borderRadius: '50%',
-              background: st === 'done' ? neon : st === 'on' ? col : `${col}40`,
-              border: `0.5px solid ${col}30`,
-              boxShadow: st === 'done' ? `0 0 4px ${neon}` : 'none',
+              background: isClassic
+                ? (st === 'done' ? (isActive ? '#FFFFFF' : clSolid) : st === 'on' ? (isActive ? '#FFFFFF' : clSolid) : (isActive ? 'rgba(255,255,255,0.30)' : `${clSolid}35`))
+                : (st === 'done' ? neon : st === 'on' ? col : `${col}40`),
+              border: isClassic
+                ? `0.5px solid ${isActive ? 'rgba(255,255,255,0.45)' : clSolid + '45'}`
+                : `0.5px solid ${col}30`,
+              boxShadow: (!isClassic && st === 'done') ? `0 0 4px ${neon}` : 'none',
               transition: 'all 0.28s',
             }}/>
           );
