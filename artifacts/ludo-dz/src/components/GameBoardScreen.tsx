@@ -645,7 +645,7 @@ function buildHopPath(
 // 45% of step duration, then descends and snaps to canonical stacking position.
 function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
-  onLastHopLand, onDefeatArrived,
+  onLastHopLand, onDefeatArrived, isClassic,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
@@ -658,6 +658,7 @@ function PawnToken({
   onPieceClick: () => void;
   onLastHopLand?: () => void;   // fires when captor's final hop lands → shockwave
   onDefeatArrived?: () => void; // fires when defeated piece reaches home → impact flash
+  isClassic?: boolean; // Classic Board theme only — swaps hex/neon body for a 3D dome token
 }) {
   const baseCtrl = useAnimationControls();
   const arcCtrl  = useAnimationControls();
@@ -820,6 +821,15 @@ function PawnToken({
   const ph3      = pR * 0.866;
   const pulsePts = `0,${-pR} ${ph3},${-pR*0.5} ${ph3},${pR*0.5} 0,${pR} ${-ph3},${pR*0.5} ${-ph3},${-pR*0.5}`;
 
+  // ── Classic 3D dome-token geometry (Classic Board theme only) ───────────────
+  const clSolid   = CL_SOLID[player as 0|1|2|3];
+  const clBorder  = CL_BORDER[player as 0|1|2|3];
+  const domeR     = 0.275;
+  const domeCY    = -0.06;
+  const baseRX    = 0.30;
+  const baseRY    = 0.10;
+  const baseCY    = 0.19;
+
   return (
     // Outer group: tile-to-tile x/y movement — GPU-composited layer
     <motion.g
@@ -830,11 +840,55 @@ function PawnToken({
 
       {/* Ground shadow — anchored to base elevation, NOT lifted by arc */}
       <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
-        fill="rgba(0,0,0,0.62)"/>
+        fill={isClassic ? 'rgba(25,18,10,0.30)' : 'rgba(0,0,0,0.62)'}/>
 
       {/* Inner group: parabolic Y-arc overlay — GPU-composited for buttery arcs */}
       <motion.g animate={arcCtrl} initial={{ y: 0 }} style={{ willChange: 'transform' }}>
 
+        {isClassic ? (
+          <>
+            {/* Ambient warm halo — mirrors the neon bloom's radius so tap/click
+                hit-area stays identical between themes (pointer-events follow
+                painted geometry on the shared outer <motion.g> onClick). */}
+            <circle cx={0} cy={0} r={HR*1.55} fill={clSolid} fillOpacity="0.05"/>
+
+            {/* Movable piece — soft gold halo, premium & quiet vs. the neon pulse */}
+            {isMovable && (
+              <motion.circle cx={0} cy={domeCY} r={domeR + 0.08}
+                fill="none" stroke="#D9A400" strokeWidth="0.034"
+                animate={{ opacity: [0.28, 0.88, 0.28] }}
+                transition={{ duration: 1.0, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            )}
+
+            {/* Base disc — flattened pedestal foot, top-lit gradient */}
+            <ellipse cx={0} cy={baseCY} rx={baseRX} ry={baseRY}
+              fill={`url(#clbase${player})`}
+              stroke={clBorder} strokeWidth="0.020" strokeOpacity="0.55"/>
+            {/* Base rim catch-light */}
+            <ellipse cx={0} cy={baseCY - baseRY*0.55} rx={baseRX*0.72} ry={baseRY*0.35}
+              fill="white" fillOpacity="0.20"/>
+
+            {/* Dome / helmet body — glossy 3D ball, inner colour depth via radial gradient */}
+            <circle cx={0} cy={domeCY} r={domeR}
+              fill={`url(#clpawn${player})`}
+              stroke={clBorder} strokeWidth="0.022" strokeOpacity="0.75"/>
+
+            {/* Bottom-inside shading — gives the dome volume against the base */}
+            <ellipse cx={0} cy={domeCY + domeR*0.55} rx={domeR*0.72} ry={domeR*0.28}
+              fill="#000000" fillOpacity="0.16"/>
+
+            {/* Crisp dome rim */}
+            <circle cx={0} cy={domeCY} r={domeR}
+              fill="none" stroke="white" strokeWidth="0.010" strokeOpacity="0.28"/>
+
+            {/* Top specular highlight — glossy plastic sheen */}
+            <ellipse cx={-0.085} cy={domeCY - 0.095} rx={0.095} ry={0.066}
+              fill="white" fillOpacity="0.70"/>
+            <circle cx={-0.115} cy={domeCY - 0.125} r="0.028" fill="white" fillOpacity="0.92"/>
+          </>
+        ) : (
+          <>
         {/* Ambient neon bloom */}
         <circle cx={0} cy={0} r={HR*1.55} fill={neon} fillOpacity="0.042"/>
 
@@ -902,6 +956,8 @@ function PawnToken({
           stroke="white" strokeWidth="0.028" strokeOpacity="0.56" strokeLinecap="round"
         />
         <circle cx={-h3*0.27} cy={-HR*0.68} r="0.019" fill="white" opacity="0.46"/>
+          </>
+        )}
       </motion.g>
     </motion.g>
   );
@@ -1159,6 +1215,22 @@ function BoardSVG({
         <pattern id="cpscan" x="0" y="0" width="15" height="0.22" patternUnits="userSpaceOnUse">
           <line x1="0" y1="0" x2="15" y2="0" stroke="white" strokeWidth="0.017" strokeOpacity="0.024"/>
         </pattern>
+        {/* ── Classic 3D dome-token gradients (Classic Board theme only) ── */}
+        {CL_SOLID.map((c, i) => (
+          <radialGradient key={i} id={`clpawn${i}`} cx="34%" cy="24%" r="85%">
+            <stop offset="0%"   stopColor="#FFFFFF" stopOpacity="0.95"/>
+            <stop offset="30%"  stopColor={c}        stopOpacity="0.96"/>
+            <stop offset="72%"  stopColor={c}/>
+            <stop offset="100%" stopColor="#000000" stopOpacity="0.32"/>
+          </radialGradient>
+        ))}
+        {CL_SOLID.map((c, i) => (
+          <linearGradient key={i} id={`clbase${i}`} x1="50%" y1="0%" x2="50%" y2="100%">
+            <stop offset="0%"   stopColor={c} stopOpacity="1"/>
+            <stop offset="55%"  stopColor={c} stopOpacity="0.86"/>
+            <stop offset="100%" stopColor="#000000" stopOpacity="0.30"/>
+          </linearGradient>
+        ))}
       </defs>
 
       {/* ── Background ── */}
@@ -1184,7 +1256,6 @@ function BoardSVG({
 
         if (isClassic) {
           const solid  = CL_SOLID[player as 0|1|2|3];
-          const light  = CL_LIGHT[player as 0|1|2|3];
           const border = CL_BORDER[player as 0|1|2|3];
           const mainOp = exists ? (isCurrent ? 0.92 : 0.78) : 0.22;
           return (
@@ -1197,9 +1268,39 @@ function BoardSVG({
               {/* Glossy sheen */}
               <rect x={zc+0.32} y={zr+0.32} width="5.36" height="1.30" rx="0.22"
                 fill="white" fillOpacity={exists ? 0.28 : 0.10}/>
-              {/* Pawn bays — classic circles */}
+
+              {/* Decorative inset frame — premium double-border detail */}
+              <rect x={zc+0.55} y={zr+0.55} width="4.9" height="4.9" rx="0.16"
+                fill="none" stroke={border} strokeWidth="0.026"
+                strokeOpacity={exists ? 0.30 : 0.08}/>
+              {/* Inset frame corner accents */}
+              {([[zc+0.55,zr+0.55],[zc+5.45,zr+0.55],[zc+5.45,zr+5.45],[zc+0.55,zr+5.45]] as [number,number][])
+                .map(([bx,by], i) => {
+                  const arm  = 0.30;
+                  const sx2  = bx < cx ? 1 : -1;
+                  const sy2  = by < cy ? 1 : -1;
+                  return (
+                    <polyline key={`ca-${i}`}
+                      points={`${bx+sx2*arm},${by} ${bx},${by} ${bx},${by+sy2*arm}`}
+                      fill="none" stroke={border} strokeWidth="0.045"
+                      strokeOpacity={exists ? 0.42 : 0.10} strokeLinecap="round"/>
+                  );
+                })}
+
+              {/* Guide lines linking each pawn bay to the centre mark — classic "flower" motif */}
+              {E.HOME_BASES[player].map(([br, bc], si) => (
+                <line key={`gl-${si}`}
+                  x1={cx} y1={cy} x2={bc+0.5} y2={br+0.5}
+                  stroke={border} strokeWidth="0.018" strokeOpacity={exists ? 0.16 : 0.05}
+                  strokeDasharray="0.10 0.09"/>
+              ))}
+
+              {/* Pawn bays — classic circles, recessed for a socketed, dimensional feel */}
               {E.HOME_BASES[player].map(([br, bc], si) => (
                 <g key={si}>
+                  {/* Recessed socket shadow — grounds the bay like a real pawn well */}
+                  <circle cx={bc+0.53} cy={br+0.54} r={0.44}
+                    fill="#000000" fillOpacity={exists ? 0.12 : 0.03}/>
                   <circle cx={bc+0.5} cy={br+0.5} r={0.42}
                     fill={solid} fillOpacity={exists ? 0.88 : 0.15}
                     stroke={border} strokeWidth="0.048" strokeOpacity={exists ? 0.90 : 0.20}/>
@@ -1208,6 +1309,9 @@ function BoardSVG({
                     fill="white" fillOpacity={exists ? 0.52 : 0.10}/>
                   <circle cx={bc+0.36} cy={br+0.36} r={0.10}
                     fill="white" fillOpacity={exists ? 0.80 : 0.15}/>
+                  {/* Socket rim accent ring for dimensional depth */}
+                  <circle cx={bc+0.5} cy={br+0.5} r={0.42}
+                    fill="none" stroke="white" strokeWidth="0.020" strokeOpacity={exists ? 0.22 : 0.05}/>
                   {homeImpact?.player === player && homeImpact?.index === si && (
                     <motion.circle
                       key={homeImpact.id}
@@ -1220,9 +1324,13 @@ function BoardSVG({
                   )}
                 </g>
               ))}
-              {/* Center mark */}
+              {/* Center mark — inner circle + cross detail */}
               <circle cx={cx} cy={cy} r="0.28"
                 fill={solid} fillOpacity={0.28} stroke={border} strokeWidth="0.036" strokeOpacity={0.45}/>
+              <line x1={cx-0.15} y1={cy} x2={cx+0.15} y2={cy}
+                stroke={border} strokeWidth="0.022" strokeOpacity={0.50}/>
+              <line x1={cx} y1={cy-0.15} x2={cx} y2={cy+0.15}
+                stroke={border} strokeWidth="0.022" strokeOpacity={0.50}/>
               {/* Border */}
               <rect x={zc} y={zr} width="6" height="6" fill="none"
                 stroke={border}
@@ -1671,6 +1779,7 @@ function BoardSVG({
             onPieceClick={() => onPieceClick(pid)}
             onLastHopLand={anim.onLastHop}
             onDefeatArrived={anim.onArrival}
+            isClassic={isClassic}
           />
         );
       })}
