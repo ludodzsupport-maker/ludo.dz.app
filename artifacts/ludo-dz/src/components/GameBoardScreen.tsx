@@ -604,11 +604,13 @@ function buildHopPath(
 // parabolic flight path: piece traverses each cell with a smooth hop, peaks at
 // 45% of step duration, then descends and snaps to canonical stacking position.
 function PawnToken({
-  pid, player, finalX, finalY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
+  pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
   onLastHopLand, onDefeatArrived,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
+  startX?: number; // piece's visual X at the moment the hop sequence begins
+  startY?: number; // piece's visual Y at the moment the hop sequence begins
   hopSteps: HopStep[] | null | 'defeat'; // null=spring; 'defeat'=capture arc; [...]=hops
   hopMs: number;
   springCfg: { stiffness: number; damping: number; mass: number };
@@ -674,21 +676,36 @@ function PawnToken({
     }
 
     // ── Normal hop sequence ──────────────────────────────────────────────────
+    // Fix 2: strict step-by-step — each hop awaits before the next begins.
+    // Fix 3: track previous position so we only animate the axis that changes,
+    //        preventing Framer Motion from blending both axes diagonally at corners.
     setIsHopping(true);
     (async () => {
       const dur = hopMs / 1000;
+
+      // Seed previous position from the explicit start props (from triggerMove)
+      // or fall back to the current finalX/Y (which is the piece's current tile).
+      let prevX = startX ?? finalRef.current.x;
+      let prevY = startY ?? finalRef.current.y;
 
       for (let i = 0; i < hopSteps.length; i++) {
         if (stale()) return;
         const step   = hopSteps[i];
         const isLast = i === hopSteps.length - 1;
 
+        // Only animate the axis that actually changes this step.
+        // When only X changes, Framer Motion never touches Y → no diagonal drift.
+        const dX = Math.abs(step.x - prevX) > 0.001;
+        const dY = Math.abs(step.y - prevY) > 0.001;
+        const moveTarget: Record<string, unknown> = {
+          transition: { duration: dur, ease: STEP_EASE },
+        };
+        if (dX) moveTarget.x = step.x;
+        if (dY) moveTarget.y = step.y;
+
         // Lateral movement + parabolic arc run in parallel
         await Promise.all([
-          baseCtrl.start({
-            x: step.x, y: step.y,
-            transition: { duration: dur, ease: STEP_EASE },
-          }),
+          baseCtrl.start(moveTarget as Parameters<typeof baseCtrl.start>[0]),
           arcCtrl.start({
             y: [0, -ARC_H, 0],
             transition: {
@@ -698,6 +715,9 @@ function PawnToken({
             },
           }),
         ]);
+
+        prevX = step.x;
+        prevY = step.y;
 
         // ── Squash & stretch on landing ──────────────────────────────────────
         // Fired but NOT awaited — plays concurrently with the inter-step pause
@@ -714,7 +734,9 @@ function PawnToken({
         }
 
         if (isLast) {
-          onLastHopRef.current?.();   // notify shockwave (capture detection)
+          // Fix 1: fire onLastHopLand only when the pawn is physically on the
+          // final tile — game state resolution (capture, turn change) happens here.
+          onLastHopRef.current?.();
           await new Promise<void>(r => setTimeout(r, Math.ceil(SQUASH_MS * 1.6)));
           if (!stale()) arcCtrl.set({ scaleX: 1, scaleY: 1 });
         } else {
@@ -725,6 +747,7 @@ function PawnToken({
       }
 
       if (stale()) return;
+      // Final spring corrects stacking offsets (multiple pieces on same tile).
       const { x, y } = finalRef.current;
       await baseCtrl.start({ x, y, transition: LAND_SPRING });
       if (!stale()) setIsHopping(false);
@@ -947,15 +970,37 @@ function HomeFinishVFX({
   );
 }
 
+// ─── Shared animation types (used by BoardSVG and GameBoardScreen) ────────────
+type ShockwaveEvent = { x: number; y: number; neon: string; id: number };
+type HomeImpactEvent = { player: number; index: number; id: number };
+type PieceAnim = {
+  steps: HopStep[] | 'defeat' | null;
+  startX?: number;   // piece's visual X before the hop starts (for axis-diff)
+  startY?: number;   // piece's visual Y before the hop starts
+  onLastHop?: () => void;
+  onArrival?: () => void;
+};
+
 // ─── BoardSVG — pure game board ───────────────────────────────────────────────
 interface BoardSVGProps {
   game: E.GameState;
   onPieceClick: (pid: string) => void;
   springCfg: { stiffness: number; damping: number; mass: number };
   hopMs: number;
+  // Animation state — owned by GameBoardScreen, threaded down here for rendering
+  pieceAnims: Record<string, PieceAnim>;
+  shockwave: ShockwaveEvent | null;
+  onShockwaveDone: () => void;
+  homeImpact: HomeImpactEvent | null;
+  homeFinishVFX: ShockwaveEvent | null;
+  onHomeFinishDone: () => void;
 }
 
-function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
+function BoardSVG({
+  game, onPieceClick, springCfg, hopMs,
+  pieceAnims, shockwave, onShockwaveDone,
+  homeImpact, homeFinishVFX, onHomeFinishDone,
+}: BoardSVGProps) {
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   const pieces      = game.pieces;
@@ -964,7 +1009,6 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
     () => pieces.map(p => ({ ...p, xy: getPieceXY(p, pieces) })),
     [pieces]
   );
-
 
   const movableHighlights = useMemo(() => {
     if (game.phase !== 'selecting' || !game.movable.length) return [];
@@ -977,94 +1021,6 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
       return [{ col: gp[1], row: gp[0], neon: E.PLAYER_NEONS[piece.player] }];
     });
   }, [game.movable, game.phase, pieces]);
-
-  // ── Piece animation state ─────────────────────────────────────────────────────
-  // Each entry holds the hop sequence (or defeat-arc) + optional effect callbacks.
-  // Callbacks live in state so they persist for the full duration of the animation.
-  type PieceAnim = {
-    steps: HopStep[] | 'defeat' | null;
-    onLastHop?: () => void;   // captor → shockwave
-    onArrival?: () => void;   // captured piece → home impact flash
-  };
-  const [pieceAnims, setPieceAnims] = useState<Record<string, PieceAnim>>({});
-  const prevPiecesRef = useRef<E.Piece[]>([]);
-
-  // ── Visual effects state ──────────────────────────────────────────────────────
-  type ShockwaveEvent = { x: number; y: number; neon: string; id: number };
-  const [shockwave,     setShockwave]     = useState<ShockwaveEvent | null>(null);
-  const [homeImpact,    setHomeImpact]    = useState<{ player: number; index: number; id: number } | null>(null);
-  const [homeFinishVFX, setHomeFinishVFX] = useState<ShockwaveEvent | null>(null);
-
-  useEffect(() => {
-    const prev = prevPiecesRef.current;
-    prevPiecesRef.current = pieces;
-    if (!prev.length) return;
-
-    // Detect the moving piece (relPos advanced) and any captured piece (relPos → -1)
-    let captorPiece:   E.Piece | null = null;
-    let captorPrev:    E.Piece | null = null;
-    let capturedPiece: E.Piece | null = null;
-
-    for (const piece of pieces) {
-      const prevP = prev.find(p => p.player === piece.player && p.index === piece.index);
-      if (!prevP || prevP.relPos === piece.relPos) continue;
-      if (piece.relPos === -1) {
-        capturedPiece = piece;
-      } else {
-        captorPiece = piece;
-        captorPrev  = prevP;
-      }
-    }
-
-    if (!captorPiece || !captorPrev) return;
-
-    const pid   = E.pieceId(captorPiece.player, captorPiece.index);
-    const pFrom = captorPrev.relPos;
-    const pTo   = captorPiece.relPos;
-
-    // Build corner-smooth hop path using buildHopPath
-    const steps = buildHopPath(captorPiece.player, captorPiece.index, pFrom, pTo);
-
-    const capturedPid      = capturedPiece ? E.pieceId(capturedPiece.player, capturedPiece.index) : null;
-    const capturedSnapshot = capturedPiece;
-    const captorNeon       = E.PLAYER_NEONS[captorPiece.player];
-    const lastStep         = steps[steps.length - 1];
-    const isHomeFinish     = pTo === E.FINISHED_POS;
-
-    // Capture shockwave — only when a capture happened
-    const captureCallback: (() => void) | undefined =
-      capturedPid && lastStep
-        ? () => setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() })
-        : undefined;
-
-    // Home finish VFX — fires when this pawn reaches the center
-    const homeFinishCallback: (() => void) | undefined =
-      isHomeFinish
-        ? () => setHomeFinishVFX({ x: 7.5, y: 7.5, neon: captorNeon, id: Date.now() })
-        : undefined;
-
-    const onLastHop: (() => void) | undefined =
-      (captureCallback || homeFinishCallback)
-        ? () => { captureCallback?.(); homeFinishCallback?.(); }
-        : undefined;
-
-    const onArrival: (() => void) | undefined =
-      capturedSnapshot
-        ? () => {
-            setHomeImpact({ player: capturedSnapshot.player, index: capturedSnapshot.index, id: Date.now() });
-            setTimeout(() => setHomeImpact(null), 750);
-          }
-        : undefined;
-
-    // Commit: moving piece hops, captured piece defeat-arcs, all others spring
-    setPieceAnims(() => {
-      const next: Record<string, PieceAnim> = {};
-      pieces.forEach(p => { next[E.pieceId(p.player, p.index)] = { steps: null }; });
-      next[pid] = { steps, onLastHop };
-      if (capturedPid) next[capturedPid] = { steps: 'defeat', onArrival };
-      return next;
-    });
-  }, [pieces]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <svg viewBox="0 0 15 15"
@@ -1525,7 +1481,7 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
           x={shockwave.x}
           y={shockwave.y}
           neon={shockwave.neon}
-          onDone={() => setShockwave(null)}
+          onDone={onShockwaveDone}
         />
       )}
 
@@ -1536,7 +1492,7 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
           x={homeFinishVFX.x}
           y={homeFinishVFX.y}
           neon={homeFinishVFX.neon}
-          onDone={() => setHomeFinishVFX(null)}
+          onDone={onHomeFinishDone}
         />
       )}
 
@@ -1551,6 +1507,8 @@ function BoardSVG({ game, onPieceClick, springCfg, hopMs }: BoardSVGProps) {
             player={player}
             finalX={fx}
             finalY={fy}
+            startX={anim.startX}
+            startY={anim.startY}
             hopSteps={anim.steps}
             hopMs={hopMs}
             springCfg={springCfg}
@@ -1684,6 +1642,20 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
   const [restartKey, setRestartKey] = useState(0);
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
 
+  // ── Animation queue state (owned here, threaded down to BoardSVG) ─────────
+  const [isAnimating,   setIsAnimating]   = useState(false);
+  const [pieceAnims,    setPieceAnims]    = useState<Record<string, PieceAnim>>({});
+  const [shockwave,     setShockwave]     = useState<ShockwaveEvent | null>(null);
+  const [homeImpact,    setHomeImpact]    = useState<HomeImpactEvent | null>(null);
+  const [homeFinishVFX, setHomeFinishVFX] = useState<ShockwaveEvent | null>(null);
+
+  // Stable refs so triggerMove closures always see the latest values
+  // without needing to be recreated on every render.
+  const gameRef        = useRef(game);
+  const isAnimatingRef = useRef(isAnimating);
+  gameRef.current        = game;
+  isAnimatingRef.current = isAnimating;
+
   const isComputer  = config.modeId === 'computer';
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
@@ -1731,18 +1703,131 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
     cycle();
   }, [rolling, game.phase, game.winner, game.activePlayer, animSpeed]);
 
+  // ── triggerMove — async-safe, decoupled animation from state resolution ──
+  // Uses refs for game/isAnimating so it is stable (no deps) and never stale.
+  const triggerMove = useCallback((pid: string) => {
+    // Fix: set the ref synchronously FIRST (atomic lock) to prevent a second
+    // rapid click from entering before the React state update has rendered.
+    if (isAnimatingRef.current) return;
+    isAnimatingRef.current = true;
+
+    const currentGame = gameRef.current;
+    if (!currentGame.movable.includes(pid)) {
+      isAnimatingRef.current = false;
+      return;
+    }
+
+    // Pre-compute the logical outcome WITHOUT applying it to React state yet.
+    // Game state is only committed once the captor's last animation step lands.
+    const nextState = E.doMove(currentGame, pid);
+
+    const [ps, is] = pid.split(':').map(Number);
+    const piece    = currentGame.pieces.find(p => p.player === ps && p.index === is)!;
+    const pFrom    = piece.relPos;
+    const pTo      = nextState.pieces.find(p => p.player === ps && p.index === is)!.relPos;
+
+    // Build the corner-smoothed hop path
+    const steps = buildHopPath(ps, is, pFrom, pTo);
+
+    // Seed startX/startY from the actual rendered position (getPieceXY) so that
+    // stacking offsets are reflected — avoids off-lane axis-diff on first step.
+    const [startX, startY] = getPieceXY(piece, currentGame.pieces);
+
+    // Find which piece (if any) is captured in this move
+    const capturedP = currentGame.pieces.find(p => {
+      if (p.player === ps || p.relPos < 1 || p.relPos >= E.TRACK_SIZE) return false;
+      const np = nextState.pieces.find(q => q.player === p.player && q.index === p.index);
+      return np?.relPos === -1;
+    }) ?? null;
+    const capturedPid = capturedP ? E.pieceId(capturedP.player, capturedP.index) : null;
+
+    const captorNeon   = E.PLAYER_NEONS[ps];
+    const lastStep     = steps.length > 0 ? steps[steps.length - 1] : null;
+    const isHomeFinish = pTo === E.FINISHED_POS;
+
+    // Fix: handle zero-step edge case (piece already at destination, e.g. relPos=0
+    // on a 6-roll from base). Apply state immediately and unlock — no animation needed.
+    if (steps.length === 0) {
+      if (capturedPid && lastStep) {
+        setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() });
+      }
+      if (isHomeFinish) {
+        setHomeFinishVFX({ x: 7.5, y: 7.5, neon: captorNeon, id: Date.now() });
+      }
+      setGame(nextState);
+      setIsAnimating(false);
+      isAnimatingRef.current = false;
+      return;
+    }
+
+    setIsAnimating(true);
+
+    // onLastHop fires when the captor's FINAL step physically lands on the tile.
+    // This is the earliest safe moment to resolve captures and pass the turn.
+    const onLastHop = () => {
+      // Trigger shockwave / home-finish VFX at the landing tile
+      if (capturedPid && lastStep) {
+        setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() });
+      }
+      if (isHomeFinish) {
+        setHomeFinishVFX({ x: 7.5, y: 7.5, neon: captorNeon, id: Date.now() });
+      }
+
+      // NOW commit logical game state: captured piece's relPos → -1,
+      // finalXY resolves to its home base, turn advances, etc.
+      setGame(nextState);
+
+      if (capturedPid && capturedP) {
+        const cp = capturedP;
+        // Start defeat arc — captured piece now knows finalXY = home base
+        // because game state was just updated with relPos = -1.
+        setPieceAnims(prev => ({
+          ...prev,
+          [capturedPid]: {
+            steps: 'defeat',
+            onArrival: () => {
+              setHomeImpact({ player: cp.player, index: cp.index, id: Date.now() });
+              setTimeout(() => setHomeImpact(null), 750);
+              setIsAnimating(false);
+              isAnimatingRef.current = false;
+              setPieceAnims({});
+            },
+          },
+        }));
+      } else {
+        // No capture — animation sequence is complete
+        setIsAnimating(false);
+        isAnimatingRef.current = false;
+        setPieceAnims({});
+      }
+    };
+
+    // Set initial animation state:
+    // • Moving piece: hop sequence with actual rendered start position for axis-diff
+    // • Captured piece (if any): null steps → holds at current visual tile
+    //   (game state hasn't changed yet so getPieceXY returns its track position)
+    // • Everyone else: null (spring-to-current, effectively a no-op)
+    const initAnims: Record<string, PieceAnim> = {};
+    currentGame.pieces.forEach(p => {
+      initAnims[E.pieceId(p.player, p.index)] = { steps: null };
+    });
+    initAnims[pid] = { steps, startX, startY, onLastHop };
+    // Do NOT set capturedPid to 'defeat' here — it waits for onLastHop
+    setPieceAnims(initAnims);
+  }, []); // stable — reads game/isAnimating via refs
+
   // ── Piece click ───────────────────────────────────────────────────────────
   const handlePieceClick = useCallback((pid: string) => {
-    if (!isHumanTurn || !game.movable.includes(pid)) return;
-    setGame(prev => E.doMove(prev, pid));
-  }, [isHumanTurn, game.movable]);
+    if (!isHumanTurn || isAnimatingRef.current) return;
+    triggerMove(pid);
+  }, [isHumanTurn, triggerMove]);
 
-  // ── Auto-pass when no valid moves ────────────────────────────────────────
+  // ── Auto-pass when no valid moves — blocked while animation is in flight ─
   useEffect(() => {
-    if (game.phase !== 'selecting' || game.movable.length > 0 || game.winner) return;
+    if (game.phase !== 'selecting' || game.movable.length > 0 || game.winner || isAnimating) return;
     const t = setTimeout(() => setGame(E.autoPassTurn), 1080);
     return () => clearTimeout(t);
-  }, [game.phase, game.movable.length, game.winner]);
+  }, [game.phase, game.movable.length, game.winner, isAnimating]);
 
   // ── AI roll ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1752,15 +1837,15 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
     return () => clearTimeout(t);
   }, [isComputer, game.activePlayer, game.phase, rolling, game.winner, handleRoll]);
 
-  // ── AI move ───────────────────────────────────────────────────────────────
+  // ── AI move — blocked while animation is in flight ────────────────────────
   useEffect(() => {
     if (!isComputer || game.activePlayer === 0) return;
-    if (game.phase !== 'selecting' || !game.movable.length || game.winner) return;
+    if (game.phase !== 'selecting' || !game.movable.length || game.winner || isAnimating) return;
     const pid = E.aiPickMove(game);
     if (!pid) return;
-    const t = setTimeout(() => setGame(prev => E.doMove(prev, pid)), 480);
+    const t = setTimeout(() => triggerMove(pid), 480);
     return () => clearTimeout(t);
-  }, [isComputer, game.activePlayer, game.phase, game.movable.length, game.winner]);
+  }, [isComputer, game.activePlayer, game.phase, game.movable.length, game.winner, isAnimating, triggerMove]);
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
   useEffect(() => () => { rollTimers.current.forEach(clearTimeout); }, []);
@@ -1773,6 +1858,11 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
     setAnimDice(1);
     setJustLanded(false);
     setLastDice([0,0,0,0]);
+    setIsAnimating(false);
+    setPieceAnims({});
+    setShockwave(null);
+    setHomeImpact(null);
+    setHomeFinishVFX(null);
     setGame(E.createGame(config.players));
     setRestartKey(k => k + 1);
   }, [config.players]);
@@ -1891,7 +1981,18 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
             overflow: 'hidden',
             boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.60), inset 0 0 0 1px rgba(255,255,255,0.05)',
           }}>
-            <BoardSVG game={game} onPieceClick={handlePieceClick} springCfg={springCfg} hopMs={cfg.hopMs}/>
+            <BoardSVG
+              game={game}
+              onPieceClick={handlePieceClick}
+              springCfg={springCfg}
+              hopMs={cfg.hopMs}
+              pieceAnims={pieceAnims}
+              shockwave={shockwave}
+              onShockwaveDone={() => setShockwave(null)}
+              homeImpact={homeImpact}
+              homeFinishVFX={homeFinishVFX}
+              onHomeFinishDone={() => setHomeFinishVFX(null)}
+            />
           </div>
 
           {/* ── Corner dice panels — outside the board, adjacent to each corner ── */}

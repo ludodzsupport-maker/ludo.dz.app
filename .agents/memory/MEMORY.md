@@ -1,2 +1,3 @@
 - [Ludo DZ path-corner alignment](ludo-path-corners.md) — HOME_BASES must match PLAYER_STARTS; Red=TL, Blue=TR, Yellow=BR, Green=BL.
 - [Ludo DZ board layout](ludo-board-layout.md) — corner dice panels replace side columns; board is full-width; inactive panels must be transparent + pointer-events:none.
+- [Ludo DZ animation architecture](ludo-anim-architecture.md) — doMove deferred until captor's last hop lands; pieceAnims owned by GameBoardScreen; axis-diff hop loop prevents corner drift.
