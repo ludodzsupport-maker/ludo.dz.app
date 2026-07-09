@@ -387,8 +387,90 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
         {/* ── Scrollable body ── */}
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-5 pb-6">
 
-          {/* ── RULES / TEAM OPTIONS SECTION ── */}
-          {mode.id === "teamup" ? (
+          {/* ── RULES SECTION — always shown ── */}
+          <SectionLabel label={t.rules} neon={mode.neon}/>
+          <div className="flex gap-2.5 mb-6">
+            {RULES.map((r) => {
+              const active = rule === r.id;
+              return (
+                <motion.button
+                  key={r.id}
+                  onClick={() => setRule(r.id)}
+                  whileHover={{ scale: 1.04, y: -3 }}
+                  whileTap={{ scale: 0.96 }}
+                  className="flex-1 relative rounded-2xl overflow-hidden flex flex-col items-center pt-4 pb-3 px-2 gap-0"
+                  style={{
+                    background: active
+                      ? r.cardBg
+                      : "linear-gradient(145deg,#0a0820 0%,#0f1030 100%)",
+                    boxShadow: active
+                      ? `0 6px 24px rgba(0,0,0,0.55), 0 0 0 1.5px ${r.neon}68`
+                      : "0 3px 10px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.07)",
+                    transition: "box-shadow 0.22s ease, background 0.22s ease",
+                  }}
+                >
+                  <AnimatePresence>
+                    {active && (
+                      <motion.div
+                        key="stripe"
+                        className="absolute top-0 left-0 right-0 h-[2.5px]"
+                        style={{ background: `linear-gradient(90deg, transparent, ${r.neon}, transparent)` }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                      />
+                    )}
+                  </AnimatePresence>
+                  {active && (
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ background: `radial-gradient(circle at top left, ${r.neon}18, transparent 65%)` }}
+                    />
+                  )}
+                  <motion.div
+                    className="w-12 h-12 mb-2.5 relative z-10"
+                    animate={
+                      active
+                        ? { filter: [`drop-shadow(0 0 5px ${r.neon}55)`, `drop-shadow(0 0 12px ${r.neon}88)`, `drop-shadow(0 0 5px ${r.neon}55)`] }
+                        : { filter: "none" }
+                    }
+                    transition={{ duration: 2.2, repeat: active ? Infinity : 0 }}
+                  >
+                    {ruleIcon(r.id, active ? r.neon : "rgba(255,255,255,0.22)")}
+                  </motion.div>
+                  <span
+                    className="relative z-10 font-heading font-bold text-center leading-tight"
+                    style={{ fontSize: "12px", letterSpacing: "0.06em", color: active ? "white" : "rgba(255,255,255,0.38)", transition: "color 0.20s" }}
+                  >
+                    {ruleLabel(r.id)}
+                  </span>
+                  <span
+                    className="relative z-10 font-sans text-center leading-tight mt-0.5"
+                    style={{ fontSize: "8.5px", color: active ? `${r.neon}cc` : "rgba(255,255,255,0.22)", transition: "color 0.20s" }}
+                  >
+                    {ruleSub(r.id)}
+                  </span>
+                  <AnimatePresence>
+                    {active && (
+                      <motion.div
+                        key="dot"
+                        className="w-1.5 h-1.5 rounded-full mt-2 relative z-10 flex-shrink-0"
+                        style={{ background: r.neon, boxShadow: `0 0 6px ${r.neon}` }}
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                        layoutId="ruleIndicator"
+                      />
+                    )}
+                  </AnimatePresence>
+                </motion.button>
+              );
+            })}
+          </div>
+
+          {/* ── TEAM OPTIONS — فريق mode only ── */}
+          {mode.id === "teamup" && (
             <>
               <SectionLabel label={t.sectionTeam} neon={mode.neon}/>
               <div className="flex flex-col gap-3 mb-6">
@@ -405,13 +487,9 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
                   whileTap={{ scale: 0.987 }}
                   onClick={() => setTeamAttack(v => !v)}
                 >
-                  {/* Icon */}
                   <div
                     className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{
-                      background: `${mode.neon}14`,
-                      border: `1px solid ${mode.neon}30`,
-                    }}
+                    style={{ background: `${mode.neon}14`, border: `1px solid ${mode.neon}30` }}
                   >
                     <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
                       <path d="M4 10 L10 4 L16 10 L10 16 Z" stroke={mode.neon} strokeWidth="1.5" strokeLinejoin="round" fill={`${mode.neon}25`}/>
@@ -420,12 +498,8 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
                     </svg>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-heading font-bold text-white leading-tight" style={{ fontSize: "13px", letterSpacing: "0.04em" }}>
-                      {t.teamAttack}
-                    </p>
-                    <p className="font-sans text-white/45 leading-snug mt-0.5" style={{ fontSize: "10px" }}>
-                      {t.teamAttackSub}
-                    </p>
+                    <p className="font-heading font-bold text-white leading-tight" style={{ fontSize: "13px", letterSpacing: "0.04em" }}>{t.teamAttack}</p>
+                    <p className="font-sans text-white/45 leading-snug mt-0.5" style={{ fontSize: "10px" }}>{t.teamAttackSub}</p>
                   </div>
                   <ConfigToggle value={teamAttack} onChange={setTeamAttack} neon={mode.neon}/>
                 </motion.div>
@@ -442,13 +516,9 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
                   whileTap={{ scale: 0.987 }}
                   onClick={() => setTurnPass(v => !v)}
                 >
-                  {/* Icon */}
                   <div
                     className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{
-                      background: `${mode.neon}14`,
-                      border: `1px solid ${mode.neon}30`,
-                    }}
+                    style={{ background: `${mode.neon}14`, border: `1px solid ${mode.neon}30` }}
                   >
                     <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
                       <path d="M3 10 Q3 5 8 5 L14 5" stroke={mode.neon} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.60"/>
@@ -458,99 +528,12 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
                     </svg>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-heading font-bold text-white leading-tight" style={{ fontSize: "13px", letterSpacing: "0.04em" }}>
-                      {t.turnPass}
-                    </p>
-                    <p className="font-sans text-white/45 leading-snug mt-0.5" style={{ fontSize: "10px" }}>
-                      {t.turnPassSub}
-                    </p>
+                    <p className="font-heading font-bold text-white leading-tight" style={{ fontSize: "13px", letterSpacing: "0.04em" }}>{t.turnPass}</p>
+                    <p className="font-sans text-white/45 leading-snug mt-0.5" style={{ fontSize: "10px" }}>{t.turnPassSub}</p>
                   </div>
                   <ConfigToggle value={turnPass} onChange={setTurnPass} neon={mode.neon}/>
                 </motion.div>
 
-              </div>
-            </>
-          ) : (
-            <>
-              <SectionLabel label={t.rules} neon={mode.neon}/>
-              <div className="flex gap-2.5 mb-6">
-                {RULES.map((r) => {
-                  const active = rule === r.id;
-                  return (
-                    <motion.button
-                      key={r.id}
-                      onClick={() => setRule(r.id)}
-                      whileHover={{ scale: 1.04, y: -3 }}
-                      whileTap={{ scale: 0.96 }}
-                      className="flex-1 relative rounded-2xl overflow-hidden flex flex-col items-center pt-4 pb-3 px-2 gap-0"
-                      style={{
-                        background: active
-                          ? r.cardBg
-                          : "linear-gradient(145deg,#0a0820 0%,#0f1030 100%)",
-                        boxShadow: active
-                          ? `0 6px 24px rgba(0,0,0,0.55), 0 0 0 1.5px ${r.neon}68`
-                          : "0 3px 10px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.07)",
-                        transition: "box-shadow 0.22s ease, background 0.22s ease",
-                      }}
-                    >
-                      <AnimatePresence>
-                        {active && (
-                          <motion.div
-                            key="stripe"
-                            className="absolute top-0 left-0 right-0 h-[2.5px]"
-                            style={{ background: `linear-gradient(90deg, transparent, ${r.neon}, transparent)` }}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                          />
-                        )}
-                      </AnimatePresence>
-                      {active && (
-                        <div
-                          className="absolute inset-0 pointer-events-none"
-                          style={{ background: `radial-gradient(circle at top left, ${r.neon}18, transparent 65%)` }}
-                        />
-                      )}
-                      <motion.div
-                        className="w-12 h-12 mb-2.5 relative z-10"
-                        animate={
-                          active
-                            ? { filter: [`drop-shadow(0 0 5px ${r.neon}55)`, `drop-shadow(0 0 12px ${r.neon}88)`, `drop-shadow(0 0 5px ${r.neon}55)`] }
-                            : { filter: "none" }
-                        }
-                        transition={{ duration: 2.2, repeat: active ? Infinity : 0 }}
-                      >
-                        {ruleIcon(r.id, active ? r.neon : "rgba(255,255,255,0.22)")}
-                      </motion.div>
-                      <span
-                        className="relative z-10 font-heading font-bold text-center leading-tight"
-                        style={{ fontSize: "12px", letterSpacing: "0.06em", color: active ? "white" : "rgba(255,255,255,0.38)", transition: "color 0.20s" }}
-                      >
-                        {ruleLabel(r.id)}
-                      </span>
-                      <span
-                        className="relative z-10 font-sans text-center leading-tight mt-0.5"
-                        style={{ fontSize: "8.5px", color: active ? `${r.neon}cc` : "rgba(255,255,255,0.22)", transition: "color 0.20s" }}
-                      >
-                        {ruleSub(r.id)}
-                      </span>
-                      <AnimatePresence>
-                        {active && (
-                          <motion.div
-                            key="dot"
-                            className="w-1.5 h-1.5 rounded-full mt-2 relative z-10 flex-shrink-0"
-                            style={{ background: r.neon, boxShadow: `0 0 6px ${r.neon}` }}
-                            initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0, opacity: 0 }}
-                            transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                            layoutId="ruleIndicator"
-                          />
-                        )}
-                      </AnimatePresence>
-                    </motion.button>
-                  );
-                })}
               </div>
             </>
           )}
