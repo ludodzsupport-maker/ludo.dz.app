@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Globe, Volume2, Vibrate, Info, ChevronRight, Check } from "lucide-react";
+import { ArrowLeft, Globe, Volume2, Vibrate, Info, ChevronRight, Check, Layers } from "lucide-react";
 import { GamePiece } from "./GamePiece";
 
 interface SettingsScreenProps {
@@ -30,6 +30,11 @@ const T = {
     vibration:   "Vibrations",
     vibrationSub:"Retour haptique lors des actions",
 
+    sectionBoard:    "Apparence du plateau",
+    boardStyle:      "Style du plateau",
+    boardStyleSub:   "Choisissez l'apparence visuelle du plateau",
+    neonBoard:       "Neon Board",
+
     sectionAbout: "À propos",
     about:       "Ludo DZ",
     aboutSub:    "Version 1.0.0 — Jeu de société algérien",
@@ -55,6 +60,11 @@ const T = {
     musicSub:    "الأجواء الصوتية أثناء اللعب",
     vibration:   "الاهتزاز",
     vibrationSub:"اهتزاز الجهاز عند كل حركة",
+
+    sectionBoard:    "مظهر اللوحة",
+    boardStyle:      "نمط اللوحة",
+    boardStyleSub:   "اختر المظهر البصري للوحة",
+    neonBoard:       "نيون بورد",
 
     sectionAbout: "حول اللعبة",
     about:       "لودو DZ",
@@ -144,10 +154,12 @@ const containerVariants = {
 export function SettingsScreen({ lang, setLang, onBack }: SettingsScreenProps) {
   const t   = T[lang];
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
-  const [sound,     setSound]     = useState(true);
-  const [music,     setMusic]     = useState(true);
-  const [vibration, setVibration] = useState(true);
-  const [langOpen,  setLangOpen]  = useState(false);
+  const [sound,      setSound]      = useState(true);
+  const [music,      setMusic]      = useState(true);
+  const [vibration,  setVibration]  = useState(true);
+  const [langOpen,   setLangOpen]   = useState(false);
+  const [boardOpen,  setBoardOpen]  = useState(false);
+  const [boardStyle, setBoardStyle] = useState<"neon">("neon");
 
   return (
     <motion.div
@@ -440,6 +452,102 @@ export function SettingsScreen({ lang, setLang, onBack }: SettingsScreenProps) {
               <p className="text-white/40 font-sans" style={{ fontSize: "10px" }}>{t.vibrationSub}</p>
             </div>
             <NeonToggle value={vibration} onChange={setVibration} neon="#B44FFF" />
+          </motion.div>
+
+          {/* ── Board Style Section ── */}
+          <SectionLabel label={t.sectionBoard} />
+
+          <motion.div
+            variants={itemVariants}
+            className="rounded-2xl overflow-hidden"
+            style={{
+              background: "linear-gradient(145deg, #001a1a 0%, #002a28 100%)",
+              border: "1px solid rgba(0,255,238,0.22)",
+              boxShadow: "0 6px 24px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.06)",
+            }}
+          >
+            {/* Top accent */}
+            <div className="h-[3px]" style={{ background: "linear-gradient(90deg, transparent, #00FFEE, transparent)" }}/>
+
+            {/* Header row */}
+            <motion.button
+              className="w-full flex items-center gap-4 px-4 py-4 text-start"
+              onClick={() => setBoardOpen(o => !o)}
+              whileTap={{ scale: 0.98 }}
+            >
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: "rgba(0,255,238,0.12)", boxShadow: "0 0 16px rgba(0,255,238,0.25)" }}
+              >
+                <Layers className="w-5 h-5" style={{ color: "#00FFEE" }} />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="font-heading font-bold text-white" style={{ fontSize: "15px", letterSpacing: "0.05em" }}>{t.boardStyle}</p>
+                <p className="text-white/45 font-sans" style={{ fontSize: "11px" }}>{t.boardStyleSub}</p>
+              </div>
+
+              {/* Current style badge */}
+              <span
+                className="flex-shrink-0 text-[11px] font-heading font-bold px-2.5 py-1 rounded-full"
+                style={{ background: "rgba(0,255,238,0.15)", color: "#00FFEE", border: "1px solid rgba(0,255,238,0.32)", letterSpacing: "0.08em" }}
+              >
+                {t.neonBoard}
+              </span>
+
+              <motion.div
+                animate={{ rotate: boardOpen ? 90 : 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex-shrink-0"
+              >
+                <ChevronRight className="w-4 h-4 text-white/40" />
+              </motion.div>
+            </motion.button>
+
+            {/* Expanded picker */}
+            <AnimatePresence>
+              {boardOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  style={{ overflow: "hidden" }}
+                >
+                  <div className="px-4 pb-4">
+                    <motion.button
+                      onClick={() => { setBoardStyle("neon"); setBoardOpen(false); }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl relative overflow-hidden"
+                      style={{
+                        background: "rgba(0,255,238,0.14)",
+                        border: "1px solid rgba(0,255,238,0.45)",
+                        boxShadow: "0 0 18px rgba(0,255,238,0.18)",
+                      }}
+                    >
+                      <motion.div
+                        className="absolute inset-0"
+                        layoutId="activeBoardBg"
+                        style={{ background: "rgba(0,255,238,0.06)" }}
+                      />
+                      <span
+                        className="font-heading font-bold relative z-10"
+                        style={{ fontSize: "14px", color: "#00FFEE", letterSpacing: "0.08em" }}
+                      >
+                        {t.neonBoard}
+                      </span>
+                      <div
+                        className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 relative z-10"
+                        style={{ background: "#00FFEE" }}
+                      >
+                        <Check className="w-3 h-3 text-black" strokeWidth={3} />
+                      </div>
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
 
           {/* ── About Section ── */}
