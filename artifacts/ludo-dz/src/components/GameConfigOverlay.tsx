@@ -27,28 +27,42 @@ interface GameConfigOverlayProps {
 // ─── Translations ─────────────────────────────────────────────────────────────
 const T = {
   fr: {
-    configTitle: "Configuration",
-    rules:       "Règles du jeu",
-    players:     "Joueurs",
-    start:       "Commencer",
-    classic:    "Classique",
-    classicSub: "4 pions — règles complètes",
-    quick:      "Rapide",
-    quickSub:   "2 pions — partie courte",
-    teamup:     "Équipe",
-    teamupSub:  "2 vs 2 — en alliance",
+    configTitle:    "Configuration",
+    rules:          "Règles du jeu",
+    players:        "Joueurs",
+    start:          "Commencer",
+    classic:        "Classique",
+    classicSub:     "4 pions — règles complètes",
+    quick:          "Rapide",
+    quickSub:       "2 pions — partie courte",
+    teamup:         "Équipe",
+    teamupSub:      "2 vs 2 — en alliance",
+    // team-mode specific
+    sectionTeam:    "Options d'équipe",
+    playersFixed:   "4 joueurs — mode équipe",
+    teamAttack:     "Attaque Alliée",
+    teamAttackSub:  "Les coéquipiers peuvent s'éliminer entre eux",
+    turnPass:       "Passe de Tour",
+    turnPassSub:    "Jouer les pions du partenaire après victoire",
   },
   ar: {
-    configTitle: "الإعداد",
-    rules:       "قواعد اللعبة",
-    players:     "اللاعبون",
-    start:       "ابدأ اللعبة",
-    classic:    "كلاسيكي",
-    classicSub: "٤ قطع — القواعد الكاملة",
-    quick:      "سريع",
-    quickSub:   "قطعتان — جولة قصيرة",
-    teamup:     "فريق",
-    teamupSub:  "٢ ضد ٢ بالتحالف",
+    configTitle:    "الإعداد",
+    rules:          "قواعد اللعبة",
+    players:        "اللاعبون",
+    start:          "ابدأ اللعبة",
+    classic:        "كلاسيكي",
+    classicSub:     "٤ قطع — القواعد الكاملة",
+    quick:          "سريع",
+    quickSub:       "قطعتان — جولة قصيرة",
+    teamup:         "فريق",
+    teamupSub:      "٢ ضد ٢ بالتحالف",
+    // team-mode specific
+    sectionTeam:    "خيارات الفريق",
+    playersFixed:   "٤ لاعبين — وضع الفريق",
+    teamAttack:     "هجوم الفريق",
+    teamAttackSub:  "يمكن للزملاء أسر قطع بعضهم البعض",
+    turnPass:       "تمرير الدور",
+    turnPassSub:    "تحريك قطع الشريك بعد إيصال كل قطعه للبيت",
   },
 } as const;
 
@@ -180,6 +194,49 @@ function TeamUpIcon({ neon }: { neon: string }) {
   );
 }
 
+// ─── Config toggle (used inside team options rows) ────────────────────────────
+function ConfigToggle({
+  value,
+  onChange,
+  neon,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  neon: string;
+}) {
+  return (
+    <motion.button
+      onClick={(e) => { e.stopPropagation(); onChange(!value); }}
+      className="relative flex-shrink-0"
+      style={{
+        width: 46,
+        height: 26,
+        borderRadius: 13,
+        background: value
+          ? `linear-gradient(135deg, ${neon}90, ${neon}55)`
+          : "rgba(255,255,255,0.10)",
+        border: `1.5px solid ${value ? neon : "rgba(255,255,255,0.16)"}`,
+        boxShadow: value ? `0 0 14px ${neon}55` : "none",
+        transition: "background 0.22s, border-color 0.22s, box-shadow 0.22s",
+      }}
+      whileTap={{ scale: 0.92 }}
+    >
+      <motion.div
+        className="absolute top-[3px]"
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 9,
+          background: value ? "white" : "rgba(255,255,255,0.42)",
+          boxShadow: value ? `0 2px 8px ${neon}70` : "none",
+        }}
+        animate={{ x: value ? 22 : 3 }}
+        transition={{ type: "spring", stiffness: 520, damping: 32 }}
+      />
+    </motion.button>
+  );
+}
+
 // ─── Section label (with neon accent matching the selected mode) ──────────────
 function SectionLabel({ label, neon }: { label: string; neon: string }) {
   return (
@@ -215,8 +272,10 @@ const PLAYER_COLORS = ["#DC143C", "#1E90FF", "#FFD700", "#00A550"];
 
 // ─── Main overlay ─────────────────────────────────────────────────────────────
 export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOverlayProps) {
-  const [rule,    setRule]    = useState<Rule>("classic");
-  const [players, setPlayers] = useState(2);
+  const [rule,        setRule]        = useState<Rule>("classic");
+  const [players,     setPlayers]     = useState(2);
+  const [teamAttack,  setTeamAttack]  = useState(false);
+  const [turnPass,    setTurnPass]    = useState(true);
 
   const t   = T[lang];
   const dir = lang === "ar" ? "rtl" : "ltr";
@@ -328,181 +387,290 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
         {/* ── Scrollable body ── */}
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-5 pb-6">
 
-          {/* ── RULES SECTION ── */}
-          <SectionLabel label={t.rules} neon={mode.neon}/>
+          {/* ── RULES / TEAM OPTIONS SECTION ── */}
+          {mode.id === "teamup" ? (
+            <>
+              <SectionLabel label={t.sectionTeam} neon={mode.neon}/>
+              <div className="flex flex-col gap-3 mb-6">
 
-          <div className="flex gap-2.5 mb-6">
-            {RULES.map((r) => {
-              const active = rule === r.id;
-              return (
-                <motion.button
-                  key={r.id}
-                  onClick={() => setRule(r.id)}
-                  whileHover={{ scale: 1.04, y: -3 }}
-                  whileTap={{ scale: 0.96 }}
-                  className="flex-1 relative rounded-2xl overflow-hidden flex flex-col items-center pt-4 pb-3 px-2 gap-0"
+                {/* Team Attack toggle */}
+                <motion.div
+                  className="flex items-center gap-3.5 px-4 py-3.5 rounded-2xl"
                   style={{
-                    background: active
-                      ? r.cardBg
-                      : "linear-gradient(145deg,#0a0820 0%,#0f1030 100%)",
-                    boxShadow: active
-                      ? `0 6px 24px rgba(0,0,0,0.55), 0 0 0 1.5px ${r.neon}68`
-                      : "0 3px 10px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.07)",
-                    transition: "box-shadow 0.22s ease, background 0.22s ease",
+                    background: "linear-gradient(145deg,#1c0008 0%,#2a0012 100%)",
+                    border: `1px solid ${teamAttack ? `${mode.neon}50` : "rgba(255,255,255,0.08)"}`,
+                    boxShadow: teamAttack ? `0 0 20px ${mode.neon}1a` : "none",
+                    transition: "border-color 0.22s, box-shadow 0.22s",
                   }}
+                  whileTap={{ scale: 0.987 }}
+                  onClick={() => setTeamAttack(v => !v)}
                 >
-                  {/* Top accent stripe — active only */}
-                  <AnimatePresence>
-                    {active && (
-                      <motion.div
-                        key="stripe"
-                        className="absolute top-0 left-0 right-0 h-[2.5px]"
-                        style={{ background: `linear-gradient(90deg, transparent, ${r.neon}, transparent)` }}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                      />
-                    )}
-                  </AnimatePresence>
-
-                  {/* Corner ambient glow — active only */}
-                  {active && (
-                    <div
-                      className="absolute inset-0 pointer-events-none"
-                      style={{ background: `radial-gradient(circle at top left, ${r.neon}18, transparent 65%)` }}
-                    />
-                  )}
-
                   {/* Icon */}
-                  <motion.div
-                    className="w-12 h-12 mb-2.5 relative z-10"
-                    animate={
-                      active
-                        ? {
-                            filter: [
-                              `drop-shadow(0 0 5px ${r.neon}55)`,
-                              `drop-shadow(0 0 12px ${r.neon}88)`,
-                              `drop-shadow(0 0 5px ${r.neon}55)`,
-                            ],
-                          }
-                        : { filter: "none" }
-                    }
-                    transition={{ duration: 2.2, repeat: active ? Infinity : 0 }}
-                  >
-                    {ruleIcon(r.id, active ? r.neon : "rgba(255,255,255,0.22)")}
-                  </motion.div>
-
-                  {/* Name */}
-                  <span
-                    className="relative z-10 font-heading font-bold text-center leading-tight"
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                     style={{
-                      fontSize: "12px",
-                      letterSpacing: "0.06em",
-                      color: active ? "white" : "rgba(255,255,255,0.38)",
-                      transition: "color 0.20s",
+                      background: `${mode.neon}14`,
+                      border: `1px solid ${mode.neon}30`,
                     }}
                   >
-                    {ruleLabel(r.id)}
-                  </span>
+                    <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
+                      <path d="M4 10 L10 4 L16 10 L10 16 Z" stroke={mode.neon} strokeWidth="1.5" strokeLinejoin="round" fill={`${mode.neon}25`}/>
+                      <circle cx="10" cy="10" r="2.2" fill={mode.neon} opacity="0.80"/>
+                      <path d="M7 7 L4 4 M13 7 L16 4 M7 13 L4 16 M13 13 L16 16" stroke={mode.neon} strokeWidth="1.2" strokeLinecap="round" opacity="0.55"/>
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-heading font-bold text-white leading-tight" style={{ fontSize: "13px", letterSpacing: "0.04em" }}>
+                      {t.teamAttack}
+                    </p>
+                    <p className="font-sans text-white/45 leading-snug mt-0.5" style={{ fontSize: "10px" }}>
+                      {t.teamAttackSub}
+                    </p>
+                  </div>
+                  <ConfigToggle value={teamAttack} onChange={setTeamAttack} neon={mode.neon}/>
+                </motion.div>
 
-                  {/* Sub */}
-                  <span
-                    className="relative z-10 font-sans text-center leading-tight mt-0.5"
+                {/* Turn Pass toggle */}
+                <motion.div
+                  className="flex items-center gap-3.5 px-4 py-3.5 rounded-2xl"
+                  style={{
+                    background: "linear-gradient(145deg,#1c0008 0%,#2a0012 100%)",
+                    border: `1px solid ${turnPass ? `${mode.neon}50` : "rgba(255,255,255,0.08)"}`,
+                    boxShadow: turnPass ? `0 0 20px ${mode.neon}1a` : "none",
+                    transition: "border-color 0.22s, box-shadow 0.22s",
+                  }}
+                  whileTap={{ scale: 0.987 }}
+                  onClick={() => setTurnPass(v => !v)}
+                >
+                  {/* Icon */}
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                     style={{
-                      fontSize: "8.5px",
-                      color: active ? `${r.neon}cc` : "rgba(255,255,255,0.22)",
-                      transition: "color 0.20s",
+                      background: `${mode.neon}14`,
+                      border: `1px solid ${mode.neon}30`,
                     }}
                   >
-                    {ruleSub(r.id)}
-                  </span>
+                    <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
+                      <path d="M3 10 Q3 5 8 5 L14 5" stroke={mode.neon} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.60"/>
+                      <path d="M12 3 L15 5 L12 7" stroke={mode.neon} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M17 10 Q17 15 12 15 L6 15" stroke={mode.neon} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.60"/>
+                      <path d="M8 13 L5 15 L8 17" stroke={mode.neon} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-heading font-bold text-white leading-tight" style={{ fontSize: "13px", letterSpacing: "0.04em" }}>
+                      {t.turnPass}
+                    </p>
+                    <p className="font-sans text-white/45 leading-snug mt-0.5" style={{ fontSize: "10px" }}>
+                      {t.turnPassSub}
+                    </p>
+                  </div>
+                  <ConfigToggle value={turnPass} onChange={setTurnPass} neon={mode.neon}/>
+                </motion.div>
 
-                  {/* Active dot */}
-                  <AnimatePresence>
-                    {active && (
+              </div>
+            </>
+          ) : (
+            <>
+              <SectionLabel label={t.rules} neon={mode.neon}/>
+              <div className="flex gap-2.5 mb-6">
+                {RULES.map((r) => {
+                  const active = rule === r.id;
+                  return (
+                    <motion.button
+                      key={r.id}
+                      onClick={() => setRule(r.id)}
+                      whileHover={{ scale: 1.04, y: -3 }}
+                      whileTap={{ scale: 0.96 }}
+                      className="flex-1 relative rounded-2xl overflow-hidden flex flex-col items-center pt-4 pb-3 px-2 gap-0"
+                      style={{
+                        background: active
+                          ? r.cardBg
+                          : "linear-gradient(145deg,#0a0820 0%,#0f1030 100%)",
+                        boxShadow: active
+                          ? `0 6px 24px rgba(0,0,0,0.55), 0 0 0 1.5px ${r.neon}68`
+                          : "0 3px 10px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.07)",
+                        transition: "box-shadow 0.22s ease, background 0.22s ease",
+                      }}
+                    >
+                      <AnimatePresence>
+                        {active && (
+                          <motion.div
+                            key="stripe"
+                            className="absolute top-0 left-0 right-0 h-[2.5px]"
+                            style={{ background: `linear-gradient(90deg, transparent, ${r.neon}, transparent)` }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                          />
+                        )}
+                      </AnimatePresence>
+                      {active && (
+                        <div
+                          className="absolute inset-0 pointer-events-none"
+                          style={{ background: `radial-gradient(circle at top left, ${r.neon}18, transparent 65%)` }}
+                        />
+                      )}
                       <motion.div
-                        key="dot"
-                        className="w-1.5 h-1.5 rounded-full mt-2 relative z-10 flex-shrink-0"
-                        style={{ background: r.neon, boxShadow: `0 0 6px ${r.neon}` }}
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                        layoutId="ruleIndicator"
-                      />
-                    )}
-                  </AnimatePresence>
-                </motion.button>
-              );
-            })}
-          </div>
+                        className="w-12 h-12 mb-2.5 relative z-10"
+                        animate={
+                          active
+                            ? { filter: [`drop-shadow(0 0 5px ${r.neon}55)`, `drop-shadow(0 0 12px ${r.neon}88)`, `drop-shadow(0 0 5px ${r.neon}55)`] }
+                            : { filter: "none" }
+                        }
+                        transition={{ duration: 2.2, repeat: active ? Infinity : 0 }}
+                      >
+                        {ruleIcon(r.id, active ? r.neon : "rgba(255,255,255,0.22)")}
+                      </motion.div>
+                      <span
+                        className="relative z-10 font-heading font-bold text-center leading-tight"
+                        style={{ fontSize: "12px", letterSpacing: "0.06em", color: active ? "white" : "rgba(255,255,255,0.38)", transition: "color 0.20s" }}
+                      >
+                        {ruleLabel(r.id)}
+                      </span>
+                      <span
+                        className="relative z-10 font-sans text-center leading-tight mt-0.5"
+                        style={{ fontSize: "8.5px", color: active ? `${r.neon}cc` : "rgba(255,255,255,0.22)", transition: "color 0.20s" }}
+                      >
+                        {ruleSub(r.id)}
+                      </span>
+                      <AnimatePresence>
+                        {active && (
+                          <motion.div
+                            key="dot"
+                            className="w-1.5 h-1.5 rounded-full mt-2 relative z-10 flex-shrink-0"
+                            style={{ background: r.neon, boxShadow: `0 0 6px ${r.neon}` }}
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0, opacity: 0 }}
+                            transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                            layoutId="ruleIndicator"
+                          />
+                        )}
+                      </AnimatePresence>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           {/* ── PLAYERS SECTION ── */}
           <SectionLabel label={t.players} neon={mode.neon}/>
 
-          <div className="flex gap-3 justify-center mb-6">
-            {[2, 3, 4].map((n) => {
-              const active = players === n;
-              return (
-                <motion.button
-                  key={n}
-                  onClick={() => setPlayers(n)}
-                  whileHover={{ scale: 1.06, y: -3 }}
-                  whileTap={{ scale: 0.93 }}
-                  className="relative flex flex-col items-center justify-center gap-1.5 rounded-2xl flex-1"
-                  style={{
-                    height: "82px",
-                    background: active
-                      ? `${mode.neon}18`
-                      : "rgba(255,255,255,0.04)",
-                    border: `1.5px solid ${active ? mode.neon : "rgba(255,255,255,0.10)"}`,
-                    boxShadow: active
-                      ? `0 0 22px ${mode.neon}40, inset 0 1px 0 rgba(255,255,255,0.08)`
-                      : "none",
-                    transition: "all 0.22s ease",
-                  }}
+          {mode.id === "teamup" ? (
+            /* Locked to 4 — static indicator */
+            <div
+              className="relative overflow-hidden flex items-center gap-4 px-4 py-3.5 rounded-2xl mb-6"
+              style={{
+                background: `linear-gradient(145deg, ${mode.neon}12 0%, ${mode.neon}06 100%)`,
+                border: `1.5px solid ${mode.neon}40`,
+                boxShadow: `0 0 22px ${mode.neon}1a, inset 0 1px 0 rgba(255,255,255,0.06)`,
+              }}
+            >
+              {/* Neon top accent */}
+              <div
+                className="absolute left-0 right-0 h-[2px] rounded-t-2xl pointer-events-none"
+                style={{ top: 0, background: `linear-gradient(90deg, transparent, ${mode.neon}, transparent)` }}
+              />
+
+              {/* 4 coloured pawns */}
+              <div className="flex gap-1.5 items-end flex-shrink-0">
+                {PLAYER_COLORS.map((col, i) => (
+                  <PawnSilhouette key={i} color={col} size={11}/>
+                ))}
+              </div>
+
+              {/* Number + label */}
+              <div className="flex-1 min-w-0">
+                <p
+                  className="font-heading font-bold leading-none"
+                  style={{ fontSize: "26px", color: mode.neon, textShadow: `0 0 16px ${mode.neon}80` }}
                 >
-                  {/* Active top accent */}
-                  {active && (
-                    <div
-                      className="absolute top-0 left-0 right-0 h-[2px] rounded-t-2xl"
-                      style={{ background: `linear-gradient(90deg, transparent, ${mode.neon}, transparent)` }}
-                    />
-                  )}
+                  4
+                </p>
+                <p className="font-sans mt-0.5" style={{ fontSize: "10px", color: `${mode.neon}88` }}>
+                  {t.playersFixed}
+                </p>
+              </div>
 
-                  {/* Pawn row */}
-                  <div className="flex gap-1 items-end">
-                    {PLAYER_COLORS.slice(0, n).map((col, i) => (
-                      <PawnSilhouette
-                        key={i}
-                        color={active ? col : "rgba(255,255,255,0.22)"}
-                        size={n === 4 ? 9 : 11}
-                      />
-                    ))}
-                  </div>
-
-                  {/* Number */}
-                  <span
-                    className="font-heading font-bold leading-none"
+              {/* Lock badge */}
+              <div
+                className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full"
+                style={{
+                  background: `${mode.neon}18`,
+                  border: `1px solid ${mode.neon}40`,
+                }}
+              >
+                <svg viewBox="0 0 12 14" width="9" height="10" fill="none">
+                  <rect x="1" y="6" width="10" height="7" rx="2" fill={mode.neon} opacity="0.85"/>
+                  <path d="M3 6 V4 a3 3 0 0 1 6 0 V6" stroke={mode.neon} strokeWidth="1.4" fill="none" strokeLinecap="round"/>
+                  <circle cx="6" cy="9.5" r="1.2" fill="white" opacity="0.70"/>
+                </svg>
+                <span
+                  className="font-heading font-bold"
+                  style={{ fontSize: "9px", letterSpacing: "0.10em", color: mode.neon }}
+                >
+                  FIXE
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-3 justify-center mb-6">
+              {[2, 3, 4].map((n) => {
+                const active = players === n;
+                return (
+                  <motion.button
+                    key={n}
+                    onClick={() => setPlayers(n)}
+                    whileHover={{ scale: 1.06, y: -3 }}
+                    whileTap={{ scale: 0.93 }}
+                    className="relative flex flex-col items-center justify-center gap-1.5 rounded-2xl flex-1"
                     style={{
-                      fontSize: "20px",
-                      color: active ? mode.neon : "rgba(255,255,255,0.35)",
-                      textShadow: active ? `0 0 14px ${mode.neon}80` : "none",
-                      transition: "color 0.22s, text-shadow 0.22s",
+                      height: "82px",
+                      background: active ? `${mode.neon}18` : "rgba(255,255,255,0.04)",
+                      border: `1.5px solid ${active ? mode.neon : "rgba(255,255,255,0.10)"}`,
+                      boxShadow: active ? `0 0 22px ${mode.neon}40, inset 0 1px 0 rgba(255,255,255,0.08)` : "none",
+                      transition: "all 0.22s ease",
                     }}
                   >
-                    {n}
-                  </span>
-                </motion.button>
-              );
-            })}
-          </div>
+                    {active && (
+                      <div
+                        className="absolute top-0 left-0 right-0 h-[2px] rounded-t-2xl"
+                        style={{ background: `linear-gradient(90deg, transparent, ${mode.neon}, transparent)` }}
+                      />
+                    )}
+                    <div className="flex gap-1 items-end">
+                      {PLAYER_COLORS.slice(0, n).map((col, i) => (
+                        <PawnSilhouette key={i} color={active ? col : "rgba(255,255,255,0.22)"} size={n === 4 ? 9 : 11}/>
+                      ))}
+                    </div>
+                    <span
+                      className="font-heading font-bold leading-none"
+                      style={{
+                        fontSize: "20px",
+                        color: active ? mode.neon : "rgba(255,255,255,0.35)",
+                        textShadow: active ? `0 0 14px ${mode.neon}80` : "none",
+                        transition: "color 0.22s, text-shadow 0.22s",
+                      }}
+                    >
+                      {n}
+                    </span>
+                  </motion.button>
+                );
+              })}
+            </div>
+          )}
 
           {/* ── START CTA ── */}
           <motion.button
             whileHover={{ scale: 1.018, y: -2 }}
             whileTap={{ scale: 0.978 }}
-            onClick={() => onStart({ rule, players, modeId: mode.id })}
+            onClick={() => onStart({
+              rule:    mode.id === "teamup" ? "teamup" : rule,
+              players: mode.id === "teamup" ? 4       : players,
+              modeId:  mode.id,
+            })}
             className="w-full relative rounded-2xl overflow-hidden"
             style={{
               background: `linear-gradient(135deg, ${mode.neon}28 0%, ${mode.neon}12 100%)`,
