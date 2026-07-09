@@ -55,7 +55,7 @@ export const PLAYER_STARTS = [0, 13, 26, 39] as const;
 
 // ── Safe squares (absolute track index) ───────────────────────────────────
 // Safe squares = player-start tiles (0,13,26,39) + 4 mid-path stars (11,24,37,50)
-export const SAFE_SET = new Set([0, 11, 13, 24, 26, 37, 39, 50]);
+export const SAFE_SET = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
 
 // ── Visual constants ───────────────────────────────────────────────────────
 export const PLAYER_COLORS  = ['#DC143C','#1E90FF','#FFD700','#00C060'] as const;
