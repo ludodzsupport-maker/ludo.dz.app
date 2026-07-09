@@ -12,12 +12,14 @@ import { AnimatePresence } from 'framer-motion';
 import type { GameConfig } from '@/components/GameConfigOverlay';
 
 type Screen = 'welcome' | 'mode-select' | 'settings' | 'game';
+export type BoardStyle = 'neon';
 
 function AppContent() {
-  const [showSplash, setShowSplash] = useState(true);
-  const [screen, setScreen]         = useState<Screen>('welcome');
-  const [lang, setLang]             = useState<'fr' | 'ar'>('fr');
-  const [gameConfig, setGameConfig] = useState<GameConfig | null>({ rule: 'classic', players: 4, modeId: 'computer' });
+  const [showSplash, setShowSplash]   = useState(true);
+  const [screen, setScreen]           = useState<Screen>('welcome');
+  const [lang, setLang]               = useState<'fr' | 'ar'>('fr');
+  const [gameConfig, setGameConfig]   = useState<GameConfig | null>({ rule: 'classic', players: 4, modeId: 'computer' });
+  const [boardStyle, setBoardStyle]   = useState<BoardStyle>('neon');
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2500);
@@ -57,6 +59,8 @@ function AppContent() {
               key="settings"
               lang={lang}
               setLang={setLang}
+              boardStyle={boardStyle}
+              setBoardStyle={setBoardStyle}
               onBack={() => setScreen('welcome')}
             />
           ) : screen === 'game' && gameConfig ? (
@@ -64,6 +68,7 @@ function AppContent() {
               key="game"
               config={gameConfig}
               lang={lang}
+              boardStyle={boardStyle}
               onBack={() => setScreen('mode-select')}
             />
           ) : null}

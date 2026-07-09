@@ -3,9 +3,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Globe, Volume2, Vibrate, Info, ChevronRight, Check } from "lucide-react";
 import { GamePiece } from "./GamePiece";
 
+import type { BoardStyle } from '../App';
 interface SettingsScreenProps {
   lang: 'fr' | 'ar';
   setLang: (lang: 'fr' | 'ar') => void;
+  boardStyle: BoardStyle;
+  setBoardStyle: (style: BoardStyle) => void;
   onBack: () => void;
 }
 
@@ -151,7 +154,7 @@ const containerVariants = {
 };
 
 // ─── Main Screen ───────────────────────────────────────────────────────────────
-export function SettingsScreen({ lang, setLang, onBack }: SettingsScreenProps) {
+export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBack }: SettingsScreenProps) {
   const t   = T[lang];
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const [sound,      setSound]      = useState(true);
@@ -159,7 +162,6 @@ export function SettingsScreen({ lang, setLang, onBack }: SettingsScreenProps) {
   const [vibration,  setVibration]  = useState(true);
   const [langOpen,   setLangOpen]   = useState(false);
   const [boardOpen,  setBoardOpen]  = useState(false);
-  const [boardStyle, setBoardStyle] = useState<"neon">("neon");
 
   return (
     <motion.div

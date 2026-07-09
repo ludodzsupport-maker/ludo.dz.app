@@ -12,7 +12,8 @@ import * as E from '../lib/ludo-engine';
 import type { GameConfig } from './GameConfigOverlay';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface Props { config: GameConfig; lang: 'fr' | 'ar'; onBack: () => void; }
+import type { BoardStyle } from '../App';
+interface Props { config: GameConfig; lang: 'fr' | 'ar'; boardStyle?: BoardStyle; onBack: () => void; }
 type AnimSpeed = 'fast' | 'normal' | 'slow';
 
 // ─── Animation speed presets ──────────────────────────────────────────────────
