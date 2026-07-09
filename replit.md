@@ -32,6 +32,12 @@ Both workflows start automatically:
 
 To install dependencies: `pnpm install` (from root)
 
+To build shared lib declaration files (required after fresh install or codegen):
+```
+pnpm --filter @workspace/db run build
+pnpm --filter @workspace/api-zod run build
+```
+
 To push DB schema changes: `pnpm --filter @workspace/db run push`
 
 To regenerate API client code: `pnpm --filter @workspace/api-spec run codegen`
