@@ -342,8 +342,8 @@ function CornerDice({
       whileTap={canTap ? { scale: 0.91 } : {}}
       animate={isClassic ? {
         boxShadow: isActive
-          ? `0 4px 18px ${clSolid}55, 0 0 0 2px ${clSolid}`
-          : `0 2px 10px rgba(0,0,0,0.12)`,
+          ? `0 6px 22px rgba(0,0,0,0.22), 0 2px 6px rgba(0,0,0,0.10)`
+          : `0 2px 8px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06)`,
       } : isActive ? {
         boxShadow: [
           `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
@@ -354,7 +354,7 @@ function CornerDice({
         boxShadow: `0 2px 12px rgba(0,0,0,0.55), 0 0 10px ${col}40`,
       }}
       transition={isClassic
-        ? { duration: 0.25 }
+        ? { duration: 0.3 }
         : { duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
       style={{
         width: '100%', height: '100%',
@@ -364,12 +364,14 @@ function CornerDice({
         borderRadius: 12,
         cursor: canTap ? 'pointer' : 'default',
         background: isClassic
-          ? `linear-gradient(160deg, #FFFFFF 20%, ${clSolid}18 100%)`
+          ? (isActive
+              ? `linear-gradient(160deg, #FFFFFF 10%, ${clLight} 100%)`
+              : `linear-gradient(160deg, #FAFAFA 0%, #F3F3F3 100%)`)
           : (isActive
             ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
             : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`),
         border: isClassic
-          ? `${isActive ? 2.5 : 1.5}px solid ${isActive ? clSolid : clSolid + '70'}`
+          ? `${isActive ? 3 : 2}px solid ${isActive ? clSolid : clSolid + '90'}`
           : `1.5px solid ${isActive ? neon : col + '55'}`,
         backdropFilter: isClassic ? 'none' : 'blur(10px)',
         WebkitBackdropFilter: isClassic ? 'none' : 'blur(10px)',
@@ -390,12 +392,14 @@ function CornerDice({
           transition={{ duration: 1.4, repeat: Infinity }}
         />
       )}
+      {/* Classic active — solid top accent stripe in player colour */}
       {isActive && isClassic && (
         <div style={{
           position: 'absolute',
-          top: 0, left: 0, right: 0, height: 2,
-          background: `linear-gradient(90deg, transparent, ${clSolid}, transparent)`,
-          pointerEvents: 'none', opacity: 0.55,
+          top: 0, left: 0, right: 0, height: 3,
+          background: clSolid,
+          borderRadius: '12px 12px 0 0',
+          pointerEvents: 'none',
         }}/>
       )}
 
