@@ -104,6 +104,8 @@ function getPieceXY(piece: E.Piece, all: E.Piece[]): [number, number] {
     (a, b) => a.player * 4 + a.index - (b.player * 4 + b.index)
   );
   const rank = stack.indexOf(piece);
+  // ±0.18 keeps every pawn visually within its cell (max extent: cx ± 0.505,
+  // negligibly over the 0.5 half-cell limit). Larger offsets clip on edge cells.
   const offsets: [number,number][] = [[-0.18,-0.18],[0.18,-0.18],[-0.18,0.18],[0.18,0.18]];
   const [dx, dy] = offsets[rank % 4] || [0, 0];
   return [cx + dx, cy + dy];
@@ -756,7 +758,7 @@ function PawnToken({
     <motion.g
       animate={baseCtrl}
       initial={{ x: finalX, y: finalY }}
-      onClick={() => isMovable && !isHopping && onPieceClick()}
+      onClick={() => !isHopping && onPieceClick()}
       style={{ cursor: isMovable && !isHopping ? 'pointer' : 'default', willChange: 'transform' }}>
 
       {/* Ground shadow — anchored to base elevation, NOT lifted by arc */}
@@ -1795,9 +1797,36 @@ export function GameBoardScreen({ config, lang, onBack }: Props) {
   }, []); // stable — reads game/isAnimating via refs
 
   // ── Piece click ───────────────────────────────────────────────────────────
+  // Non-movable pawns no longer swallow the tap — their onClick now calls here
+  // too. When the tapped piece isn't movable, we look up its grid cell and
+  // redirect to the first movable pawn on that same cell (current player's
+  // piece stacked with opponents). If none, the tap is a no-op.
   const handlePieceClick = useCallback((pid: string) => {
     if (!isHumanTurn || isAnimatingRef.current) return;
-    triggerMove(pid);
+    const currentGame = gameRef.current;
+
+    // Fast path: piece is already movable — move it directly.
+    if (currentGame.movable.includes(pid)) {
+      triggerMove(pid);
+      return;
+    }
+
+    // Redirect: find a movable pawn that shares the same board cell.
+    if (currentGame.phase !== 'selecting' || !currentGame.movable.length) return;
+    const [ps, is] = pid.split(':').map(Number);
+    const tapped = currentGame.pieces.find(p => p.player === ps && p.index === is);
+    if (!tapped || tapped.relPos < 0 || tapped.relPos === E.FINISHED_POS) return;
+    const tappedGp = E.getGridPos(tapped.player, tapped.relPos);
+    if (!tappedGp) return;
+
+    const redirect = currentGame.movable.find(mpid => {
+      const [mp, mi] = mpid.split(':').map(Number);
+      const mpiece = currentGame.pieces.find(p => p.player === mp && p.index === mi);
+      if (!mpiece || mpiece.relPos < 0) return false;
+      const mgp = E.getGridPos(mpiece.player, mpiece.relPos);
+      return mgp && mgp[0] === tappedGp[0] && mgp[1] === tappedGp[1];
+    });
+    if (redirect) triggerMove(redirect);
   }, [isHumanTurn, triggerMove]);
 
   // ── Auto-pass when no valid moves — blocked while animation is in flight ─
