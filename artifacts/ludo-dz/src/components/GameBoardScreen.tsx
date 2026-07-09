@@ -519,9 +519,9 @@ function PlayerChip({ game, player, isAI, lang, boardStyle }: {
       transition={{ duration: 0.22 }}
       style={isClassic ? {
         background: isActive
-          ? `linear-gradient(135deg, ${clSolid} 0%, ${clBorder} 100%)`
-          : `linear-gradient(135deg, ${clSolid}22 0%, ${clSolid}0E 100%)`,
-        border: `${isActive ? 2 : 1.5}px solid ${isActive ? clSolid : clSolid + '55'}`,
+          ? `linear-gradient(150deg, ${clSolid} 0%, ${clBorder} 100%)`
+          : `linear-gradient(150deg, #FFFFFF 0%, #F4F4F4 100%)`,
+        border: `${isActive ? 2 : 1.5}px solid ${isActive ? clSolid : clSolid + 'AA'}`,
         borderRadius: 12, padding: '5px 8px', minWidth: 52,
         position: 'relative', overflow: 'hidden', flexShrink: 0,
       } : {
@@ -2095,7 +2095,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
         <div className="flex-1 flex gap-1.5 overflow-x-auto min-w-0" style={{ scrollbarWidth: 'none' }}>
           {game.playerSlots.map((slot) => (
             <PlayerChip key={slot} game={game} player={slot}
-              isAI={isComputer && slot !== 0} lang={lang}/>
+              isAI={isComputer && slot !== 0} lang={lang} boardStyle={boardStyle}/>
           ))}
         </div>
 
@@ -2178,16 +2178,16 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           {/* ── Corner dice panels — outside the board, adjacent to each corner ── */}
           {/* Red   → top-left    (player 0) */}
           <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
-            player={0} anchor="tl" isAI={false}/>
+            player={0} anchor="tl" isAI={false} boardStyle={boardStyle}/>
           {/* Blue  → top-right   (player 1) */}
           <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
-            player={1} anchor="tr" isAI={isComputer}/>
+            player={1} anchor="tr" isAI={isComputer} boardStyle={boardStyle}/>
           {/* Yellow → bottom-right (player 2) */}
           <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
-            player={2} anchor="br" isAI={isComputer}/>
+            player={2} anchor="br" isAI={isComputer} boardStyle={boardStyle}/>
           {/* Green  → bottom-left  (player 3) */}
           <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
-            player={3} anchor="bl" isAI={isComputer}/>
+            player={3} anchor="bl" isAI={isComputer} boardStyle={boardStyle}/>
         </motion.div>
       </div>
 
