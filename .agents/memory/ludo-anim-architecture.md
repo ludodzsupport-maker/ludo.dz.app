@@ -28,6 +28,14 @@ description: How pawn movement animation is decoupled from game state resolution
 - `PawnToken` receives `startX/startY` (from `getPieceXY` — includes stacking offsets).
 - The hop loop tracks `prevX/prevY`; if only X changes, only `x` is in `moveTarget` (prevents Framer Motion from touching Y). If both change (corner), both are included — the pawn hops diagonally in one step.
 
+# PLAYER_STARTS — Home Stretch Entry Fix
+
+**Rule:** `PLAYER_STARTS = [51, 12, 25, 38]` (NOT the intuitive [0,13,26,39]).
+
+**Why:** The four ★ star tiles in MAIN_PATH (abs 50=[7,0], 11=[0,7], 24=[7,14], 37=[14,7]) are axis-aligned to HOME_COLS[p][0] for each player. For relPos 51 to land on the star (clean straight entry), PLAYER_STARTS must be shifted back by 1. With the old [0,13,26,39], relPos 51 landed one cell PAST the star, causing the pawn to overshoot the home entry and jump back diagonally to relPos 52.
+
+**How to apply:** `PLAYER_STARTS = [51, 12, 25, 38]` and `SAFE_SET = new Set([8, 12, 21, 25, 34, 38, 47, 51])` (new starts replace old starts; mid-path safes 8,21,34,47 unchanged).
+
 # State Ownership
 
 - `pieceAnims: Record<string, PieceAnim>` — owned by `GameBoardScreen`, passed as prop to `BoardSVG`
