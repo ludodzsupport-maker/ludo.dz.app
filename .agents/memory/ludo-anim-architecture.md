@@ -19,14 +19,14 @@ description: How pawn movement animation is decoupled from game state resolution
 
 # Axis-Diff Hop Loop (Corner Drift Fix)
 
-**Rule:** Each hop step should only animate the axis (X or Y) that actually changes.
+**Rule:** Each hop step only includes the axis properties that actually change in `moveTarget`. For the 4 inner-corner hops both axes change (diagonal), which is intentional — one smooth diagonal hop per corner turn.
 
-**Why:** Animating both X and Y even when only one changes can cause Framer Motion to interpolate diagonally due to easing curves. At corners, this produces drift off the grid path.
+**Why:** The 4 inner corners of the MAIN_PATH (e.g. Red relPos 4→5: [6,5]→[5,6]) are genuinely diagonal in grid space — both row and col change simultaneously. No pivot waypoints should be inserted between them; doing so adds a ghost cell not on the track, creating a visible extra step.
 
 **How to apply:**
-- `PawnToken` receives `startX/startY` (from `getPieceXY(piece, currentGame.pieces)` — includes stacking offsets).
-- The hop loop tracks `prevX/prevY` and builds `moveTarget` with only the changed axis property.
-- `baseCtrl.start(moveTarget)` — Framer Motion only animates the properties present in the object.
+- `buildHopPath` returns raw MAIN_PATH positions only — one step per die pip, no inserted waypoints.
+- `PawnToken` receives `startX/startY` (from `getPieceXY` — includes stacking offsets).
+- The hop loop tracks `prevX/prevY`; if only X changes, only `x` is in `moveTarget` (prevents Framer Motion from touching Y). If both change (corner), both are included — the pawn hops diagonally in one step.
 
 # State Ownership
 

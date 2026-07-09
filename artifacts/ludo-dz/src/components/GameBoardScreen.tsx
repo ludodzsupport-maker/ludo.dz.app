@@ -527,73 +527,33 @@ const SQUASH_MS = 46;   // ms — fits within INTER_MS, plays during the pause g
 // ── Capture: defeat arc (captured piece flies home) ──────────────────────────
 const DEFEAT_ARC_H = 3.20; // SVG units — dramatic high parabolic arc
 
-// ─── Corner pivot map — the 4 diagonal transitions on the outer Ludo track ───
-// Standard Ludo board has exactly 4 corners where consecutive path cells change
-// BOTH row and col simultaneously, causing a pawn to slide diagonally instead
-// of turning a crisp 90°. We insert a pivot waypoint so the pawn completes the
-// axis it was already travelling before turning.
-//
-//  Key format: "fromX,fromY-toX,toY"  (SVG centre-of-cell coords)
-//  Value: the pivot waypoint to insert between from→to
-//
-//  Track 4→5   [6,5]→[5,6]  Red   corner (→ then ↑)  pivot at [6,6]
-//  Track 17→18 [5,8]→[6,9]  Blue  corner (↓ then →)  pivot at [6,8]
-//  Track 30→31 [8,9]→[9,8]  Yellow corner (← then ↓) pivot at [8,8]
-//  Track 43→44 [9,6]→[8,5]  Green corner (↑ then ←)  pivot at [8,6]
-const CORNER_PIVOTS = new Map<string, HopStep>([
-  ['5.5,6.5-6.5,5.5', { x: 6.5, y: 6.5 }],
-  ['8.5,5.5-9.5,6.5', { x: 8.5, y: 6.5 }],
-  ['9.5,8.5-8.5,9.5', { x: 8.5, y: 8.5 }],
-  ['6.5,9.5-5.5,8.5', { x: 6.5, y: 8.5 }],
-]);
-
-// Build a cell-by-cell SVG hop path for a piece moving from pFrom → pTo,
-// inserting corner pivot waypoints so X and Y transitions never conflict.
+// Build a cell-by-cell SVG hop path for a piece moving from pFrom → pTo.
+// Each entry in the returned array is the SVG centre of a MAIN_PATH cell —
+// exactly one entry per die pip, no inserted waypoints. The 4 inner-corner
+// transitions (e.g. Red relPos 4→5: [6,5]→[5,6]) move both axes in one hop;
+// PawnToken's axis-diff loop handles them naturally without adding ghost cells.
 function buildHopPath(
   player: number,
   index: number,
   pFrom: number,
   pTo: number,
 ): HopStep[] {
-  const raw: HopStep[] = [];
+  const steps: HopStep[] = [];
 
   if (pFrom === -1) {
-    // Exiting home base: single hop to track entry cell
+    // Exiting home base: single hop to track entry cell (relPos 0)
     const gp = E.getGridPos(player, 0);
-    if (gp) raw.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
+    if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
   } else {
     const trackEnd = pTo === E.FINISHED_POS ? E.FINISHED_POS - 1 : pTo;
     for (let r = pFrom + 1; r <= trackEnd; r++) {
       const gp = E.getGridPos(player, r);
-      if (gp) raw.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
+      if (gp) steps.push({ x: gp[1] + 0.5, y: gp[0] + 0.5 });
     }
-    if (pTo === E.FINISHED_POS) raw.push({ x: 7.5, y: 7.5 });
+    if (pTo === E.FINISHED_POS) steps.push({ x: 7.5, y: 7.5 });
   }
 
-  if (raw.length === 0) return raw;
-
-  // Starting SVG position of the piece before this move
-  let prevX: number, prevY: number;
-  if (pFrom === -1) {
-    const hb = E.HOME_BASES[player][index];
-    prevX = hb[1] + 0.5; prevY = hb[0] + 0.5;
-  } else {
-    const gp = E.getGridPos(player, pFrom);
-    prevX = gp ? gp[1] + 0.5 : raw[0].x;
-    prevY = gp ? gp[0] + 0.5 : raw[0].y;
-  }
-
-  // Scan each step for a known diagonal corner; if found, prepend the pivot
-  const smoothed: HopStep[] = [];
-  for (const step of raw) {
-    const key = `${prevX},${prevY}-${step.x},${step.y}`;
-    const pivot = CORNER_PIVOTS.get(key);
-    if (pivot) smoothed.push(pivot);
-    smoothed.push(step);
-    prevX = step.x; prevY = step.y;
-  }
-
-  return smoothed;
+  return steps;
 }
 
 // ─── PawnToken ────────────────────────────────────────────────────────────────
