@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import { GamePiece } from "./GamePiece";
 import { GameConfigOverlay, type SelectedMode, type GameConfig } from "./GameConfigOverlay";
 
@@ -40,8 +40,12 @@ const TRANSLATIONS = {
     passnplay:        "Tour par Tour",
     passnplaySub:     "Même appareil, plusieurs joueurs",
     passnplayPlayers: "2–4 joueurs",
-    passnplayTag:     "LOCAL",
-    wip:              "En développement",
+    passnplayTag:          "LOCAL",
+    wip:                   "En développement",
+    comingSoonTitle:       "Bientôt disponible",
+    comingSoonOnlineSub:   "Le mode En Ligne vous permettra d'affronter des joueurs du monde entier en temps réel. Restez connectés !",
+    comingSoonFriendsSub:  "Le mode Amis vous permettra d'inviter vos proches et de jouer ensemble. Bientôt disponible !",
+    comingSoonClose:       "Compris",
   },
   ar: {
     screenTitle: "وضع اللعب",
@@ -71,8 +75,12 @@ const TRANSLATIONS = {
     passnplay:        "تمرير واللعب",
     passnplaySub:     "نفس الجهاز، عدة لاعبين",
     passnplayPlayers: "٢–٤ لاعبين",
-    passnplayTag:     "محلي",
-    wip:              "قيد التطوير",
+    passnplayTag:          "محلي",
+    wip:                   "قيد التطوير",
+    comingSoonTitle:       "قريباً",
+    comingSoonOnlineSub:   "سيتيح لك وضع أون لاين مواجهة لاعبين من جميع أنحاء العالم في الوقت الحقيقي. ترقّبوا!",
+    comingSoonFriendsSub:  "سيتيح لك وضع الأصدقاء دعوة أصدقائك واللعب معهم معاً. قريباً!",
+    comingSoonClose:       "حسناً",
   },
 } as const;
 
@@ -626,6 +634,162 @@ function GridCard({ mode, t, onClick }: {
   );
 }
 
+// ─── Coming Soon Popup ────────────────────────────────────────────────────────
+function ComingSoonPopup({
+  modeId, t, onClose,
+}: {
+  modeId: string;
+  t: typeof TRANSLATIONS[keyof typeof TRANSLATIONS];
+  onClose: () => void;
+}) {
+  const mode = MODES.find(m => m.id === modeId)!;
+  const isOnline = modeId === "online";
+
+  return (
+    <motion.div
+      className="absolute inset-0 z-50 flex items-center justify-center px-5"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      onClick={onClose}
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0"
+        style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(5px)" }}
+      />
+
+      {/* Card */}
+      <motion.div
+        className="relative w-full max-w-xs rounded-3xl overflow-hidden"
+        initial={{ scale: 0.88, y: 28, opacity: 0 }}
+        animate={{ scale: 1,    y:  0, opacity: 1 }}
+        exit={{    scale: 0.88, y: 28, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 26 }}
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: mode.cardBg,
+          boxShadow: `0 24px 64px rgba(0,0,0,0.72), 0 0 0 1px ${mode.neon}40`,
+        }}
+      >
+        {/* Top accent stripe */}
+        <div
+          className="absolute top-0 left-0 right-0 h-[3px]"
+          style={{ background: `linear-gradient(90deg, transparent, ${mode.neon}, transparent)` }}
+        />
+
+        {/* Corner glow */}
+        <div
+          className="absolute top-0 left-0 w-48 h-48 rounded-full pointer-events-none"
+          style={{ background: `radial-gradient(circle at top left, ${mode.neon}16, transparent 65%)` }}
+        />
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center"
+          style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}
+          aria-label="close"
+        >
+          <X className="w-4 h-4 text-white/50" />
+        </button>
+
+        {/* Content */}
+        <div className="relative z-10 flex flex-col items-center px-6 pt-8 pb-7 gap-4">
+
+          {/* Themed icon */}
+          <motion.div
+            className="w-[84px] h-[84px] rounded-2xl flex items-center justify-center"
+            style={{
+              background: `radial-gradient(circle, ${mode.neon}18, transparent 75%)`,
+              border: `1px solid ${mode.neon}30`,
+            }}
+            animate={{
+              boxShadow: [
+                `0 0 22px ${mode.neon}35`,
+                `0 0 44px ${mode.neon}58`,
+                `0 0 22px ${mode.neon}35`,
+              ],
+            }}
+            transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <div className="w-[58px] h-[58px]">
+              {isOnline ? <OnlineIcon neon={mode.neon} /> : <FriendsIcon neon={mode.neon} />}
+            </div>
+          </motion.div>
+
+          {/* WIP pill */}
+          <div
+            className="px-3 py-1 rounded-full font-heading font-bold uppercase"
+            style={{
+              fontSize: "9px",
+              letterSpacing: "0.18em",
+              background: `${mode.neon}18`,
+              color: mode.neon,
+              border: `1px solid ${mode.neon}38`,
+            }}
+          >
+            {t.wip}
+          </div>
+
+          {/* Title */}
+          <h2
+            className="font-heading font-bold text-white text-center leading-none"
+            style={{
+              fontSize: "clamp(22px, 6vw, 26px)",
+              letterSpacing: "0.08em",
+              textShadow: `0 0 24px ${mode.neon}55`,
+            }}
+          >
+            {t.comingSoonTitle}
+          </h2>
+
+          {/* Neon rule */}
+          <div className="flex items-center gap-2 w-40">
+            <div className="h-px flex-1"
+              style={{ background: `linear-gradient(90deg, transparent, ${mode.neon}60)` }}/>
+            <motion.div
+              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+              style={{ background: mode.neon }}
+              animate={{ boxShadow: [`0 0 5px ${mode.neon}`, `0 0 12px ${mode.neon}`, `0 0 5px ${mode.neon}`] }}
+              transition={{ duration: 1.8, repeat: Infinity }}
+            />
+            <div className="h-px flex-1"
+              style={{ background: `linear-gradient(270deg, transparent, ${mode.neon}60)` }}/>
+          </div>
+
+          {/* Subtitle */}
+          <p
+            className="text-white/55 font-sans text-center leading-relaxed"
+            style={{ fontSize: "12px" }}
+          >
+            {isOnline ? t.comingSoonOnlineSub : t.comingSoonFriendsSub}
+          </p>
+
+          {/* Dismiss button */}
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={onClose}
+            className="w-full rounded-xl py-3 font-heading font-bold mt-1"
+            style={{
+              background: `linear-gradient(135deg, ${mode.neon}28, ${mode.neon}14)`,
+              border: `1px solid ${mode.neon}44`,
+              color: mode.neon,
+              letterSpacing: "0.10em",
+              fontSize: "13px",
+              boxShadow: `0 0 18px ${mode.neon}20`,
+            }}
+          >
+            {t.comingSoonClose}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export function GameModeScreen({ lang, onBack, onStart }: GameModeScreenProps) {
   const t = TRANSLATIONS[lang];
@@ -635,10 +799,15 @@ export function GameModeScreen({ lang, onBack, onStart }: GameModeScreenProps) {
   const grid     = MODES.filter(m => !m.featured);
 
   const [selectedMode, setSelectedMode] = useState<SelectedMode | null>(null);
+  const [wipMode,      setWipMode]      = useState<string | null>(null);
 
   const handleModeSelect = (modeId: string) => {
     const mode = MODES.find(m => m.id === modeId);
     if (!mode) return;
+    if (mode.wip) {
+      setWipMode(modeId);
+      return;
+    }
     setSelectedMode({
       id:    mode.id,
       neon:  mode.neon,
@@ -764,7 +933,7 @@ export function GameModeScreen({ lang, onBack, onStart }: GameModeScreenProps) {
         </motion.div>
       </div>
 
-      {/* ── Game Config Overlay ── */}
+      {/* ── Game Config Overlay (non-WIP modes) ── */}
       <AnimatePresence>
         {selectedMode && (
           <GameConfigOverlay
@@ -776,6 +945,18 @@ export function GameModeScreen({ lang, onBack, onStart }: GameModeScreenProps) {
               setSelectedMode(null);
               onStart(config);
             }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Coming Soon Popup (WIP modes) ── */}
+      <AnimatePresence>
+        {wipMode && (
+          <ComingSoonPopup
+            key="coming-soon"
+            modeId={wipMode}
+            t={t}
+            onClose={() => setWipMode(null)}
           />
         )}
       </AnimatePresence>
