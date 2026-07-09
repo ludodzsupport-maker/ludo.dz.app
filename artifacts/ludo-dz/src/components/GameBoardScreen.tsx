@@ -74,6 +74,7 @@ const CL_SOLID  = ['#E8192C','#1565C0','#FFD700','#2E7D32'] as const;
 const CL_LIGHT  = ['#FFECEE','#E3EEFF','#FFFDE7','#E8F5E9'] as const;
 const CL_BORDER = ['#B71C1C','#0D47A1','#F9A825','#1B5E20'] as const;
 const CL_ARROW  = ['#8B0000','#003087','#7A5000','#004D10'] as const;
+const CL_GOLD   = '#B8863B'; // warm brass/gilt accent for premium home-base trim
 
 // Lighten (positive) or darken (negative) a hex colour by `percent` (-100..100).
 // Used to build richly-graded, per-colour gradients for the Classic dome pawns
@@ -89,6 +90,32 @@ function shadeColor(hex: string, percent: number): string {
   g = Math.max(0, Math.min(255, g));
   b = Math.max(0, Math.min(255, b));
   return `#${(0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1)}`;
+}
+
+// Evenly-spaced points walking clockwise around a rectangle's perimeter —
+// used to lay a "beaded" gilt trim line around the Classic home-base panels.
+function beadRect(x0: number, y0: number, x1: number, y1: number, step: number): [number, number][] {
+  const pts: [number, number][] = [];
+  for (let x = x0; x <= x1 + 1e-6; x += step) pts.push([x, y0]);
+  for (let y = y0 + step; y <= y1 + 1e-6; y += step) pts.push([x1, y]);
+  for (let x = x1 - step; x >= x0 - 1e-6; x -= step) pts.push([x, y1]);
+  for (let y = y1 - step; y >= y0 + step - 1e-6; y -= step) pts.push([x0, y]);
+  return pts;
+}
+
+// Point-string for an n-pointed star polygon (alternating outer/inner radius) —
+// used for the Classic home-base centre medallion / compass rosette.
+function starPoints(cx: number, cy: number, rOuter: number, rInner: number, spikes: number): string {
+  const pts: string[] = [];
+  const step = Math.PI / spikes;
+  let rot = -Math.PI / 2;
+  for (let i = 0; i < spikes; i++) {
+    pts.push(`${cx + Math.cos(rot) * rOuter},${cy + Math.sin(rot) * rOuter}`);
+    rot += step;
+    pts.push(`${cx + Math.cos(rot) * rInner},${cy + Math.sin(rot) * rInner}`);
+    rot += step;
+  }
+  return pts.join(' ');
 }
 
 // ─── Fixed resting slots for finished pawns inside each player's center triangle ──
@@ -1274,16 +1301,24 @@ function BoardSVG({
 
             {/* Classic home-base warmth & inlay gradients */}
             {/* Warm ivory/parchment panel — replaces flat white for a printed-cardstock feel */}
-            <radialGradient id="clivory" cx="42%" cy="30%" r="85%">
-              <stop offset="0%"   stopColor="#FFFCF3"/>
-              <stop offset="60%"  stopColor="#FBF2DD"/>
-              <stop offset="100%" stopColor="#EFE0BC"/>
+            <radialGradient id="clivory" cx="40%" cy="28%" r="90%">
+              <stop offset="0%"   stopColor="#FFFDF6"/>
+              <stop offset="45%"  stopColor="#FAF0D6"/>
+              <stop offset="78%"  stopColor="#F0DDA8"/>
+              <stop offset="100%" stopColor="#E2C283"/>
             </radialGradient>
-            {/* Beveled inlay edge — cream catch-light to warm shadow, like inlaid wood trim */}
-            <linearGradient id="clbevel" x1="15%" y1="10%" x2="85%" y2="90%">
-              <stop offset="0%"   stopColor="#FFFEF6"/>
-              <stop offset="55%"  stopColor="#E4CE9B"/>
-              <stop offset="100%" stopColor="#B08D53"/>
+            {/* Beveled gilt inlay edge — bright catch-light to deep brass shadow */}
+            <linearGradient id="clbevel" x1="12%" y1="8%" x2="88%" y2="92%">
+              <stop offset="0%"   stopColor="#FFFAEA"/>
+              <stop offset="45%"  stopColor="#E9C878"/>
+              <stop offset="75%"  stopColor="#B8863B"/>
+              <stop offset="100%" stopColor="#7A5423"/>
+            </linearGradient>
+            {/* Polished brass ring used for the pawn-socket collars and medallion rim */}
+            <linearGradient id="clbrass" x1="20%" y1="10%" x2="80%" y2="95%">
+              <stop offset="0%"   stopColor="#FCEBB6"/>
+              <stop offset="50%"  stopColor="#C9A24B"/>
+              <stop offset="100%" stopColor="#8C6423"/>
             </linearGradient>
             {/* Recessed pawn-socket gradients — dark rim / lit floor, true inset-shadow read */}
             {CL_SOLID.map((c, i) => (
@@ -1321,73 +1356,100 @@ function BoardSVG({
         if (isClassic) {
           const solid  = CL_SOLID[player as 0|1|2|3];
           const border = CL_BORDER[player as 0|1|2|3];
-          const mainOp = exists ? (isCurrent ? 0.92 : 0.78) : 0.22;
+          const mainOp = exists ? (isCurrent ? 0.94 : 0.85) : 0.24;
+          const fade   = exists ? 1 : 0.30;
+          const beads  = beadRect(zc+0.20, zr+0.20, zc+5.80, zr+5.80, 0.62);
           return (
             <g key={`hz-${player}`}>
-              {/* Solid coloured background */}
+              {/* Solid coloured background — the bold outer "frame" of the tray */}
               <rect x={zc} y={zr} width="6" height="6" fill={solid} fillOpacity={mainOp}/>
-              {/* Wood-inlay trim — thin warm line beneath the colour edge, printed-board cue */}
-              <rect x={zc+0.09} y={zr+0.09} width="5.82" height="5.82" rx="0.10"
-                fill="none" stroke="#6B4423" strokeWidth="0.028"
-                strokeOpacity={exists ? 0.32 : 0.08}/>
-              {/* Inner ivory/parchment panel — warm, rich, not flat white */}
-              <rect x={zc+0.32} y={zr+0.32} width="5.36" height="5.36" rx="0.22"
-                fill="url(#clivory)" fillOpacity={exists ? 0.98 : 0.65}/>
-              {/* Glossy sheen */}
-              <rect x={zc+0.32} y={zr+0.32} width="5.36" height="1.30" rx="0.22"
-                fill="white" fillOpacity={exists ? 0.22 : 0.08}/>
+              {/* Beaded gilt trim — a row of brass studs set into the colour band,
+                  the first clearly-legible "premium hardware" cue at board scale */}
+              {beads.map(([bx,by], i) => (
+                <circle key={`bd-${i}`} cx={bx} cy={by} r="0.052"
+                  fill="url(#clbrass)" stroke="#5C3D14" strokeWidth="0.010"
+                  fillOpacity={0.85*fade} strokeOpacity={0.55*fade}/>
+              ))}
 
-              {/* Decorative inset frame — beveled inlay-card edge for a premium bordered feel */}
-              <rect x={zc+0.55} y={zr+0.55} width="4.9" height="4.9" rx="0.16"
-                fill="none" stroke="url(#clbevel)" strokeWidth="0.032"
-                strokeOpacity={exists ? 0.55 : 0.12}/>
-              <rect x={zc+0.55} y={zr+0.55} width="4.9" height="4.9" rx="0.16"
-                fill="none" stroke={border} strokeWidth="0.012"
-                strokeOpacity={exists ? 0.28 : 0.06}/>
-              {/* Inset frame corner accents */}
-              {([[zc+0.55,zr+0.55],[zc+5.45,zr+0.55],[zc+5.45,zr+5.45],[zc+0.55,zr+5.45]] as [number,number][])
+              {/* Inner ivory/parchment panel — warm, rich, not flat white */}
+              <rect x={zc+0.40} y={zr+0.40} width="5.20" height="5.20" rx="0.22"
+                fill="url(#clivory)" fillOpacity={exists ? 0.99 : 0.68}/>
+              {/* Soft drop shadow under the panel's top edge, reads as a raised tray */}
+              <rect x={zc+0.40} y={zr+0.40} width="5.20" height="0.16" rx="0.06"
+                fill="#000000" fillOpacity={0.10*fade}/>
+              {/* Glossy sheen across the upper third */}
+              <rect x={zc+0.40} y={zr+0.40} width="5.20" height="1.35" rx="0.22"
+                fill="white" fillOpacity={exists ? 0.24 : 0.08}/>
+
+              {/* Gilt double-line inset frame — a real bordered-cardstock/inlaid-wood edge */}
+              <rect x={zc+0.68} y={zr+0.68} width="4.64" height="4.64" rx="0.14"
+                fill="none" stroke="url(#clbevel)" strokeWidth="0.070"
+                strokeOpacity={0.85*fade}/>
+              <rect x={zc+0.68} y={zr+0.68} width="4.64" height="4.64" rx="0.14"
+                fill="none" stroke={solid} strokeWidth="0.020"
+                strokeOpacity={0.55*fade}/>
+              <rect x={zc+0.86} y={zr+0.86} width="4.28" height="4.28" rx="0.10"
+                fill="none" stroke={border} strokeWidth="0.014"
+                strokeOpacity={0.30*fade}/>
+
+              {/* Corner flourishes — fan of brass ticks + diamond tip, quietly ornate */}
+              {([[zc+0.68,zr+0.68],[zc+5.32,zr+0.68],[zc+5.32,zr+5.32],[zc+0.68,zr+5.32]] as [number,number][])
                 .map(([bx,by], i) => {
-                  const arm  = 0.30;
-                  const sx2  = bx < cx ? 1 : -1;
-                  const sy2  = by < cy ? 1 : -1;
+                  const sx2 = bx < cx ? 1 : -1;
+                  const sy2 = by < cy ? 1 : -1;
                   return (
-                    <polyline key={`ca-${i}`}
-                      points={`${bx+sx2*arm},${by} ${bx},${by} ${bx},${by+sy2*arm}`}
-                      fill="none" stroke={border} strokeWidth="0.045"
-                      strokeOpacity={exists ? 0.42 : 0.10} strokeLinecap="round"/>
+                    <g key={`ca-${i}`}>
+                      <polyline
+                        points={`${bx+sx2*0.34},${by} ${bx},${by} ${bx},${by+sy2*0.34}`}
+                        fill="none" stroke="url(#clbrass)" strokeWidth="0.055"
+                        strokeOpacity={0.80*fade} strokeLinecap="round"/>
+                      <path d={`M ${bx+sx2*0.20},${by} A 0.20 0.20 0 0 ${sx2*sy2>0?1:0} ${bx},${by+sy2*0.20}`}
+                        fill="none" stroke={border} strokeWidth="0.022" strokeOpacity={0.34*fade}/>
+                      <rect x={bx+sx2*0.10-0.032} y={by+sy2*0.10-0.032} width="0.064" height="0.064"
+                        fill={solid} fillOpacity={0.65*fade}
+                        transform={`rotate(45 ${bx+sx2*0.10} ${by+sy2*0.10})`}/>
+                    </g>
                   );
                 })}
 
-              {/* Guide lines linking each pawn bay to the centre mark — delicate lattice cue */}
+              {/* Lattice lines linking each pawn bay to the centre medallion —
+                  bolder brass pinstripes give the panel real structure */}
               {E.HOME_BASES[player].map(([br, bc], si) => (
                 <line key={`gl-${si}`}
                   x1={cx} y1={cy} x2={bc+0.5} y2={br+0.5}
-                  stroke={border} strokeWidth="0.016" strokeOpacity={exists ? 0.14 : 0.04}
-                  strokeDasharray="0.09 0.10"/>
+                  stroke="url(#clbrass)" strokeWidth="0.034" strokeOpacity={0.42*fade}/>
+              ))}
+              {E.HOME_BASES[player].map(([br, bc], si) => (
+                <line key={`gl2-${si}`}
+                  x1={cx} y1={cy} x2={bc+0.5} y2={br+0.5}
+                  stroke={border} strokeWidth="0.012" strokeOpacity={0.30*fade}/>
               ))}
 
-              {/* Pawn bays — clearly-defined circles with true recessed inset-shadow read */}
+              {/* Pawn bays — brass-collared wells with a true recessed inset-shadow read */}
               {E.HOME_BASES[player].map(([br, bc], si) => (
                 <g key={si}>
                   {/* Soft two-layer recess shadow — grounds the bay like a real carved well */}
-                  <circle cx={bc+0.55} cy={br+0.57} r={0.47}
-                    fill="#000000" fillOpacity={exists ? 0.08 : 0.02}/>
-                  <circle cx={bc+0.52} cy={br+0.53} r={0.44}
-                    fill="#000000" fillOpacity={exists ? 0.13 : 0.03}/>
+                  <circle cx={bc+0.56} cy={br+0.58} r={0.50}
+                    fill="#000000" fillOpacity={exists ? 0.10 : 0.03}/>
+                  <circle cx={bc+0.53} cy={br+0.54} r={0.47}
+                    fill="#000000" fillOpacity={exists ? 0.15 : 0.04}/>
+                  {/* Polished brass collar ring — the coin-slot "hardware" edge */}
+                  <circle cx={bc+0.5} cy={br+0.5} r={0.47}
+                    fill="none" stroke="url(#clbrass)" strokeWidth="0.055" strokeOpacity={0.90*fade}/>
                   {/* Dark inset rim — the recess wall, catches shadow all around */}
-                  <circle cx={bc+0.5} cy={br+0.5} r={0.43}
-                    fill="none" stroke="#000000" strokeWidth="0.030" strokeOpacity={exists ? 0.22 : 0.05}/>
                   <circle cx={bc+0.5} cy={br+0.5} r={0.42}
-                    fill={`url(#clsocket${player})`} fillOpacity={exists ? 0.94 : 0.16}
-                    stroke={border} strokeWidth="0.036" strokeOpacity={exists ? 0.85 : 0.18}/>
+                    fill="none" stroke="#000000" strokeWidth="0.032" strokeOpacity={exists ? 0.26 : 0.06}/>
+                  <circle cx={bc+0.5} cy={br+0.5} r={0.41}
+                    fill={`url(#clsocket${player})`} fillOpacity={exists ? 0.96 : 0.18}
+                    stroke={border} strokeWidth="0.030" strokeOpacity={exists ? 0.85 : 0.18}/>
                   {/* Glossy highlight on pawn bay */}
                   <circle cx={bc+0.42} cy={br+0.40} r={0.15}
-                    fill="white" fillOpacity={exists ? 0.42 : 0.08}/>
+                    fill="white" fillOpacity={exists ? 0.44 : 0.08}/>
                   <circle cx={bc+0.36} cy={br+0.34} r={0.075}
-                    fill="white" fillOpacity={exists ? 0.72 : 0.12}/>
+                    fill="white" fillOpacity={exists ? 0.74 : 0.12}/>
                   {/* Lit lip along the upper-left rim — the recess "catching" light */}
                   <path d={`M ${bc+0.5-0.42*0.71},${br+0.5-0.42*0.71} A 0.42 0.42 0 0 1 ${bc+0.92},${br+0.5}`}
-                    fill="none" stroke="white" strokeWidth="0.020" strokeOpacity={exists ? 0.30 : 0.06}/>
+                    fill="none" stroke="white" strokeWidth="0.022" strokeOpacity={exists ? 0.32 : 0.06}/>
                   {homeImpact?.player === player && homeImpact?.index === si && (
                     <motion.circle
                       key={homeImpact.id}
@@ -1401,30 +1463,34 @@ function BoardSVG({
                 </g>
               ))}
 
-              {/* Centre ornament — delicate four-petal flower medallion, replaces the plain cross */}
-              <circle cx={cx} cy={cy} r="0.30"
-                fill={solid} fillOpacity={0.16} stroke={border} strokeWidth="0.030" strokeOpacity={0.42}/>
-              <circle cx={cx} cy={cy} r="0.21"
-                fill="none" stroke={border} strokeWidth="0.014" strokeOpacity={0.32}/>
-              {/* Four petals (N/E/S/W) */}
-              <ellipse cx={cx} cy={cy-0.135} rx={0.062} ry={0.125} fill={border} fillOpacity={0.40}/>
-              <ellipse cx={cx} cy={cy+0.135} rx={0.062} ry={0.125} fill={border} fillOpacity={0.40}/>
-              <ellipse cx={cx-0.135} cy={cy} rx={0.125} ry={0.062} fill={border} fillOpacity={0.40}/>
-              <ellipse cx={cx+0.135} cy={cy} rx={0.125} ry={0.062} fill={border} fillOpacity={0.40}/>
-              {/* Four diagonal accent dots complete the ornamental star */}
+              {/* Centre ornament — a jeweled compass rosette replaces the old plain cross */}
+              <circle cx={cx} cy={cy} r="0.66" fill="none" stroke="url(#clbrass)"
+                strokeWidth="0.020" strokeOpacity={0.40*fade}/>
+              <polygon points={starPoints(cx, cy, 0.50, 0.225, 8)}
+                fill={solid} fillOpacity={0.30*fade}
+                stroke="url(#clbrass)" strokeWidth="0.028" strokeOpacity={0.75*fade}/>
+              <circle cx={cx} cy={cy} r="0.31" fill="url(#clivory)" fillOpacity={0.96*fade}
+                stroke="url(#clbrass)" strokeWidth="0.026" strokeOpacity={0.80*fade}/>
+              {/* Four petals (N/E/S/W) sitting on the ivory disc */}
+              <ellipse cx={cx} cy={cy-0.155} rx={0.070} ry={0.145} fill={solid} fillOpacity={0.62*fade}/>
+              <ellipse cx={cx} cy={cy+0.155} rx={0.070} ry={0.145} fill={solid} fillOpacity={0.62*fade}/>
+              <ellipse cx={cx-0.155} cy={cy} rx={0.145} ry={0.070} fill={solid} fillOpacity={0.62*fade}/>
+              <ellipse cx={cx+0.155} cy={cy} rx={0.145} ry={0.070} fill={solid} fillOpacity={0.62*fade}/>
+              {/* Four diagonal accent dots complete the eight-point star motif */}
               {[[1,1],[1,-1],[-1,1],[-1,-1]].map(([sx3,sy3], i) => (
-                <circle key={`dd-${i}`} cx={cx+sx3*0.145} cy={cy+sy3*0.145} r="0.028"
-                  fill={border} fillOpacity={0.35}/>
+                <circle key={`dd-${i}`} cx={cx+sx3*0.165} cy={cy+sy3*0.165} r="0.032"
+                  fill={border} fillOpacity={0.55*fade}/>
               ))}
-              {/* Centre jewel */}
-              <circle cx={cx} cy={cy} r="0.085" fill={solid} fillOpacity={0.85} stroke={border} strokeWidth="0.016" strokeOpacity={0.55}/>
-              <circle cx={cx-0.025} cy={cy-0.025} r="0.026" fill="white" fillOpacity={0.65}/>
+              {/* Centre jewel — gem-cut socket-toned dome with its own highlight */}
+              <circle cx={cx} cy={cy} r="0.115" fill={`url(#clsocket${player})`} fillOpacity={0.98*fade}
+                stroke="url(#clbrass)" strokeWidth="0.022" strokeOpacity={0.85*fade}/>
+              <circle cx={cx-0.032} cy={cy-0.032} r="0.032" fill="white" fillOpacity={0.70*fade}/>
 
               {/* Border */}
               <rect x={zc} y={zr} width="6" height="6" fill="none"
                 stroke={border}
-                strokeWidth={isCurrent ? 0.095 : 0.045}
-                strokeOpacity={isCurrent ? 0.92 : exists ? 0.62 : 0.18}/>
+                strokeWidth={isCurrent ? 0.10 : 0.05}
+                strokeOpacity={isCurrent ? 0.95 : exists ? 0.68 : 0.20}/>
             </g>
           );
         }
