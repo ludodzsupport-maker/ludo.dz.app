@@ -1,7 +1,7 @@
 // ─── Ludo Engine ─────────────────────────────────────────────────────────────
 // Pure game logic: state, moves, AI. No React/DOM dependencies.
 
-export const TRACK_SIZE    = 52;
+export const TRACK_SIZE    = 51;
 export const HOME_COL_SIZE = 6;
 export const FINISHED_POS  = TRACK_SIZE + HOME_COL_SIZE; // 58
 
@@ -33,10 +33,10 @@ export const HOME_COLS: readonly (readonly [number, number][])[] = [
 
 // ── Piece spawn positions inside each corner home zone ─────────────────────
 // Aligned to path start positions:
-//   Red    starts at MAIN_PATH[51]=[6,0]  → TOP-LEFT  zone (rows 0-5, cols 0-5)
-//   Blue   starts at MAIN_PATH[12]=[0,8]  → TOP-RIGHT zone (rows 0-5, cols 9-14)
-//   Yellow starts at MAIN_PATH[25]=[8,14] → BOT-RIGHT zone (rows 9-14,cols 9-14)
-//   Green  starts at MAIN_PATH[38]=[14,6] → BOT-LEFT  zone (rows 9-14,cols 0-5)
+//   Red    starts at MAIN_PATH[0]=[6,1]   → TOP-LEFT  zone (rows 0-5, cols 0-5)
+//   Blue   starts at MAIN_PATH[13]=[1,8]  → TOP-RIGHT zone (rows 0-5, cols 9-14)
+//   Yellow starts at MAIN_PATH[26]=[8,13] → BOT-RIGHT zone (rows 9-14,cols 9-14)
+//   Green  starts at MAIN_PATH[39]=[13,6] → BOT-LEFT  zone (rows 9-14,cols 0-5)
 // Slots ±1.5 SVG units from zone centre for perfect symmetry.
 export const HOME_BASES: readonly (readonly [number, number][])[] = [
   [[1,1],[1,4],[4,1],[4,4]],         // Red    — TOP-LEFT  (rows 0-5,  cols 0-5)
@@ -47,13 +47,14 @@ export const HOME_BASES: readonly (readonly [number, number][])[] = [
 
 // ── Player starts (absolute track index) ───────────────────────────────────
 // Each start is the absolute MAIN_PATH index a piece enters when a 6 is rolled.
-// Chosen so relPos 51 always lands on the ★ star tile axis-aligned to HOME_COLS[p][0],
-// giving a clean straight-line entry into the home stretch with no diagonal jump.
-export const PLAYER_STARTS = [51, 12, 25, 38] as const;
+// relPos 0  → colored spawn square (MAIN_PATH[start]).
+// relPos 50 → ★ star tile axis-aligned to HOME_COLS[p][0] (clean straight entry).
+// relPos 51 → piece turns into the home column (TRACK_SIZE = 51).
+export const PLAYER_STARTS = [0, 13, 26, 39] as const;
 
 // ── Safe squares (absolute track index) ───────────────────────────────────
-// Safe squares = new player-start tiles (51,12,25,38) + 4 mid-path stars (8,21,34,47)
-export const SAFE_SET = new Set([8, 12, 21, 25, 34, 38, 47, 51]);
+// Safe squares = player-start tiles (0,13,26,39) + 4 mid-path stars (11,24,37,50)
+export const SAFE_SET = new Set([0, 11, 13, 24, 26, 37, 39, 50]);
 
 // ── Visual constants ───────────────────────────────────────────────────────
 export const PLAYER_COLORS  = ['#DC143C','#1E90FF','#FFD700','#00C060'] as const;
@@ -65,7 +66,7 @@ export const PLAYER_NAMES_AR = ['أحمر','أزرق','أصفر','أخضر']    
 export interface Piece {
   player: number;
   index:  number;
-  relPos: number; // -1=home base, 0-51=track, 52-57=home col, 58=finished
+  relPos: number; // -1=home base, 0-50=track, 51-56=home col, 57=finished
 }
 
 export interface GameState {
@@ -215,7 +216,7 @@ export function aiPickMove(state: GameState): string | null {
 
     if (newRel === FINISHED_POS) score += 250;
     if (p.relPos === -1)         score += 45;
-    if (newRel >= 52)            score += 60; // in home col — valuable
+    if (newRel >= TRACK_SIZE)    score += 60; // in home col — valuable
 
     // Bonus for capture
     if (newRel >= 1 && newRel < TRACK_SIZE) {
