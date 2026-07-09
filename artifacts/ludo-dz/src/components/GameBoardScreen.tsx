@@ -75,6 +75,22 @@ const CL_LIGHT  = ['#FFECEE','#E3EEFF','#FFFDE7','#E8F5E9'] as const;
 const CL_BORDER = ['#B71C1C','#0D47A1','#F9A825','#1B5E20'] as const;
 const CL_ARROW  = ['#8B0000','#003087','#7A5000','#004D10'] as const;
 
+// Lighten (positive) or darken (negative) a hex colour by `percent` (-100..100).
+// Used to build richly-graded, per-colour gradients for the Classic dome pawns
+// and warm ornamental home-base details — premium 3D shading needs true tonal
+// steps of each player colour, not just opacity tricks.
+function shadeColor(hex: string, percent: number): string {
+  const num = parseInt(hex.slice(1), 16);
+  const amt = Math.round(2.55 * percent);
+  let r = (num >> 16) + amt;
+  let g = ((num >> 8) & 0x00ff) + amt;
+  let b = (num & 0x0000ff) + amt;
+  r = Math.max(0, Math.min(255, r));
+  g = Math.max(0, Math.min(255, g));
+  b = Math.max(0, Math.min(255, b));
+  return `#${(0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1)}`;
+}
+
 // ─── Fixed resting slots for finished pawns inside each player's center triangle ──
 // Center 3×3 spans columns/rows 6–9, apex at (7.5, 7.5). [x, y] = [col, row].
 // Red=left, Blue=top, Yellow=right, Green=bottom.
@@ -840,7 +856,8 @@ function PawnToken({
 
       {/* Ground shadow — anchored to base elevation, NOT lifted by arc */}
       <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
-        fill={isClassic ? 'rgba(25,18,10,0.30)' : 'rgba(0,0,0,0.62)'}/>
+        fill={isClassic ? 'rgba(30,20,8,0.38)' : 'rgba(0,0,0,0.62)'}
+        filter={isClassic ? 'url(#cl-pawn-shadow)' : undefined}/>
 
       {/* Inner group: parabolic Y-arc overlay — GPU-composited for buttery arcs */}
       <motion.g animate={arcCtrl} initial={{ y: 0 }} style={{ willChange: 'transform' }}>
@@ -861,31 +878,42 @@ function PawnToken({
               />
             )}
 
-            {/* Base disc — flattened pedestal foot, top-lit gradient */}
+            {/* Base disc — flattened pedestal foot, top-lit gradient for real dimension */}
             <ellipse cx={0} cy={baseCY} rx={baseRX} ry={baseRY}
               fill={`url(#clbase${player})`}
-              stroke={clBorder} strokeWidth="0.020" strokeOpacity="0.55"/>
+              stroke={clBorder} strokeWidth="0.018" strokeOpacity="0.60"/>
+            {/* Base underside shadow — grounds the pedestal against the board */}
+            <path d={`M ${baseRX},${baseCY} A ${baseRX} ${baseRY} 0 0 1 ${-baseRX},${baseCY}`}
+              fill="none" stroke="#000000" strokeOpacity="0.22" strokeWidth="0.026"/>
             {/* Base rim catch-light */}
-            <ellipse cx={0} cy={baseCY - baseRY*0.55} rx={baseRX*0.72} ry={baseRY*0.35}
-              fill="white" fillOpacity="0.20"/>
+            <ellipse cx={0} cy={baseCY - baseRY*0.55} rx={baseRX*0.70} ry={baseRY*0.32}
+              fill="white" fillOpacity="0.26"/>
 
-            {/* Dome / helmet body — glossy 3D ball, inner colour depth via radial gradient */}
+            {/* Dome / helmet body — glossy 3D ball, rich per-colour radial gradient for deep saturation */}
             <circle cx={0} cy={domeCY} r={domeR}
               fill={`url(#clpawn${player})`}
-              stroke={clBorder} strokeWidth="0.022" strokeOpacity="0.75"/>
+              stroke={clBorder} strokeWidth="0.020" strokeOpacity="0.80"/>
 
-            {/* Bottom-inside shading — gives the dome volume against the base */}
-            <ellipse cx={0} cy={domeCY + domeR*0.55} rx={domeR*0.72} ry={domeR*0.28}
-              fill="#000000" fillOpacity="0.16"/>
+            {/* Core shadow — asymmetric inner shading opposite the highlight, real 3D depth */}
+            <ellipse cx={domeR*0.30} cy={domeCY + domeR*0.46} rx={domeR*0.74} ry={domeR*0.34}
+              fill="#000000" fillOpacity="0.22"/>
+
+            {/* Subtle bottom-edge rim light — light bouncing up off the board, premium plastic cue */}
+            <path
+              d={`M ${domeR*0.966},${domeCY + domeR*0.259} A ${domeR} ${domeR} 0 0 1 ${-domeR*0.174},${domeCY + domeR*0.985}`}
+              fill="none" stroke="#FFF3D6" strokeOpacity="0.55" strokeWidth="0.018" strokeLinecap="round"/>
 
             {/* Crisp dome rim */}
             <circle cx={0} cy={domeCY} r={domeR}
-              fill="none" stroke="white" strokeWidth="0.010" strokeOpacity="0.28"/>
+              fill="none" stroke="white" strokeWidth="0.010" strokeOpacity="0.24"/>
 
-            {/* Top specular highlight — glossy plastic sheen */}
-            <ellipse cx={-0.085} cy={domeCY - 0.095} rx={0.095} ry={0.066}
-              fill="white" fillOpacity="0.70"/>
-            <circle cx={-0.115} cy={domeCY - 0.125} r="0.028" fill="white" fillOpacity="0.92"/>
+            {/* Top specular highlight — bright glossy hotspot, luxury lacquered-plastic sheen */}
+            <ellipse cx={-0.09} cy={domeCY - 0.10} rx={0.105} ry={0.072}
+              fill="white" fillOpacity="0.62"/>
+            <circle cx={-0.118} cy={domeCY - 0.132} r="0.032" fill="white" fillOpacity="0.96"/>
+            {/* Secondary sheen streak along the upper rim, glass-like curvature cue */}
+            <path d={`M ${-domeR*0.55},${domeCY - domeR*0.72} A ${domeR} ${domeR} 0 0 1 ${domeR*0.15},${domeCY - domeR*0.985}`}
+              fill="none" stroke="white" strokeOpacity="0.30" strokeWidth="0.012" strokeLinecap="round"/>
           </>
         ) : (
           <>
@@ -1215,22 +1243,58 @@ function BoardSVG({
         <pattern id="cpscan" x="0" y="0" width="15" height="0.22" patternUnits="userSpaceOnUse">
           <line x1="0" y1="0" x2="15" y2="0" stroke="white" strokeWidth="0.017" strokeOpacity="0.024"/>
         </pattern>
-        {/* ── Classic 3D dome-token gradients (Classic Board theme only) ── */}
-        {CL_SOLID.map((c, i) => (
-          <radialGradient key={i} id={`clpawn${i}`} cx="34%" cy="24%" r="85%">
-            <stop offset="0%"   stopColor="#FFFFFF" stopOpacity="0.95"/>
-            <stop offset="30%"  stopColor={c}        stopOpacity="0.96"/>
-            <stop offset="72%"  stopColor={c}/>
-            <stop offset="100%" stopColor="#000000" stopOpacity="0.32"/>
-          </radialGradient>
-        ))}
-        {CL_SOLID.map((c, i) => (
-          <linearGradient key={i} id={`clbase${i}`} x1="50%" y1="0%" x2="50%" y2="100%">
-            <stop offset="0%"   stopColor={c} stopOpacity="1"/>
-            <stop offset="55%"  stopColor={c} stopOpacity="0.86"/>
-            <stop offset="100%" stopColor="#000000" stopOpacity="0.30"/>
-          </linearGradient>
-        ))}
+        {/* ── Classic-only defs (Classic Board theme). Gated so nothing new is
+              emitted at all when the Neon theme is active. ── */}
+        {isClassic && (
+          <>
+            {/* Classic luxury dome-token gradients */}
+            {CL_SOLID.map((c, i) => (
+              <radialGradient key={i} id={`clpawn${i}`} cx="31%" cy="19%" r="95%">
+                <stop offset="0%"   stopColor="#FFFFFF" stopOpacity="1"/>
+                <stop offset="8%"   stopColor="#FFFFFF" stopOpacity="0.62"/>
+                <stop offset="23%"  stopColor={shadeColor(c, 22)} stopOpacity="1"/>
+                <stop offset="48%"  stopColor={c}/>
+                <stop offset="76%"  stopColor={shadeColor(c, -20)}/>
+                <stop offset="92%"  stopColor={shadeColor(c, -42)}/>
+                <stop offset="100%" stopColor={shadeColor(c, -58)}/>
+              </radialGradient>
+            ))}
+            {CL_SOLID.map((c, i) => (
+              <linearGradient key={i} id={`clbase${i}`} x1="26%" y1="0%" x2="70%" y2="100%">
+                <stop offset="0%"   stopColor={shadeColor(c, 24)}/>
+                <stop offset="42%"  stopColor={c}/>
+                <stop offset="78%"  stopColor={shadeColor(c, -28)}/>
+                <stop offset="100%" stopColor={shadeColor(c, -52)}/>
+              </linearGradient>
+            ))}
+            {/* Soft, realistic ground-shadow blur for the Classic pawn cast shadow */}
+            <filter id="cl-pawn-shadow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur stdDeviation="0.05"/>
+            </filter>
+
+            {/* Classic home-base warmth & inlay gradients */}
+            {/* Warm ivory/parchment panel — replaces flat white for a printed-cardstock feel */}
+            <radialGradient id="clivory" cx="42%" cy="30%" r="85%">
+              <stop offset="0%"   stopColor="#FFFCF3"/>
+              <stop offset="60%"  stopColor="#FBF2DD"/>
+              <stop offset="100%" stopColor="#EFE0BC"/>
+            </radialGradient>
+            {/* Beveled inlay edge — cream catch-light to warm shadow, like inlaid wood trim */}
+            <linearGradient id="clbevel" x1="15%" y1="10%" x2="85%" y2="90%">
+              <stop offset="0%"   stopColor="#FFFEF6"/>
+              <stop offset="55%"  stopColor="#E4CE9B"/>
+              <stop offset="100%" stopColor="#B08D53"/>
+            </linearGradient>
+            {/* Recessed pawn-socket gradients — dark rim / lit floor, true inset-shadow read */}
+            {CL_SOLID.map((c, i) => (
+              <radialGradient key={i} id={`clsocket${i}`} cx="46%" cy="40%" r="62%">
+                <stop offset="0%"   stopColor={shadeColor(c, 14)}/>
+                <stop offset="60%"  stopColor={c}/>
+                <stop offset="100%" stopColor={shadeColor(c, -34)}/>
+              </radialGradient>
+            ))}
+          </>
+        )}
       </defs>
 
       {/* ── Background ── */}
@@ -1262,17 +1326,24 @@ function BoardSVG({
             <g key={`hz-${player}`}>
               {/* Solid coloured background */}
               <rect x={zc} y={zr} width="6" height="6" fill={solid} fillOpacity={mainOp}/>
-              {/* Inner white panel — clean Ludo King style */}
+              {/* Wood-inlay trim — thin warm line beneath the colour edge, printed-board cue */}
+              <rect x={zc+0.09} y={zr+0.09} width="5.82" height="5.82" rx="0.10"
+                fill="none" stroke="#6B4423" strokeWidth="0.028"
+                strokeOpacity={exists ? 0.32 : 0.08}/>
+              {/* Inner ivory/parchment panel — warm, rich, not flat white */}
               <rect x={zc+0.32} y={zr+0.32} width="5.36" height="5.36" rx="0.22"
-                fill="white" fillOpacity={exists ? 0.97 : 0.65}/>
+                fill="url(#clivory)" fillOpacity={exists ? 0.98 : 0.65}/>
               {/* Glossy sheen */}
               <rect x={zc+0.32} y={zr+0.32} width="5.36" height="1.30" rx="0.22"
-                fill="white" fillOpacity={exists ? 0.28 : 0.10}/>
+                fill="white" fillOpacity={exists ? 0.22 : 0.08}/>
 
-              {/* Decorative inset frame — premium double-border detail */}
+              {/* Decorative inset frame — beveled inlay-card edge for a premium bordered feel */}
               <rect x={zc+0.55} y={zr+0.55} width="4.9" height="4.9" rx="0.16"
-                fill="none" stroke={border} strokeWidth="0.026"
-                strokeOpacity={exists ? 0.30 : 0.08}/>
+                fill="none" stroke="url(#clbevel)" strokeWidth="0.032"
+                strokeOpacity={exists ? 0.55 : 0.12}/>
+              <rect x={zc+0.55} y={zr+0.55} width="4.9" height="4.9" rx="0.16"
+                fill="none" stroke={border} strokeWidth="0.012"
+                strokeOpacity={exists ? 0.28 : 0.06}/>
               {/* Inset frame corner accents */}
               {([[zc+0.55,zr+0.55],[zc+5.45,zr+0.55],[zc+5.45,zr+5.45],[zc+0.55,zr+5.45]] as [number,number][])
                 .map(([bx,by], i) => {
@@ -1287,31 +1358,36 @@ function BoardSVG({
                   );
                 })}
 
-              {/* Guide lines linking each pawn bay to the centre mark — classic "flower" motif */}
+              {/* Guide lines linking each pawn bay to the centre mark — delicate lattice cue */}
               {E.HOME_BASES[player].map(([br, bc], si) => (
                 <line key={`gl-${si}`}
                   x1={cx} y1={cy} x2={bc+0.5} y2={br+0.5}
-                  stroke={border} strokeWidth="0.018" strokeOpacity={exists ? 0.16 : 0.05}
-                  strokeDasharray="0.10 0.09"/>
+                  stroke={border} strokeWidth="0.016" strokeOpacity={exists ? 0.14 : 0.04}
+                  strokeDasharray="0.09 0.10"/>
               ))}
 
-              {/* Pawn bays — classic circles, recessed for a socketed, dimensional feel */}
+              {/* Pawn bays — clearly-defined circles with true recessed inset-shadow read */}
               {E.HOME_BASES[player].map(([br, bc], si) => (
                 <g key={si}>
-                  {/* Recessed socket shadow — grounds the bay like a real pawn well */}
-                  <circle cx={bc+0.53} cy={br+0.54} r={0.44}
-                    fill="#000000" fillOpacity={exists ? 0.12 : 0.03}/>
+                  {/* Soft two-layer recess shadow — grounds the bay like a real carved well */}
+                  <circle cx={bc+0.55} cy={br+0.57} r={0.47}
+                    fill="#000000" fillOpacity={exists ? 0.08 : 0.02}/>
+                  <circle cx={bc+0.52} cy={br+0.53} r={0.44}
+                    fill="#000000" fillOpacity={exists ? 0.13 : 0.03}/>
+                  {/* Dark inset rim — the recess wall, catches shadow all around */}
+                  <circle cx={bc+0.5} cy={br+0.5} r={0.43}
+                    fill="none" stroke="#000000" strokeWidth="0.030" strokeOpacity={exists ? 0.22 : 0.05}/>
                   <circle cx={bc+0.5} cy={br+0.5} r={0.42}
-                    fill={solid} fillOpacity={exists ? 0.88 : 0.15}
-                    stroke={border} strokeWidth="0.048" strokeOpacity={exists ? 0.90 : 0.20}/>
+                    fill={`url(#clsocket${player})`} fillOpacity={exists ? 0.94 : 0.16}
+                    stroke={border} strokeWidth="0.036" strokeOpacity={exists ? 0.85 : 0.18}/>
                   {/* Glossy highlight on pawn bay */}
-                  <circle cx={bc+0.5} cy={br+0.5} r={0.27}
-                    fill="white" fillOpacity={exists ? 0.52 : 0.10}/>
-                  <circle cx={bc+0.36} cy={br+0.36} r={0.10}
-                    fill="white" fillOpacity={exists ? 0.80 : 0.15}/>
-                  {/* Socket rim accent ring for dimensional depth */}
-                  <circle cx={bc+0.5} cy={br+0.5} r={0.42}
-                    fill="none" stroke="white" strokeWidth="0.020" strokeOpacity={exists ? 0.22 : 0.05}/>
+                  <circle cx={bc+0.42} cy={br+0.40} r={0.15}
+                    fill="white" fillOpacity={exists ? 0.42 : 0.08}/>
+                  <circle cx={bc+0.36} cy={br+0.34} r={0.075}
+                    fill="white" fillOpacity={exists ? 0.72 : 0.12}/>
+                  {/* Lit lip along the upper-left rim — the recess "catching" light */}
+                  <path d={`M ${bc+0.5-0.42*0.71},${br+0.5-0.42*0.71} A 0.42 0.42 0 0 1 ${bc+0.92},${br+0.5}`}
+                    fill="none" stroke="white" strokeWidth="0.020" strokeOpacity={exists ? 0.30 : 0.06}/>
                   {homeImpact?.player === player && homeImpact?.index === si && (
                     <motion.circle
                       key={homeImpact.id}
@@ -1324,13 +1400,26 @@ function BoardSVG({
                   )}
                 </g>
               ))}
-              {/* Center mark — inner circle + cross detail */}
-              <circle cx={cx} cy={cy} r="0.28"
-                fill={solid} fillOpacity={0.28} stroke={border} strokeWidth="0.036" strokeOpacity={0.45}/>
-              <line x1={cx-0.15} y1={cy} x2={cx+0.15} y2={cy}
-                stroke={border} strokeWidth="0.022" strokeOpacity={0.50}/>
-              <line x1={cx} y1={cy-0.15} x2={cx} y2={cy+0.15}
-                stroke={border} strokeWidth="0.022" strokeOpacity={0.50}/>
+
+              {/* Centre ornament — delicate four-petal flower medallion, replaces the plain cross */}
+              <circle cx={cx} cy={cy} r="0.30"
+                fill={solid} fillOpacity={0.16} stroke={border} strokeWidth="0.030" strokeOpacity={0.42}/>
+              <circle cx={cx} cy={cy} r="0.21"
+                fill="none" stroke={border} strokeWidth="0.014" strokeOpacity={0.32}/>
+              {/* Four petals (N/E/S/W) */}
+              <ellipse cx={cx} cy={cy-0.135} rx={0.062} ry={0.125} fill={border} fillOpacity={0.40}/>
+              <ellipse cx={cx} cy={cy+0.135} rx={0.062} ry={0.125} fill={border} fillOpacity={0.40}/>
+              <ellipse cx={cx-0.135} cy={cy} rx={0.125} ry={0.062} fill={border} fillOpacity={0.40}/>
+              <ellipse cx={cx+0.135} cy={cy} rx={0.125} ry={0.062} fill={border} fillOpacity={0.40}/>
+              {/* Four diagonal accent dots complete the ornamental star */}
+              {[[1,1],[1,-1],[-1,1],[-1,-1]].map(([sx3,sy3], i) => (
+                <circle key={`dd-${i}`} cx={cx+sx3*0.145} cy={cy+sy3*0.145} r="0.028"
+                  fill={border} fillOpacity={0.35}/>
+              ))}
+              {/* Centre jewel */}
+              <circle cx={cx} cy={cy} r="0.085" fill={solid} fillOpacity={0.85} stroke={border} strokeWidth="0.016" strokeOpacity={0.55}/>
+              <circle cx={cx-0.025} cy={cy-0.025} r="0.026" fill="white" fillOpacity={0.65}/>
+
               {/* Border */}
               <rect x={zc} y={zr} width="6" height="6" fill="none"
                 stroke={border}
