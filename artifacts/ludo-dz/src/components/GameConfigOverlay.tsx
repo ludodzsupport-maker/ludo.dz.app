@@ -35,8 +35,9 @@ const T = {
     classicSub:     "4 pions — règles complètes",
     quick:          "Rapide",
     quickSub:       "2 pions — partie courte",
-    teamup:         "Équipe",
-    teamupSub:      "2 vs 2 — en alliance",
+    teamup:         "Paramètres",
+    teamupSub:      "Attaque · Passe de Tour",
+    settingsTitle:  "Paramètres d'équipe",
     // team-mode specific
     sectionTeam:    "Options d'équipe",
     playersFixed:   "4 joueurs — mode équipe",
@@ -54,8 +55,9 @@ const T = {
     classicSub:     "٤ قطع — القواعد الكاملة",
     quick:          "سريع",
     quickSub:       "قطعتان — جولة قصيرة",
-    teamup:         "فريق",
-    teamupSub:      "٢ ضد ٢ بالتحالف",
+    teamup:         "إعدادات اللعب",
+    teamupSub:      "هجوم · تمرير الدور",
+    settingsTitle:  "إعدادات اللعبة",
     // team-mode specific
     sectionTeam:    "خيارات الفريق",
     playersFixed:   "٤ لاعبين — وضع الفريق",
@@ -194,6 +196,34 @@ function TeamUpIcon({ neon }: { neon: string }) {
   );
 }
 
+/** Settings — two toggle rows (one ON, one OFF) */
+function SettingsIcon({ neon }: { neon: string }) {
+  return (
+    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+      <defs>
+        <filter id="si-f" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="1.8" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <radialGradient id="si-g" cx="33%" cy="22%" r="72%">
+          <stop offset="0%" stopColor="#ffaabb"/>
+          <stop offset="55%" stopColor={neon}/>
+          <stop offset="100%" stopColor="#3a0008"/>
+        </radialGradient>
+      </defs>
+      {/* Toggle 1 — ON */}
+      <rect x="6" y="11" width="38" height="11" rx="5.5" fill={`${neon}20`} stroke={neon} strokeWidth="1.5" filter="url(#si-f)"/>
+      <circle cx="38" cy="16.5" r="6" fill="url(#si-g)" filter="url(#si-f)"/>
+      <ellipse cx="36.2" cy="14.5" rx="2" ry="1.2" fill="white" opacity="0.42"/>
+      <circle cx="15" cy="16.5" r="1.6" fill={neon} opacity="0.38"/>
+      {/* Toggle 2 — OFF */}
+      <rect x="12" y="34" width="38" height="11" rx="5.5" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" filter="url(#si-f)"/>
+      <circle cx="18" cy="39.5" r="6" fill="rgba(255,255,255,0.26)" filter="url(#si-f)"/>
+      <circle cx="43" cy="39.5" r="1.6" fill="rgba(255,255,255,0.20)"/>
+    </svg>
+  );
+}
+
 // ─── Config toggle (used inside team options rows) ────────────────────────────
 function ConfigToggle({
   value,
@@ -272,10 +302,11 @@ const PLAYER_COLORS = ["#DC143C", "#1E90FF", "#FFD700", "#00A550"];
 
 // ─── Main overlay ─────────────────────────────────────────────────────────────
 export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOverlayProps) {
-  const [rule,        setRule]        = useState<Rule>("classic");
-  const [players,     setPlayers]     = useState(2);
-  const [teamAttack,  setTeamAttack]  = useState(false);
-  const [turnPass,    setTurnPass]    = useState(true);
+  const [rule,         setRule]         = useState<Rule>("classic");
+  const [players,      setPlayers]      = useState(2);
+  const [teamAttack,   setTeamAttack]   = useState(false);
+  const [turnPass,     setTurnPass]     = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
 
   const t   = T[lang];
   const dir = lang === "ar" ? "rtl" : "ltr";
@@ -285,9 +316,9 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
   const ruleSub = (r: Rule) =>
     r === "classic" ? t.classicSub : r === "quick" ? t.quickSub : t.teamupSub;
   const ruleIcon = (r: Rule, neon: string) => {
-    if (r === "classic") return <ClassicIcon neon={neon}/>;
-    if (r === "quick")   return <QuickIcon   neon={neon}/>;
-    return                      <TeamUpIcon  neon={neon}/>;
+    if (r === "classic") return <ClassicIcon  neon={neon}/>;
+    if (r === "quick")   return <QuickIcon    neon={neon}/>;
+    return                      <SettingsIcon neon={neon}/>;
   };
 
   return (
@@ -395,7 +426,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
               return (
                 <motion.button
                   key={r.id}
-                  onClick={() => setRule(r.id)}
+                  onClick={() => { setRule(r.id); if (r.id === "teamup") setShowSettings(true); }}
                   whileHover={{ scale: 1.04, y: -3 }}
                   whileTap={{ scale: 0.96 }}
                   className="flex-1 relative rounded-2xl overflow-hidden flex flex-col items-center pt-4 pb-3 px-2 gap-0"
@@ -468,75 +499,6 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
               );
             })}
           </div>
-
-          {/* ── TEAM OPTIONS — فريق mode only ── */}
-          {mode.id === "teamup" && (
-            <>
-              <SectionLabel label={t.sectionTeam} neon={mode.neon}/>
-              <div className="flex flex-col gap-3 mb-6">
-
-                {/* Team Attack toggle */}
-                <motion.div
-                  className="flex items-center gap-3.5 px-4 py-3.5 rounded-2xl"
-                  style={{
-                    background: "linear-gradient(145deg,#1c0008 0%,#2a0012 100%)",
-                    border: `1px solid ${teamAttack ? `${mode.neon}50` : "rgba(255,255,255,0.08)"}`,
-                    boxShadow: teamAttack ? `0 0 20px ${mode.neon}1a` : "none",
-                    transition: "border-color 0.22s, box-shadow 0.22s",
-                  }}
-                  whileTap={{ scale: 0.987 }}
-                  onClick={() => setTeamAttack(v => !v)}
-                >
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${mode.neon}14`, border: `1px solid ${mode.neon}30` }}
-                  >
-                    <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
-                      <path d="M4 10 L10 4 L16 10 L10 16 Z" stroke={mode.neon} strokeWidth="1.5" strokeLinejoin="round" fill={`${mode.neon}25`}/>
-                      <circle cx="10" cy="10" r="2.2" fill={mode.neon} opacity="0.80"/>
-                      <path d="M7 7 L4 4 M13 7 L16 4 M7 13 L4 16 M13 13 L16 16" stroke={mode.neon} strokeWidth="1.2" strokeLinecap="round" opacity="0.55"/>
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-heading font-bold text-white leading-tight" style={{ fontSize: "13px", letterSpacing: "0.04em" }}>{t.teamAttack}</p>
-                    <p className="font-sans text-white/45 leading-snug mt-0.5" style={{ fontSize: "10px" }}>{t.teamAttackSub}</p>
-                  </div>
-                  <ConfigToggle value={teamAttack} onChange={setTeamAttack} neon={mode.neon}/>
-                </motion.div>
-
-                {/* Turn Pass toggle */}
-                <motion.div
-                  className="flex items-center gap-3.5 px-4 py-3.5 rounded-2xl"
-                  style={{
-                    background: "linear-gradient(145deg,#1c0008 0%,#2a0012 100%)",
-                    border: `1px solid ${turnPass ? `${mode.neon}50` : "rgba(255,255,255,0.08)"}`,
-                    boxShadow: turnPass ? `0 0 20px ${mode.neon}1a` : "none",
-                    transition: "border-color 0.22s, box-shadow 0.22s",
-                  }}
-                  whileTap={{ scale: 0.987 }}
-                  onClick={() => setTurnPass(v => !v)}
-                >
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${mode.neon}14`, border: `1px solid ${mode.neon}30` }}
-                  >
-                    <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
-                      <path d="M3 10 Q3 5 8 5 L14 5" stroke={mode.neon} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.60"/>
-                      <path d="M12 3 L15 5 L12 7" stroke={mode.neon} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M17 10 Q17 15 12 15 L6 15" stroke={mode.neon} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.60"/>
-                      <path d="M8 13 L5 15 L8 17" stroke={mode.neon} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-heading font-bold text-white leading-tight" style={{ fontSize: "13px", letterSpacing: "0.04em" }}>{t.turnPass}</p>
-                    <p className="font-sans text-white/45 leading-snug mt-0.5" style={{ fontSize: "10px" }}>{t.turnPassSub}</p>
-                  </div>
-                  <ConfigToggle value={turnPass} onChange={setTurnPass} neon={mode.neon}/>
-                </motion.div>
-
-              </div>
-            </>
-          )}
 
           {/* ── PLAYERS SECTION ── */}
           <SectionLabel label={t.players} neon={mode.neon}/>
@@ -703,6 +665,120 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
           </motion.button>
 
         </div>
+
+        {/* ── Settings Modal (overlays the sheet) ── */}
+        <AnimatePresence>
+          {showSettings && (
+            <motion.div
+              className="absolute inset-0 z-50 flex items-center px-5"
+              style={{ background: "rgba(4,6,20,0.72)", backdropFilter: "blur(6px)", borderRadius: "28px 28px 0 0" }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.20 }}
+              onClick={() => setShowSettings(false)}
+            >
+              <motion.div
+                className="w-full rounded-3xl overflow-hidden"
+                style={{
+                  background: "linear-gradient(145deg,#12082c 0%,#200010 100%)",
+                  boxShadow: "0 24px 64px rgba(0,0,0,0.80), 0 0 0 1px rgba(255,255,255,0.09)",
+                }}
+                initial={{ opacity: 0, scale: 0.93, y: 18 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.93, y: 10 }}
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Top neon stripe */}
+                <div className="h-[2.5px]" style={{ background: `linear-gradient(90deg, transparent, ${RULES[2].neon}, transparent)` }}/>
+
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 pt-4 pb-3">
+                  <span className="font-heading font-bold text-white" style={{ fontSize: "14px", letterSpacing: "0.06em" }}>
+                    {t.settingsTitle}
+                  </span>
+                  <motion.button
+                    onClick={() => setShowSettings(false)}
+                    whileTap={{ scale: 0.90 }}
+                    className="w-7 h-7 rounded-full flex items-center justify-center"
+                    style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.14)" }}
+                  >
+                    <X className="w-3.5 h-3.5 text-white/60"/>
+                  </motion.button>
+                </div>
+
+                {/* Divider */}
+                <div className="mx-5 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent)" }}/>
+
+                {/* Toggles */}
+                <div className="flex flex-col gap-3 px-4 pt-3 pb-5">
+
+                  {/* Team Attack */}
+                  <motion.div
+                    className="flex items-center gap-3.5 px-4 py-3.5 rounded-2xl"
+                    style={{
+                      background: "linear-gradient(145deg,#1c0008 0%,#2a0012 100%)",
+                      border: `1px solid ${teamAttack ? `${RULES[2].neon}50` : "rgba(255,255,255,0.08)"}`,
+                      boxShadow: teamAttack ? `0 0 20px ${RULES[2].neon}1a` : "none",
+                      transition: "border-color 0.22s, box-shadow 0.22s",
+                    }}
+                    whileTap={{ scale: 0.987 }}
+                    onClick={() => setTeamAttack(v => !v)}
+                  >
+                    <div
+                      className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: `${RULES[2].neon}14`, border: `1px solid ${RULES[2].neon}30` }}
+                    >
+                      <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
+                        <path d="M4 10 L10 4 L16 10 L10 16 Z" stroke={RULES[2].neon} strokeWidth="1.5" strokeLinejoin="round" fill={`${RULES[2].neon}25`}/>
+                        <circle cx="10" cy="10" r="2.2" fill={RULES[2].neon} opacity="0.80"/>
+                        <path d="M7 7 L4 4 M13 7 L16 4 M7 13 L4 16 M13 13 L16 16" stroke={RULES[2].neon} strokeWidth="1.2" strokeLinecap="round" opacity="0.55"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-heading font-bold text-white leading-tight" style={{ fontSize: "13px", letterSpacing: "0.04em" }}>{t.teamAttack}</p>
+                      <p className="font-sans text-white/45 leading-snug mt-0.5" style={{ fontSize: "10px" }}>{t.teamAttackSub}</p>
+                    </div>
+                    <ConfigToggle value={teamAttack} onChange={setTeamAttack} neon={RULES[2].neon}/>
+                  </motion.div>
+
+                  {/* Turn Pass */}
+                  <motion.div
+                    className="flex items-center gap-3.5 px-4 py-3.5 rounded-2xl"
+                    style={{
+                      background: "linear-gradient(145deg,#1c0008 0%,#2a0012 100%)",
+                      border: `1px solid ${turnPass ? `${RULES[2].neon}50` : "rgba(255,255,255,0.08)"}`,
+                      boxShadow: turnPass ? `0 0 20px ${RULES[2].neon}1a` : "none",
+                      transition: "border-color 0.22s, box-shadow 0.22s",
+                    }}
+                    whileTap={{ scale: 0.987 }}
+                    onClick={() => setTurnPass(v => !v)}
+                  >
+                    <div
+                      className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{ background: `${RULES[2].neon}14`, border: `1px solid ${RULES[2].neon}30` }}
+                    >
+                      <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
+                        <path d="M3 10 Q3 5 8 5 L14 5" stroke={RULES[2].neon} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.60"/>
+                        <path d="M12 3 L15 5 L12 7" stroke={RULES[2].neon} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M17 10 Q17 15 12 15 L6 15" stroke={RULES[2].neon} strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.60"/>
+                        <path d="M8 13 L5 15 L8 17" stroke={RULES[2].neon} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-heading font-bold text-white leading-tight" style={{ fontSize: "13px", letterSpacing: "0.04em" }}>{t.turnPass}</p>
+                      <p className="font-sans text-white/45 leading-snug mt-0.5" style={{ fontSize: "10px" }}>{t.turnPassSub}</p>
+                    </div>
+                    <ConfigToggle value={turnPass} onChange={setTurnPass} neon={RULES[2].neon}/>
+                  </motion.div>
+
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
       </motion.div>
     </>
   );
