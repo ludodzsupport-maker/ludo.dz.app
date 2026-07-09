@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Globe, Volume2, Vibrate, Info, ChevronRight, Check, Layers } from "lucide-react";
+import { ArrowLeft, Globe, Volume2, Vibrate, Info, ChevronRight, Check } from "lucide-react";
 import { GamePiece } from "./GamePiece";
 
 interface SettingsScreenProps {
@@ -479,7 +479,21 @@ export function SettingsScreen({ lang, setLang, onBack }: SettingsScreenProps) {
                 className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{ background: "rgba(0,255,238,0.12)", boxShadow: "0 0 16px rgba(0,255,238,0.25)" }}
               >
-                <Layers className="w-5 h-5" style={{ color: "#00FFEE" }} />
+                {/* Mini Ludo board icon */}
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="0.5" y="0.5" width="23" height="23" rx="3" fill="#050d1a" stroke="#00FFEE" strokeWidth="0.7" opacity="0.9"/>
+                  <rect x="1.5" y="1.5"  width="8.5" height="8.5" rx="1.5" fill="#DC143C" opacity="0.85"/>
+                  <rect x="14"  y="1.5"  width="8.5" height="8.5" rx="1.5" fill="#1E90FF" opacity="0.85"/>
+                  <rect x="1.5" y="14"   width="8.5" height="8.5" rx="1.5" fill="#00A550" opacity="0.85"/>
+                  <rect x="14"  y="14"   width="8.5" height="8.5" rx="1.5" fill="#FFD700" opacity="0.85"/>
+                  <rect x="10.5" y="1.5" width="3"   height="21"  fill="#071422"/>
+                  <rect x="1.5" y="10.5" width="21"  height="3"   fill="#071422"/>
+                  <line x1="10.5" y1="0" x2="10.5" y2="24" stroke="#00FFEE" strokeWidth="0.4" opacity="0.30"/>
+                  <line x1="13.5" y1="0" x2="13.5" y2="24" stroke="#00FFEE" strokeWidth="0.4" opacity="0.30"/>
+                  <line x1="0" y1="10.5" x2="24" y2="10.5" stroke="#00FFEE" strokeWidth="0.4" opacity="0.30"/>
+                  <line x1="0" y1="13.5" x2="24" y2="13.5" stroke="#00FFEE" strokeWidth="0.4" opacity="0.30"/>
+                  <polygon points="12,10.5 13.5,12 12,13.5 10.5,12" fill="#00FFEE" opacity="0.75"/>
+                </svg>
               </div>
 
               <div className="flex-1 min-w-0">
@@ -531,8 +545,55 @@ export function SettingsScreen({ lang, setLang, onBack }: SettingsScreenProps) {
                         layoutId="activeBoardBg"
                         style={{ background: "rgba(0,255,238,0.06)" }}
                       />
+                      {/* Mini board thumbnail */}
+                      <div className="relative z-10 flex-shrink-0 rounded-lg overflow-hidden"
+                        style={{ boxShadow: "0 0 10px rgba(0,255,238,0.30)", border: "1px solid rgba(0,255,238,0.30)" }}>
+                        <svg viewBox="0 0 60 60" width="42" height="42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect width="60" height="60" fill="#06101e"/>
+                          {/* Corner home areas */}
+                          <rect x="1"  y="1"  width="22" height="22" rx="3.5" fill="#DC143C" opacity="0.80"/>
+                          <rect x="37" y="1"  width="22" height="22" rx="3.5" fill="#1E90FF" opacity="0.80"/>
+                          <rect x="1"  y="37" width="22" height="22" rx="3.5" fill="#00A550" opacity="0.80"/>
+                          <rect x="37" y="37" width="22" height="22" rx="3.5" fill="#FFD700" opacity="0.80"/>
+                          {/* Pawn slots */}
+                          <circle cx="8"  cy="8"  r="2.8" fill="#ff9999" opacity="0.85"/>
+                          <circle cx="16" cy="8"  r="2.8" fill="#ff9999" opacity="0.85"/>
+                          <circle cx="8"  cy="16" r="2.8" fill="#ff9999" opacity="0.85"/>
+                          <circle cx="16" cy="16" r="2.8" fill="#ff9999" opacity="0.85"/>
+                          <circle cx="44" cy="8"  r="2.8" fill="#99ccff" opacity="0.85"/>
+                          <circle cx="52" cy="8"  r="2.8" fill="#99ccff" opacity="0.85"/>
+                          <circle cx="44" cy="16" r="2.8" fill="#99ccff" opacity="0.85"/>
+                          <circle cx="52" cy="16" r="2.8" fill="#99ccff" opacity="0.85"/>
+                          <circle cx="8"  cy="44" r="2.8" fill="#66dd99" opacity="0.85"/>
+                          <circle cx="16" cy="44" r="2.8" fill="#66dd99" opacity="0.85"/>
+                          <circle cx="8"  cy="52" r="2.8" fill="#66dd99" opacity="0.85"/>
+                          <circle cx="16" cy="52" r="2.8" fill="#66dd99" opacity="0.85"/>
+                          <circle cx="44" cy="44" r="2.8" fill="#ffe680" opacity="0.85"/>
+                          <circle cx="52" cy="44" r="2.8" fill="#ffe680" opacity="0.85"/>
+                          <circle cx="44" cy="52" r="2.8" fill="#ffe680" opacity="0.85"/>
+                          <circle cx="52" cy="52" r="2.8" fill="#ffe680" opacity="0.85"/>
+                          {/* Cross lanes */}
+                          <rect x="23" y="1"  width="14" height="58" fill="#071422"/>
+                          <rect x="1"  y="23" width="58" height="14" fill="#071422"/>
+                          {/* Home stretch tints */}
+                          <rect x="23" y="1"  width="14" height="20" fill="#DC143C" opacity="0.20"/>
+                          <rect x="23" y="39" width="14" height="20" fill="#1E90FF" opacity="0.20"/>
+                          <rect x="1"  y="23" width="20" height="14" fill="#00A550" opacity="0.20"/>
+                          <rect x="39" y="23" width="20" height="14" fill="#FFD700" opacity="0.20"/>
+                          {/* Center area */}
+                          <rect x="23" y="23" width="14" height="14" rx="2" fill="#06101e"/>
+                          <polygon points="30,24.5 35.5,30 30,35.5 24.5,30" fill="#00FFEE" opacity="0.60"/>
+                          {/* Neon grid lines */}
+                          <line x1="23" y1="0" x2="23" y2="60" stroke="#00FFEE" strokeWidth="0.5" opacity="0.22"/>
+                          <line x1="37" y1="0" x2="37" y2="60" stroke="#00FFEE" strokeWidth="0.5" opacity="0.22"/>
+                          <line x1="0" y1="23" x2="60" y2="23" stroke="#00FFEE" strokeWidth="0.5" opacity="0.22"/>
+                          <line x1="0" y1="37" x2="60" y2="37" stroke="#00FFEE" strokeWidth="0.5" opacity="0.22"/>
+                          {/* Outer border */}
+                          <rect x="0.5" y="0.5" width="59" height="59" stroke="#00FFEE" strokeWidth="0.8" fill="none" opacity="0.45"/>
+                        </svg>
+                      </div>
                       <span
-                        className="font-heading font-bold relative z-10"
+                        className="font-heading font-bold relative z-10 flex-1 px-3"
                         style={{ fontSize: "14px", color: "#00FFEE", letterSpacing: "0.08em" }}
                       >
                         {t.neonBoard}
