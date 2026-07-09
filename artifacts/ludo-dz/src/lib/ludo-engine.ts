@@ -1,9 +1,10 @@
 // ─── Ludo Engine ─────────────────────────────────────────────────────────────
 // Pure game logic: state, moves, AI. No React/DOM dependencies.
 
-export const TRACK_SIZE    = 51;
+export const MAIN_PATH_SIZE = 52; // physical length of MAIN_PATH (used for abs modulo)
+export const TRACK_SIZE    = 51; // home-entry threshold: relPos 51+ → HOME_COLS
 export const HOME_COL_SIZE = 6;
-export const FINISHED_POS  = TRACK_SIZE + HOME_COL_SIZE; // 58
+export const FINISHED_POS  = TRACK_SIZE + HOME_COL_SIZE; // 57
 
 // ── Board path (52 cells, clockwise from Red's start) ──────────────────────
 //    Row = grid row (0-14)   Col = grid column (0-14)
@@ -91,7 +92,7 @@ export function pieceId(player: number, index: number): string {
 export function getGridPos(player: number, relPos: number): [number, number] | null {
   if (relPos < 0) return null;
   if (relPos < TRACK_SIZE) {
-    const abs = (PLAYER_STARTS[player] + relPos) % TRACK_SIZE;
+    const abs = (PLAYER_STARTS[player] + relPos) % MAIN_PATH_SIZE;
     return MAIN_PATH[abs] as [number, number];
   }
   if (relPos < FINISHED_POS) {
@@ -155,12 +156,12 @@ export function doMove(state: GameState, pid: string): GameState {
   // Capture check (main track only, non-safe squares)
   let captured = false;
   if (piece.relPos >= 1 && piece.relPos < TRACK_SIZE) {
-    const abs = (PLAYER_STARTS[ps] + piece.relPos) % TRACK_SIZE;
+    const abs = (PLAYER_STARTS[ps] + piece.relPos) % MAIN_PATH_SIZE;
     if (!SAFE_SET.has(abs)) {
       const [pr, pc] = MAIN_PATH[abs];
       pieces = pieces.map(op => {
         if (op.player === ps || op.relPos < 0 || op.relPos >= TRACK_SIZE) return op;
-        const oAbs = (PLAYER_STARTS[op.player] + op.relPos) % TRACK_SIZE;
+        const oAbs = (PLAYER_STARTS[op.player] + op.relPos) % MAIN_PATH_SIZE;
         const [or, oc] = MAIN_PATH[oAbs];
         if (or === pr && oc === pc) { captured = true; return { ...op, relPos: -1 }; }
         return op;
@@ -220,12 +221,12 @@ export function aiPickMove(state: GameState): string | null {
 
     // Bonus for capture
     if (newRel >= 1 && newRel < TRACK_SIZE) {
-      const abs = (PLAYER_STARTS[ap] + newRel) % TRACK_SIZE;
+      const abs = (PLAYER_STARTS[ap] + newRel) % MAIN_PATH_SIZE;
       if (!SAFE_SET.has(abs)) {
         const [r, c] = MAIN_PATH[abs];
         const captures = pieces.some(op => {
           if (op.player === ap || op.relPos < 0 || op.relPos >= TRACK_SIZE) return false;
-          const oAbs = (PLAYER_STARTS[op.player] + op.relPos) % TRACK_SIZE;
+          const oAbs = (PLAYER_STARTS[op.player] + op.relPos) % MAIN_PATH_SIZE;
           return MAIN_PATH[oAbs][0] === r && MAIN_PATH[oAbs][1] === c;
         });
         if (captures) score += 150;
