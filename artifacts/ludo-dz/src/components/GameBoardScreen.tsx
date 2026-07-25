@@ -2328,7 +2328,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     <motion.div key={restartKey}
       className="absolute inset-0 z-20 flex flex-col overflow-hidden select-none"
       style={{ background: isClassic
-        ? 'linear-gradient(160deg, #0d1b2a 0%, #162840 45%, #0a1520 100%)'
+        ? 'radial-gradient(ellipse 85% 65% at 50% 38%, #261509 0%, #150b04 48%, #0d0703 100%)'
         : 'linear-gradient(175deg, #060f1d 0%, #09152a 55%, #050d18 100%)' }}
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -2412,9 +2412,9 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             overflow: 'visible',
             padding: '6px',
             background: isClassic
-              ? 'radial-gradient(ellipse 150% 130% at 18% 18%, rgba(255,255,255,0.022) 0%, transparent 52%), radial-gradient(ellipse 120% 100% at 50% 50%, #1b3350 0%, #0e2035 55%, #071525 100%)'
+              ? 'linear-gradient(135deg, rgba(255,185,70,0.13) 0%, rgba(255,140,30,0.04) 30%, transparent 55%), radial-gradient(ellipse 120% 110% at 50% 50%, #3e210b 0%, #1e0f04 52%, #110804 100%)'
               : 'radial-gradient(ellipse 120% 100% at 50% 50%, #0e2647 0%, #030b16 70%)',
-            border: isClassic ? '1px solid rgba(255,255,255,0.11)' : '1px solid rgba(255,255,255,0.07)',
+            border: isClassic ? '1px solid rgba(175,95,25,0.30)' : '1px solid rgba(255,255,255,0.07)',
           }}
           animate={{
             boxShadow: [
@@ -2432,7 +2432,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             borderRadius: 14,
             overflow: 'hidden',
             boxShadow: isClassic
-              ? 'inset 0 4px 28px rgba(0,0,0,0.72), inset 0 0 70px rgba(0,0,0,0.42), inset 0 0 0 1px rgba(255,255,255,0.07)'
+              ? 'inset 0 6px 36px rgba(12,4,0,0.82), inset 0 0 90px rgba(8,3,0,0.52), inset 0 0 0 1px rgba(160,80,20,0.14)'
               : 'inset 0 4px 20px rgba(0,0,0,0.60), inset 0 0 0 1px rgba(255,255,255,0.05)',
           }}>
             <BoardSVG
