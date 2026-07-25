@@ -2077,6 +2077,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   isAnimatingRef.current = isAnimating;
 
   const isComputer  = config.modeId === 'computer';
+  const isClassic   = boardStyle === 'classic';
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   const isHumanTurn = !isComputer || game.activePlayer === 0;
@@ -2326,7 +2327,9 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   return (
     <motion.div key={restartKey}
       className="absolute inset-0 z-20 flex flex-col overflow-hidden select-none"
-      style={{ background: 'linear-gradient(175deg, #060f1d 0%, #09152a 55%, #050d18 100%)' }}
+      style={{ background: isClassic
+        ? 'linear-gradient(160deg, #0d1b2a 0%, #162840 45%, #0a1520 100%)'
+        : 'linear-gradient(175deg, #060f1d 0%, #09152a 55%, #050d18 100%)' }}
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.97 }}
@@ -2408,8 +2411,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             borderRadius: 22,
             overflow: 'visible',
             padding: '6px',
-            background: 'radial-gradient(ellipse 120% 100% at 50% 50%, #0e2647 0%, #030b16 70%)',
-            border: '1px solid rgba(255,255,255,0.07)',
+            background: isClassic
+              ? 'radial-gradient(ellipse 150% 130% at 18% 18%, rgba(255,255,255,0.022) 0%, transparent 52%), radial-gradient(ellipse 120% 100% at 50% 50%, #1b3350 0%, #0e2035 55%, #071525 100%)'
+              : 'radial-gradient(ellipse 120% 100% at 50% 50%, #0e2647 0%, #030b16 70%)',
+            border: isClassic ? '1px solid rgba(255,255,255,0.11)' : '1px solid rgba(255,255,255,0.07)',
           }}
           animate={{
             boxShadow: [
@@ -2426,7 +2431,9 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             height: '100%',
             borderRadius: 14,
             overflow: 'hidden',
-            boxShadow: 'inset 0 4px 20px rgba(0,0,0,0.60), inset 0 0 0 1px rgba(255,255,255,0.05)',
+            boxShadow: isClassic
+              ? 'inset 0 4px 28px rgba(0,0,0,0.72), inset 0 0 70px rgba(0,0,0,0.42), inset 0 0 0 1px rgba(255,255,255,0.07)'
+              : 'inset 0 4px 20px rgba(0,0,0,0.60), inset 0 0 0 1px rgba(255,255,255,0.05)',
           }}>
             <BoardSVG
               game={game}
