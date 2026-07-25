@@ -18,17 +18,39 @@ Both services start automatically via the "Project" run button:
 | Ludo DZ frontend | 21341 | `PORT=21341 BASE_PATH=/ pnpm --filter @workspace/ludo-dz run dev` |
 | API server | 8080 | `PORT=8080 pnpm --filter @workspace/api-server run dev` |
 
+## Environment
+
+The project uses Replit's built-in PostgreSQL database. The following environment variables are provided automatically by the Replit runtime — no manual configuration needed:
+
+- `DATABASE_URL` — full PostgreSQL connection string (runtime-managed)
+- `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE` — individual DB credentials
+- `SESSION_SECRET` — stored as a Replit secret
+
+The `postgresql-16` Nix module is included in `.replit` so `psql` and related CLI tools are available in the shell.
+
 ## Development
 
 ```bash
 # Install all workspace dependencies
 pnpm install
 
+# Push the Drizzle schema to the database (run after schema changes)
+pnpm --filter @workspace/db run push
+
 # Type-check everything
 pnpm typecheck
 
 # Build all packages
 pnpm build
+```
+
+## Post-merge setup
+
+`scripts/post-merge.sh` runs automatically after task merges:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter db push
 ```
 
 ## Project structure
@@ -43,6 +65,8 @@ lib/
   api-zod/          # Zod schemas (generated)
   api-client-react/ # React Query hooks (generated)
   db/               # Drizzle ORM schema + client
+scripts/
+  post-merge.sh     # Runs after task agent merges (install + db push)
 ```
 
 ## User preferences
