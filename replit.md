@@ -50,7 +50,7 @@ pnpm build
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm --filter db push
+pnpm --filter @workspace/db run push
 ```
 
 ## Project structure
