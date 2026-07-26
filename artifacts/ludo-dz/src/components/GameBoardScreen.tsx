@@ -384,15 +384,17 @@ function CornerDice({
       }}/>
     <motion.div
       onClick={canTap ? onRoll : undefined}
-      whileTap={canTap ? { scale: 0.91 } : {}}
+      whileTap={canTap ? (isClassic ? { scale: 1.02 } : { scale: 0.91 }) : {}}
       animate={isClassic ? {
+        scale: isActive ? 1.08 : 0.88,
+        opacity: isActive ? 1 : 0.72,
         boxShadow: isActive
           ? [
-              `0 0 0 2px ${clLight}, 0 0 0 3.5px ${clBorder}, 0 5px 16px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.82)`,
-              `0 0 0 2px ${clLight}, 0 0 0 3.5px ${clBorder}, 0 8px 22px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.82)`,
-              `0 0 0 2px ${clLight}, 0 0 0 3.5px ${clBorder}, 0 5px 16px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.82)`,
+              `0 0 0 2px ${clLight}, 0 0 0 3.5px ${clBorder}, 0 5px 18px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.82)`,
+              `0 0 0 2px ${clLight}, 0 0 0 3.5px ${clBorder}, 0 9px 26px rgba(0,0,0,0.44), inset 0 1px 0 rgba(255,255,255,0.82)`,
+              `0 0 0 2px ${clLight}, 0 0 0 3.5px ${clBorder}, 0 5px 18px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.82)`,
             ]
-          : `0 2px 10px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.72)`,
+          : `0 2px 8px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.65)`,
       } : isActive ? {
         boxShadow: [
           `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
@@ -403,7 +405,11 @@ function CornerDice({
         boxShadow: `0 2px 12px rgba(0,0,0,0.55), 0 0 10px ${col}40`,
       }}
       transition={isClassic
-        ? { duration: isActive ? 1.6 : 0.3, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }
+        ? {
+            scale:     { type: 'spring', stiffness: 260, damping: 28 },
+            opacity:   { duration: 0.38, ease: 'easeOut' },
+            boxShadow: { duration: isActive ? 1.6 : 0.3, repeat: isActive ? Infinity : 0, ease: 'easeInOut' },
+          }
         : { duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
       style={{
         width: '100%', height: '100%',
@@ -418,13 +424,17 @@ function CornerDice({
             ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
             : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`),
         border: isClassic
-          ? `1.5px solid #a07820`
+          ? (isActive ? `1.5px solid ${clBorder}` : `1px solid rgba(160,120,32,0.48)`)
           : `1.5px solid ${isActive ? neon : col + '55'}`,
         backdropFilter: isClassic ? 'none' : 'blur(10px)',
         WebkitBackdropFilter: isClassic ? 'none' : 'blur(10px)',
         transition: 'background 0.4s, border-color 0.4s',
         overflow: 'hidden',
         userSelect: 'none',
+        // Scale grows toward the board corner so the active card "leans in" to the game
+        transformOrigin: isClassic ? (
+          { tl: 'top left', tr: 'top right', bl: 'bottom left', br: 'bottom right' }[anchor]
+        ) : undefined,
       }}
     >
       {/* Active edge shimmer — neon only */}
@@ -2533,12 +2543,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             style={{ transform: lang === 'ar' ? 'scaleX(-1)' : undefined }}/>
         </motion.button>
 
-        {/* Classic: unified gilt scoreboard strip — Neon: individual player chips */}
+        {/* Classic: spacer only — turn is communicated via card elevation at the corners */}
+        {/* Neon: individual player chips */}
         {isClassic ? (
-          <ClassicScoreStrip
-            game={game} playerSlots={game.playerSlots}
-            isComputer={isComputer} lang={lang}
-          />
+          <div style={{ flex: 1 }}/>
         ) : (
           <div className="flex-1 flex gap-1.5 overflow-x-auto min-w-0" style={{ scrollbarWidth: 'none' }}>
             {game.playerSlots.map((slot) => (
