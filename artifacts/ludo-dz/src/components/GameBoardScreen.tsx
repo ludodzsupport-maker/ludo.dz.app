@@ -669,6 +669,117 @@ function PlayerChip({ game, player, isAI, lang, boardStyle }: {
   );
 }
 
+// ─── Classic scoreboard strip (replaces PlayerChip row in Classic mode) ──────
+// One unified parchment ribbon — same ivory/gold vocabulary as the dice cards.
+// Divided into per-player sections by gilt vertical rules. The active player's
+// section carries a player-colour top bar that slides via layoutId as turns
+// change, a colour-saturated name, and a warm tint on the section background.
+// Inactive sections are muted parchment ink. Nothing loud, nothing accidental.
+function ClassicScoreStrip({ game, playerSlots, isComputer, lang }: {
+  game: E.GameState; playerSlots: number[]; isComputer: boolean; lang: 'fr'|'ar';
+}) {
+  return (
+    <div style={{
+      flex: 1, minWidth: 0,
+      position: 'relative',
+      borderRadius: 8,
+      border: '1.5px solid #a07820',
+      background: 'linear-gradient(170deg, #fefdf6 0%, #f0e4c6 100%)',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.85)',
+      overflow: 'hidden',
+      display: 'flex', flexDirection: 'row',
+    }}>
+      {/* Full-width gilt accent line across the top */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 2, zIndex: 2,
+        background: 'linear-gradient(90deg, rgba(160,120,32,0.08) 0%, rgba(201,162,39,0.68) 22%, rgba(201,162,39,0.68) 78%, rgba(160,120,32,0.08) 100%)',
+        pointerEvents: 'none',
+      }}/>
+
+      {playerSlots.map((slot, idx) => {
+        const isActive = game.activePlayer === slot && game.phase !== 'done';
+        const pieces   = game.pieces.filter(p => p.player === slot);
+        const name     = lang === 'ar' ? E.PLAYER_NAMES_AR[slot] : E.PLAYER_NAMES_FR[slot];
+        const clSolid  = CL_SOLID[slot  as 0|1|2|3];
+        const clBorder = CL_BORDER[slot as 0|1|2|3];
+        const clArrow  = CL_ARROW[slot  as 0|1|2|3];
+        const isAI     = isComputer && slot !== 0;
+
+        return (
+          <div key={slot} style={{
+            flex: 1, minWidth: 0,
+            position: 'relative',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            gap: 3,
+            padding: '8px 4px 6px',
+            borderLeft: idx === 0 ? 'none' : '0.5px solid rgba(160,120,32,0.30)',
+            background: isActive ? `${clSolid}10` : 'transparent',
+            transition: 'background 0.45s',
+          }}>
+            {/* Player-colour top bar — slides via layoutId as the active player changes */}
+            {isActive && (
+              <motion.div
+                layoutId="classic-active-bar"
+                style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                  background: clSolid, zIndex: 1,
+                }}
+                transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+              />
+            )}
+
+            {/* Name row: colour pip + abbreviated name + optional AI icon */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <div style={{
+                width: 5, height: 5, borderRadius: '50%',
+                background: clSolid,
+                opacity: isActive ? 1 : 0.52,
+                boxShadow: isActive ? `0 0 0 1px rgba(160,120,32,0.42)` : 'none',
+                flexShrink: 0, transition: 'opacity 0.4s',
+              }}/>
+              <span style={{
+                fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 10,
+                color: isActive ? clArrow : 'rgba(100,70,20,0.42)',
+                letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1,
+                transition: 'color 0.4s',
+              }}>
+                {name.slice(0,4)}
+              </span>
+              {isAI && (
+                <Bot size={7}
+                  color={isActive ? clArrow : 'rgba(100,70,20,0.28)'}
+                  style={{ flexShrink: 0 }}/>
+              )}
+            </div>
+
+            {/* Pawn status pips — same palette as CornerDice progress dots */}
+            <div style={{ display: 'flex', gap: 3 }}>
+              {[0,1,2,3].map(i => {
+                const p  = pieces[i];
+                const st = !p ? 'none'
+                         : p.relPos === E.FINISHED_POS ? 'done'
+                         : p.relPos >= 0 ? 'on' : 'home';
+                return (
+                  <div key={i} style={{
+                    width: 5, height: 5, borderRadius: '50%',
+                    background: st === 'done' ? clSolid
+                              : st === 'on'   ? `${clSolid}bb`
+                              : st === 'home' ? `${clSolid}50`
+                              : 'rgba(180,140,40,0.10)',
+                    border: `0.5px solid ${st !== 'none' ? `${clBorder}72` : 'rgba(160,120,32,0.24)'}`,
+                    transition: 'all 0.3s',
+                  }}/>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Hop animation constants ─────────────────────────────────────────────────
 interface HopStep { x: number; y: number }
 // Premium cubic-bezier easing: snappy ease-out-quart for lateral movement
@@ -2422,13 +2533,20 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             style={{ transform: lang === 'ar' ? 'scaleX(-1)' : undefined }}/>
         </motion.button>
 
-        {/* Player chips — colour + name only; dice panels live at board corners */}
-        <div className="flex-1 flex gap-1.5 overflow-x-auto min-w-0" style={{ scrollbarWidth: 'none' }}>
-          {game.playerSlots.map((slot) => (
-            <PlayerChip key={slot} game={game} player={slot}
-              isAI={isComputer && slot !== 0} lang={lang} boardStyle={boardStyle}/>
-          ))}
-        </div>
+        {/* Classic: unified gilt scoreboard strip — Neon: individual player chips */}
+        {isClassic ? (
+          <ClassicScoreStrip
+            game={game} playerSlots={game.playerSlots}
+            isComputer={isComputer} lang={lang}
+          />
+        ) : (
+          <div className="flex-1 flex gap-1.5 overflow-x-auto min-w-0" style={{ scrollbarWidth: 'none' }}>
+            {game.playerSlots.map((slot) => (
+              <PlayerChip key={slot} game={game} player={slot}
+                isAI={isComputer && slot !== 0} lang={lang} boardStyle={boardStyle}/>
+            ))}
+          </div>
+        )}
 
         {/* Settings */}
         <motion.button onClick={() => setShowSettings(true)}
