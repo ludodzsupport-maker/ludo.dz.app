@@ -2329,8 +2329,20 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       className="absolute inset-0 z-20 flex flex-col overflow-hidden select-none"
       style={{ background: isClassic
         ? [
+            // Cinematic vignette — edges fall to deep purple, centre stays warm
+            'radial-gradient(ellipse 105% 105% at 50% 50%, transparent 42%, rgba(8,3,18,0.72) 100%)',
+            // Gold stardust — sparse tiny glints at very low opacity
+            'radial-gradient(circle at 12% 22%, rgba(255,220,100,0.10) 0px, transparent 1.5px)',
+            'radial-gradient(circle at 80% 15%, rgba(255,220,100,0.08) 0px, transparent 1px)',
+            'radial-gradient(circle at 44% 75%, rgba(255,220,100,0.09) 0px, transparent 1.5px)',
+            'radial-gradient(circle at 90% 68%, rgba(255,220,100,0.07) 0px, transparent 1px)',
+            'radial-gradient(circle at 28% 90%, rgba(255,220,100,0.08) 0px, transparent 1.5px)',
+            'radial-gradient(circle at 67% 38%, rgba(255,220,100,0.06) 0px, transparent 1px)',
+            'radial-gradient(circle at 55% 8%,  rgba(255,220,100,0.07) 0px, transparent 1.5px)',
+            // Diamond grid
             'repeating-linear-gradient(45deg,  rgba(201,162,39,0.07) 0px, rgba(201,162,39,0.07) 1px, transparent 1px, transparent 32px)',
             'repeating-linear-gradient(-45deg, rgba(201,162,39,0.07) 0px, rgba(201,162,39,0.07) 1px, transparent 1px, transparent 32px)',
+            // Purple base
             'radial-gradient(ellipse 90% 70% at 50% 42%, #3d2566 0%, #2d1b4e 45%, #1a0f30 100%)',
           ].join(', ')
         : 'linear-gradient(175deg, #060f1d 0%, #09152a 55%, #050d18 100%)' }}
@@ -2416,9 +2428,9 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             overflow: 'visible',
             padding: '6px',
             background: isClassic
-              ? 'linear-gradient(135deg, rgba(201,162,39,0.22) 0%, rgba(201,162,39,0.06) 35%, transparent 60%), radial-gradient(ellipse 120% 110% at 50% 50%, #3a2260 0%, #231545 52%, #160e30 100%)'
+              ? 'transparent'
               : 'radial-gradient(ellipse 120% 100% at 50% 50%, #0e2647 0%, #030b16 70%)',
-            border: isClassic ? '1.5px solid rgba(201,162,39,0.55)' : '1px solid rgba(255,255,255,0.07)',
+            border: isClassic ? 'none' : '1px solid rgba(255,255,255,0.07)',
           }}
           animate={{
             boxShadow: [
@@ -2436,7 +2448,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             borderRadius: 14,
             overflow: 'hidden',
             boxShadow: isClassic
-              ? 'inset 0 0 0 2px rgba(201,162,39,0.40), inset 0 6px 32px rgba(0,0,0,0.78), inset 0 0 80px rgba(0,0,0,0.48)'
+              ? 'inset 0 6px 32px rgba(0,0,0,0.78), inset 0 0 80px rgba(0,0,0,0.48)'
               : 'inset 0 4px 20px rgba(0,0,0,0.60), inset 0 0 0 1px rgba(255,255,255,0.05)',
           }}>
             <BoardSVG
@@ -2453,24 +2465,6 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
               boardStyle={boardStyle}
             />
           </div>
-
-          {/* ── Classic golden corner accents ── */}
-          {isClassic && ['tl','tr','bl','br'].map(c => (
-            <div key={c} style={{
-              position: 'absolute', width: 16, height: 16, pointerEvents: 'none',
-              top:    c[0]==='t' ? -1 : undefined,
-              bottom: c[0]==='b' ? -1 : undefined,
-              left:   c[1]==='l' ? -1 : undefined,
-              right:  c[1]==='r' ? -1 : undefined,
-              borderTop:    c[0]==='t' ? '2.5px solid #c9a227' : undefined,
-              borderBottom: c[0]==='b' ? '2.5px solid #c9a227' : undefined,
-              borderLeft:   c[1]==='l' ? '2.5px solid #c9a227' : undefined,
-              borderRight:  c[1]==='r' ? '2.5px solid #c9a227' : undefined,
-              borderRadius: c==='tl'?'5px 0 0 0': c==='tr'?'0 5px 0 0': c==='bl'?'0 0 0 5px':'0 0 5px 0',
-              boxShadow: '0 0 6px rgba(201,162,39,0.55)',
-              zIndex: 10,
-            }}/>
-          ))}
 
           {/* ── Corner dice panels — outside the board, adjacent to each corner ── */}
           {/* Red   → top-left    (player 0) */}
