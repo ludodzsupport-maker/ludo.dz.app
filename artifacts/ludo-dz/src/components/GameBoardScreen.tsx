@@ -245,23 +245,22 @@ function DieFace({
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
               background: classic
-                ? `linear-gradient(145deg, #1e0d38 0%, #120620 100%)`
+                ? '#fffef9'
                 : `radial-gradient(circle at 36% 28%, rgba(255,255,255,0.26), ${neon}28 42%, ${col}cc)`,
-              border: `${Math.max(1, Math.round(size * 0.038))}px solid ${classic ? col + '66' : neon}`,
+              border: `${Math.max(1, Math.round(size * 0.038))}px solid ${classic ? 'rgba(0,0,0,0.12)' : neon}`,
               borderRadius: `${size * 0.16}px`,
               overflow: 'hidden',
             }}>
               <svg width={size} height={size} viewBox="-3 -3 6 6"
                 style={{ display: 'block', position: 'absolute', top: 0, left: 0 }}>
-                {/* Glass sheen */}
-                <rect x="-2.6" y="-2.7" width="2.1" height="0.76" rx="0.30"
-                  fill="white" opacity={classic ? "0.10" : "0.20"}/>
-                {/* Dots — classic: player-colour dots with a soft bloom glow underneath */}
-                {classic && d.map(([dx, dy], i) => (
-                  <circle key={`glow-${i}`} cx={dx} cy={dy} r="0.92" fill={col} opacity="0.22"/>
-                ))}
+                {/* Glass sheen — neon only */}
+                {!classic && (
+                  <rect x="-2.6" y="-2.7" width="2.1" height="0.76" rx="0.30"
+                    fill="white" opacity="0.20"/>
+                )}
+                {/* Dots — classic: plain dark #2c1810 for a wooden-board look */}
                 {d.map(([dx, dy], i) => (
-                  <circle key={i} cx={dx} cy={dy} r="0.55" fill={classic ? col : neon}/>
+                  <circle key={i} cx={dx} cy={dy} r="0.55" fill={classic ? '#2c1810' : neon}/>
                 ))}
               </svg>
             </div>
@@ -358,13 +357,13 @@ function CornerDice({
         }}/>
         <div style={{
           width: '100%', height: '100%',
-          borderRadius: 16,
-          background: isClassic ? 'rgba(20,10,40,0.55)' : 'rgba(3,10,22,0.40)',
-          border: `1px solid ${isClassic ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.04)'}`,
-          opacity: 0.35,
+          borderRadius: isClassic ? 10 : 16,
+          background: isClassic ? 'rgba(245,230,200,0.30)' : 'rgba(3,10,22,0.40)',
+          border: `1px solid ${isClassic ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.04)'}`,
+          opacity: 0.5,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: isClassic ? 'rgba(0,0,0,0.18)' : '#1a2a40' }}/>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: isClassic ? 'rgba(0,0,0,0.12)' : '#1a2a40' }}/>
         </div>
       </div>
     );
@@ -389,11 +388,11 @@ function CornerDice({
       animate={isClassic ? {
         boxShadow: isActive
           ? [
-              `0 0 14px ${clSolid}44, 0 0 4px ${clSolid}22, 0 4px 18px rgba(0,0,0,0.65)`,
-              `0 0 24px ${clSolid}66, 0 0 8px ${clSolid}44, 0 4px 18px rgba(0,0,0,0.65)`,
-              `0 0 14px ${clSolid}44, 0 0 4px ${clSolid}22, 0 4px 18px rgba(0,0,0,0.65)`,
+              `inset 0 1px 3px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.12)`,
+              `inset 0 1px 3px rgba(0,0,0,0.15), 0 2px 10px rgba(0,0,0,0.16)`,
+              `inset 0 1px 3px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.12)`,
             ]
-          : `0 0 8px ${clSolid}22, 0 2px 12px rgba(0,0,0,0.55)`,
+          : `inset 0 1px 3px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.10)`,
       } : isActive ? {
         boxShadow: [
           `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
@@ -411,18 +410,18 @@ function CornerDice({
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'space-evenly',
         padding: '6px 4px',
-        borderRadius: isClassic ? 16 : 12,
+        borderRadius: isClassic ? 10 : 12,
         cursor: canTap ? 'pointer' : 'default',
         background: isClassic
-          ? `linear-gradient(160deg, rgba(38, 18, 68, 0.92) 0%, rgba(20, 10, 40, 0.95) 100%)`
+          ? '#fdf3e3'
           : (isActive
             ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
             : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`),
         border: isClassic
-          ? `${isActive ? 2 : 1.5}px solid ${isActive ? clSolid + 'cc' : clSolid + '44'}`
+          ? `1.5px solid ${isActive ? clSolid : clSolid + '77'}`
           : `1.5px solid ${isActive ? neon : col + '55'}`,
-        backdropFilter: isClassic ? 'blur(14px)' : 'blur(10px)',
-        WebkitBackdropFilter: isClassic ? 'blur(14px)' : 'blur(10px)',
+        backdropFilter: isClassic ? 'none' : 'blur(10px)',
+        WebkitBackdropFilter: isClassic ? 'none' : 'blur(10px)',
         transition: 'background 0.4s, border-color 0.4s',
         overflow: 'hidden',
         userSelect: 'none',
@@ -467,9 +466,7 @@ function CornerDice({
             : (isActive ? neon : col + '90'),
           letterSpacing: '0.05em', textTransform: 'uppercase',
           lineHeight: 1,
-          textShadow: isClassic
-            ? (isActive ? `0 0 8px ${clSolid}88` : 'none')
-            : 'none',
+          textShadow: 'none',
         }}>
           {name.slice(0, 4)}
         </span>
