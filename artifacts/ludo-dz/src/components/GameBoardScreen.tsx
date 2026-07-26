@@ -286,7 +286,7 @@ const PANEL_GAP = 6;  // px — space between panel edge and board frame edge
 // (using the vertical headroom, which is plentiful) and hug the frame's own
 // left/right edge horizontally instead of overhanging sideways — this keeps
 // them fully outside the board while costing almost no extra board width.
-const BOARD_MARGIN = 14;   // px — minimal side margin for the board frame itself
+const BOARD_MARGIN = 4;    // px — minimal side margin for the board frame itself
 const PANEL_INSET  = 9;    // px — how far the panel sits inward from the frame's corner
 // Connector tail — a small triangle inside the untouched PANEL_GAP buffer,
 // pointing from the panel toward its board corner. TAIL_H + TAIL_GAP must
@@ -2609,7 +2609,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             position: 'relative',
             // min() ensures the board is always square and never overflows:
             // width-constrained on portrait phones, height-constrained on short screens.
-            width: `min(calc(100vw - ${2 * BOARD_MARGIN}px), calc(100dvh - 300px))`,
+            width: `min(calc(100vw - ${2 * BOARD_MARGIN}px), calc(100dvh - 270px))`,
             aspectRatio: '1',
             boxSizing: 'border-box',
             borderRadius: 22,
