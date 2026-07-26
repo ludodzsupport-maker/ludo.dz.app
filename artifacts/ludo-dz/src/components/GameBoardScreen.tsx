@@ -395,14 +395,14 @@ function CornerDice({
               `0 0 0 2px ${clLight}, 0 0 0 3.5px ${clBorder}, 0 5px 18px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.82)`,
             ]
           : `0 2px 8px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.65)`,
-      } : isActive ? {
-        boxShadow: [
+      } : {
+        scale: isActive ? 1.08 : 0.88,
+        opacity: isActive ? 1 : 0.68,
+        boxShadow: isActive ? [
           `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
           `0 0 28px ${neon}65, inset 0 0 18px ${col}28`,
           `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
-        ],
-      } : {
-        boxShadow: `0 2px 12px rgba(0,0,0,0.55), 0 0 10px ${col}40`,
+        ] : `0 2px 12px rgba(0,0,0,0.55), 0 0 8px ${col}28`,
       }}
       transition={isClassic
         ? {
@@ -410,7 +410,11 @@ function CornerDice({
             opacity:   { duration: 0.38, ease: 'easeOut' },
             boxShadow: { duration: isActive ? 1.6 : 0.3, repeat: isActive ? Infinity : 0, ease: 'easeInOut' },
           }
-        : { duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' }}
+        : {
+            scale:     { type: 'spring', stiffness: 260, damping: 28 },
+            opacity:   { duration: 0.38, ease: 'easeOut' },
+            boxShadow: { duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' },
+          }}
       style={{
         width: '100%', height: '100%',
         display: 'flex', flexDirection: 'column',
@@ -432,9 +436,7 @@ function CornerDice({
         overflow: 'hidden',
         userSelect: 'none',
         // Scale grows toward the board corner so the active card "leans in" to the game
-        transformOrigin: isClassic ? (
-          { tl: 'top left', tr: 'top right', bl: 'bottom left', br: 'bottom right' }[anchor]
-        ) : undefined,
+        transformOrigin: { tl: 'top left', tr: 'top right', bl: 'bottom left', br: 'bottom right' }[anchor],
       }}
     >
       {/* Active edge shimmer — neon only */}
@@ -495,7 +497,7 @@ function CornerDice({
             background: isClassic ? clSolid : col,
             flexShrink: 0,
             boxShadow: isClassic ? `0 0 0 1px rgba(160,120,32,0.42)` : undefined,
-            opacity: isClassic ? (isActive ? 1 : 0.60) : 1,
+            opacity: isActive ? 1 : (isClassic ? 0.60 : 0.50),
           }}
         />
         <span style={{
@@ -2543,18 +2545,8 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             style={{ transform: lang === 'ar' ? 'scaleX(-1)' : undefined }}/>
         </motion.button>
 
-        {/* Classic: spacer only — turn is communicated via card elevation at the corners */}
-        {/* Neon: individual player chips */}
-        {isClassic ? (
-          <div style={{ flex: 1 }}/>
-        ) : (
-          <div className="flex-1 flex gap-1.5 overflow-x-auto min-w-0" style={{ scrollbarWidth: 'none' }}>
-            {game.playerSlots.map((slot) => (
-              <PlayerChip key={slot} game={game} player={slot}
-                isAI={isComputer && slot !== 0} lang={lang} boardStyle={boardStyle}/>
-            ))}
-          </div>
-        )}
+        {/* Turn is communicated via card elevation at the corners — both themes */}
+        <div style={{ flex: 1 }}/>
 
         {/* Settings */}
         <motion.button onClick={() => setShowSettings(true)}
