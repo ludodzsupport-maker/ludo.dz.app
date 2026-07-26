@@ -245,9 +245,9 @@ function DieFace({
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
               background: classic
-                ? '#fffef9'
+                ? `radial-gradient(ellipse at 40% 35%, #a0521a 0%, #8b4513 55%, #6b3010 100%)`
                 : `radial-gradient(circle at 36% 28%, rgba(255,255,255,0.26), ${neon}28 42%, ${col}cc)`,
-              border: `${Math.max(1, Math.round(size * 0.038))}px solid ${classic ? 'rgba(0,0,0,0.12)' : neon}`,
+              border: `${Math.max(1, Math.round(size * 0.038))}px solid ${classic ? '#c9a227' : neon}`,
               borderRadius: `${size * 0.16}px`,
               overflow: 'hidden',
             }}>
@@ -258,9 +258,9 @@ function DieFace({
                   <rect x="-2.6" y="-2.7" width="2.1" height="0.76" rx="0.30"
                     fill="white" opacity="0.20"/>
                 )}
-                {/* Dots — classic: plain dark #2c1810 for a wooden-board look */}
+                {/* Dots — classic: ivory cream on dark wood */}
                 {d.map(([dx, dy], i) => (
-                  <circle key={i} cx={dx} cy={dy} r="0.55" fill={classic ? '#2c1810' : neon}/>
+                  <circle key={i} cx={dx} cy={dy} r="0.55" fill={classic ? '#f5e6c8' : neon}/>
                 ))}
               </svg>
             </div>
@@ -357,9 +357,9 @@ function CornerDice({
         }}/>
         <div style={{
           width: '100%', height: '100%',
-          borderRadius: isClassic ? 10 : 16,
-          background: isClassic ? 'rgba(245,230,200,0.30)' : 'rgba(3,10,22,0.40)',
-          border: `1px solid ${isClassic ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.04)'}`,
+          borderRadius: isClassic ? 12 : 16,
+          background: isClassic ? 'rgba(61,28,2,0.55)' : 'rgba(3,10,22,0.40)',
+          border: `1px solid ${isClassic ? 'rgba(201,162,39,0.30)' : 'rgba(255,255,255,0.04)'}`,
           opacity: 0.5,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
@@ -377,7 +377,7 @@ function CornerDice({
         width: 0, height: 0,
         borderLeft: `${TAIL_W}px solid transparent`,
         borderRight: `${TAIL_W}px solid transparent`,
-        [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? (isActive ? clSolid : clSolid + '88') : (isActive ? neon : col + '55')}`,
+        [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? (isActive ? '#c9a227' : '#c9a22766') : (isActive ? neon : col + '55')}`,
         filter: isClassic ? 'none' : (isActive ? `drop-shadow(0 0 3px ${neon})` : 'none'),
         transition: 'border-color 0.4s',
         pointerEvents: 'none',
@@ -388,11 +388,11 @@ function CornerDice({
       animate={isClassic ? {
         boxShadow: isActive
           ? [
-              `inset 0 1px 3px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.12)`,
-              `inset 0 1px 3px rgba(0,0,0,0.15), 0 2px 10px rgba(0,0,0,0.16)`,
-              `inset 0 1px 3px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.12)`,
+              `0 4px 15px rgba(0,0,0,0.5), inset 0 1px 0 rgba(201,162,39,0.25)`,
+              `0 4px 22px rgba(0,0,0,0.65), inset 0 1px 0 rgba(201,162,39,0.40)`,
+              `0 4px 15px rgba(0,0,0,0.5), inset 0 1px 0 rgba(201,162,39,0.25)`,
             ]
-          : `inset 0 1px 3px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.10)`,
+          : `0 4px 15px rgba(0,0,0,0.5)`,
       } : isActive ? {
         boxShadow: [
           `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
@@ -410,15 +410,15 @@ function CornerDice({
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'space-evenly',
         padding: '6px 4px',
-        borderRadius: isClassic ? 10 : 12,
+        borderRadius: 12,
         cursor: canTap ? 'pointer' : 'default',
         background: isClassic
-          ? '#fdf3e3'
+          ? `linear-gradient(145deg, #3d1c02 0%, #6b3010 50%, #3d1c02 100%)`
           : (isActive
             ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
             : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`),
         border: isClassic
-          ? `1.5px solid ${isActive ? clSolid : clSolid + '77'}`
+          ? `1.5px solid #c9a227`
           : `1.5px solid ${isActive ? neon : col + '55'}`,
         backdropFilter: isClassic ? 'none' : 'blur(10px)',
         WebkitBackdropFilter: isClassic ? 'none' : 'blur(10px)',
@@ -439,13 +439,23 @@ function CornerDice({
           transition={{ duration: 1.4, repeat: Infinity }}
         />
       )}
-      {/* Classic active — solid top accent stripe in player colour */}
+      {/* Classic — wood grain texture overlay */}
+      {isClassic && (
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: 12, pointerEvents: 'none',
+          backgroundImage: [
+            'repeating-linear-gradient(93deg, rgba(255,255,255,0.022) 0px, rgba(255,255,255,0.022) 1px, transparent 1px, transparent 7px)',
+            'repeating-linear-gradient(3deg,  rgba(0,0,0,0.10) 0px, rgba(0,0,0,0.10) 1px, transparent 1px, transparent 11px)',
+          ].join(', '),
+        }}/>
+      )}
+      {/* Classic active — golden top accent bar */}
       {isActive && isClassic && (
         <div style={{
           position: 'absolute',
           top: 0, left: 0, right: 0, height: 3,
-          background: clSolid,
-          borderRadius: '16px 16px 0 0',
+          background: `linear-gradient(90deg, #c9a22766, #c9a227, #c9a22766)`,
+          borderRadius: '12px 12px 0 0',
           pointerEvents: 'none',
         }}/>
       )}
@@ -462,7 +472,7 @@ function CornerDice({
         <span style={{
           fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 9,
           color: isClassic
-            ? (isActive ? clSolid : clSolid + 'aa')
+            ? (isActive ? '#f0c040' : '#c9a22799')
             : (isActive ? neon : col + '90'),
           letterSpacing: '0.05em', textTransform: 'uppercase',
           lineHeight: 1,
@@ -470,7 +480,7 @@ function CornerDice({
         }}>
           {name.slice(0, 4)}
         </span>
-        {isAI && <Bot size={8} color={isClassic ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.30)'} style={{ flexShrink: 0 }}/>}
+        {isAI && <Bot size={8} color={isClassic ? 'rgba(245,230,200,0.55)' : 'rgba(255,255,255,0.30)'} style={{ flexShrink: 0 }}/>}
       </div>
 
       {/* Die face with pulse ring — perspective establishes the 3D rendering context */}
@@ -478,7 +488,7 @@ function CornerDice({
         {canTap && !rolling && (
           <motion.div style={{
             position: 'absolute', inset: -6, borderRadius: 10,
-            border: `1.5px solid ${isClassic ? clSolid : neon}`,
+            border: `1.5px solid ${isClassic ? '#c9a227' : neon}`,
             pointerEvents: 'none',
           }}
             animate={{ scale: [1, 1.22, 1], opacity: [0.80, 0, 0.80] }}
@@ -504,7 +514,7 @@ function CornerDice({
               exit={{ opacity: 0, y: -2 }}
               style={{
                 fontFamily: 'Rajdhani, sans-serif', fontSize: 9, fontWeight: 700,
-                color: isClassic ? clSolid : neon, letterSpacing: '0.08em',
+                color: isClassic ? '#f0c040' : neon, letterSpacing: '0.08em',
                 textShadow: isClassic ? 'none' : `0 0 7px ${neon}`,
               }}>
               {lang === 'ar' ? 'ارمِ' : 'TAP'}
@@ -512,7 +522,7 @@ function CornerDice({
           ) : isRollingMe ? (
             <motion.span key="roll"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 9, color: isClassic ? clSolid + '88' : 'rgba(255,255,255,0.40)' }}>
+              style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 9, color: isClassic ? '#f0c04077' : 'rgba(255,255,255,0.40)' }}>
               …
             </motion.span>
           ) : null}
@@ -531,11 +541,11 @@ function CornerDice({
             <div key={i} style={{
               width: 5, height: 5, borderRadius: '50%',
               background: isClassic
-                ? (st === 'done' ? clSolid : st === 'on' ? clSolid : `${clSolid}38`)
+                ? (st === 'done' ? '#f0c040' : st === 'on' ? '#f5e6c8' : 'rgba(245,230,200,0.15)')
                 : (st === 'done' ? neon : st === 'on' ? col : `${col}35`),
-              border: `0.5px solid ${isClassic ? clSolid + '55' : col + '45'}`,
+              border: `0.5px solid ${isClassic ? 'rgba(201,162,39,0.45)' : col + '45'}`,
               boxShadow: isClassic
-                ? (st === 'done' ? `0 0 4px ${clSolid}bb` : st === 'on' ? `0 0 2px ${clSolid}77` : 'none')
+                ? 'none'
                 : (st === 'done' ? `0 0 5px ${neon}` : 'none'),
               transition: 'all 0.3s',
             }}/>
