@@ -1498,12 +1498,52 @@ function BoardSVG({
                 <stop offset="100%" stopColor={shadeColor(c, -34)}/>
               </radialGradient>
             ))}
+
+            {/* ── Safe-square star: cream-gold highlight → pure gold → amber shadow ── */}
+            <radialGradient id="cl-safe-star" cx="35%" cy="28%" r="80%">
+              <stop offset="0%"   stopColor="#FFFAC0"/>
+              <stop offset="22%"  stopColor="#FFD700"/>
+              <stop offset="62%"  stopColor="#E8A800"/>
+              <stop offset="100%" stopColor="#B07818"/>
+            </radialGradient>
+            {/* ── Jewel dome: white highlight → cream gold → warm brass ── */}
+            <radialGradient id="cl-star-jewel" cx="32%" cy="24%" r="72%">
+              <stop offset="0%"   stopColor="#FFFFFF"/>
+              <stop offset="30%"  stopColor="#FFF3A0"/>
+              <stop offset="70%"  stopColor="#FFCC40"/>
+              <stop offset="100%" stopColor="#B07818"/>
+            </radialGradient>
+            {/* ── Center star: ivory flash → bright gold → deep amber → rich brass ── */}
+            <radialGradient id="cl-center-star" cx="36%" cy="26%" r="82%">
+              <stop offset="0%"   stopColor="#FFFFE8"/>
+              <stop offset="18%"  stopColor="#FFE066"/>
+              <stop offset="48%"  stopColor="#FFB700"/>
+              <stop offset="76%"  stopColor="#D47C00"/>
+              <stop offset="100%" stopColor="#8C5200"/>
+            </radialGradient>
+            {/* ── Linen cross-hatch: classic board-game paper grain ── */}
+            <pattern id="cl-linen" x="0" y="0" width="0.55" height="0.55" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0.55" y2="0.55" stroke="rgba(130,90,30,0.046)" strokeWidth="0.062"/>
+              <line x1="0.55" y1="0" x2="0" y2="0.55" stroke="rgba(130,90,30,0.046)" strokeWidth="0.062"/>
+            </pattern>
+            {/* ── Soft golden glow for safe-square stars ── */}
+            <filter id="cl-safe-glow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur stdDeviation="0.13" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            {/* ── Richer two-pass glow for the center focal star ── */}
+            <filter id="cl-center-glow" x="-100%" y="-100%" width="300%" height="300%">
+              <feGaussianBlur stdDeviation="0.22" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
           </>
         )}
       </defs>
 
       {/* ── Background ── */}
       <rect width="15" height="15" fill={isClassic ? '#F0EEE8' : '#030b16'}/>
+      {/* Classic: linen cross-hatch paper grain — the feel of a premium printed board */}
+      {isClassic && <rect width="15" height="15" fill="url(#cl-linen)"/>}
 
       {/* ── Home zones ── */}
       {[0,1,2,3].map(player => {
@@ -1642,6 +1682,23 @@ function BoardSVG({
               })}
 
               {/* Centre ornament — a jeweled compass rosette replaces the old plain cross */}
+              {/* Outer decorative ring — compass perimeter */}
+              <circle cx={cx} cy={cy} r="0.74" fill="none" stroke={border}
+                strokeWidth="0.012" strokeOpacity={0.22*fade}/>
+              {/* Cardinal N/E/S/W tick marks — the four compass points */}
+              {([0, Math.PI/2, Math.PI, 3*Math.PI/2] as number[]).map((ang, i) => (
+                <line key={`tk-${i}`}
+                  x1={cx + Math.cos(ang)*0.60} y1={cy + Math.sin(ang)*0.60}
+                  x2={cx + Math.cos(ang)*0.74} y2={cy + Math.sin(ang)*0.74}
+                  stroke="url(#clbrass)" strokeWidth="0.022" strokeOpacity={0.55*fade}/>
+              ))}
+              {/* Diagonal NE/NW/SE/SW tick marks — shorter intercardinal marks */}
+              {([Math.PI/4, 3*Math.PI/4, 5*Math.PI/4, 7*Math.PI/4] as number[]).map((ang, i) => (
+                <line key={`tk2-${i}`}
+                  x1={cx + Math.cos(ang)*0.63} y1={cy + Math.sin(ang)*0.63}
+                  x2={cx + Math.cos(ang)*0.72} y2={cy + Math.sin(ang)*0.72}
+                  stroke={border} strokeWidth="0.014" strokeOpacity={0.36*fade}/>
+              ))}
               <circle cx={cx} cy={cy} r="0.66" fill="none" stroke="url(#clbrass)"
                 strokeWidth="0.020" strokeOpacity={0.40*fade}/>
               <polygon points={starPoints(cx, cy, 0.50, 0.225, 8)}
@@ -1663,6 +1720,8 @@ function BoardSVG({
               <circle cx={cx} cy={cy} r="0.115" fill={`url(#clsocket${player})`} fillOpacity={0.98*fade}
                 stroke="url(#clbrass)" strokeWidth="0.022" strokeOpacity={0.85*fade}/>
               <circle cx={cx-0.032} cy={cy-0.032} r="0.032" fill="white" fillOpacity={0.70*fade}/>
+              {/* Hot-spot — the jewel dome peak catching direct light */}
+              <circle cx={cx-0.018} cy={cy-0.018} r="0.014" fill="white" fillOpacity={0.90*fade}/>
 
               {/* Border */}
               <rect x={zc} y={zr} width="6" height="6" fill="none"
@@ -1869,9 +1928,9 @@ function BoardSVG({
 
         // Visual rule: ONLY homecol (middle lane) cells get player color.
         // Strip and path cells stay neutral/dark for clean contrast.
-        let fill    = isClassic ? '#FFFFFF' : '#0d1f38';
+        let fill    = isClassic ? '#FDFBF4' : '#0d1f38';
         let fillOp  = 1;
-        let stroke  = isClassic ? 'rgba(40,40,70,0.18)' : 'rgba(255,255,255,0.06)';
+        let stroke  = isClassic ? 'rgba(130,85,20,0.22)' : 'rgba(255,255,255,0.06)';
         let useGlow = false;
 
         if (cell.kind === 'homecol') {
@@ -1910,6 +1969,21 @@ function BoardSVG({
               stroke={stroke} strokeWidth="0.028"
               filter={useGlow ? 'url(#lane-glow)' : undefined}
             />
+            {/* Classic: inner bevel — bright top/left catch-light, warm shadow bottom/right */}
+            {isClassic && (
+              <>
+                <line x1={c+0.03} y1={r+0.03} x2={c+0.97} y2={r+0.03}
+                  stroke="white" strokeWidth="0.022"
+                  strokeOpacity={cell.kind === 'homecol' ? 0.28 : 0.50}/>
+                <line x1={c+0.03} y1={r+0.04} x2={c+0.03} y2={r+0.97}
+                  stroke="white" strokeWidth="0.022"
+                  strokeOpacity={cell.kind === 'homecol' ? 0.20 : 0.36}/>
+                <line x1={c+0.04} y1={r+0.97} x2={c+0.97} y2={r+0.97}
+                  stroke="rgba(100,58,8,0.18)" strokeWidth="0.018"/>
+                <line x1={c+0.97} y1={r+0.04} x2={c+0.97} y2={r+0.97}
+                  stroke="rgba(100,58,8,0.18)" strokeWidth="0.018"/>
+              </>
+            )}
             {/* Subtle glass sheen — neon mode only */}
             {!isClassic && (
               <rect x={c+0.04} y={r+0.04} width="0.28" height="0.13" rx="0.05"
@@ -1975,14 +2049,31 @@ function BoardSVG({
             {isStar && !isStart && (() => {
               if (isClassic) {
                 return (
-                  <g transform={`translate(${c},${r})`}>
-                    {/* Classic golden star — clean, premium */}
+                  <g transform={`translate(${c},${r})`} filter="url(#cl-safe-glow)">
+                    {/* Stamped impression ring — the star is pressed into the ivory like a seal */}
+                    <circle cx="0.5" cy="0.5" r="0.412"
+                      fill="none" stroke="#8C6420" strokeWidth="0.016" strokeOpacity="0.28"/>
+                    {/* Warm amber bloom — the star radiates a soft golden warmth onto the cell */}
+                    <circle cx="0.5" cy="0.5" r="0.36"
+                      fill="#FFB800" fillOpacity="0.10"/>
+                    {/* Emboss drop-shadow — brass-dark offset copy underneath the main star */}
                     <polygon
                       points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
-                      fill="#FFD700" fillOpacity="0.95"
-                      stroke="#D4A000" strokeWidth="0.016" strokeOpacity="0.85"
-                    />
-                    <circle cx="0.5" cy="0.5" r="0.055" fill="#FFF8C0" fillOpacity="0.95"/>
+                      fill="#7A4C08" fillOpacity="0.24"
+                      transform="translate(0.013,0.013)"/>
+                    {/* Main star — rich gradient gold from cream highlight to deep amber */}
+                    <polygon
+                      points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
+                      fill="url(#cl-safe-star)" fillOpacity="1.0"
+                      stroke="#A07010" strokeWidth="0.020" strokeOpacity="0.72"/>
+                    {/* Faceted jewel dome at centre */}
+                    <circle cx="0.5" cy="0.5" r="0.078"
+                      fill="url(#cl-star-jewel)"
+                      stroke="#C8960C" strokeWidth="0.014" strokeOpacity="0.88"/>
+                    {/* Jewel primary specular */}
+                    <circle cx="0.470" cy="0.467" r="0.028" fill="white" fillOpacity="0.82"/>
+                    {/* Jewel hot-spot — pin-point light at the dome peak */}
+                    <circle cx="0.480" cy="0.476" r="0.012" fill="white" fillOpacity="0.96"/>
                   </g>
                 );
               }
