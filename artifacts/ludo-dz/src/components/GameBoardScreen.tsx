@@ -1426,30 +1426,37 @@ function BoardSVG({
               ))}
 
               {/* Pawn bays — brass-collared wells with a true recessed inset-shadow read */}
-              {E.HOME_BASES[player].map(([br, bc], si) => (
+              {E.HOME_BASES[player].map(([br, bc], si) => {
+                // slotOccupied: this specific pawn is still in the home bay (relPos === -1).
+                // 'exists' is only player-level; using it here caused empty bays to stay
+                // visually filled after their pawn left home.
+                const slotOccupied = game.pieces.some(
+                  p => p.player === player && p.index === si && p.relPos === -1
+                );
+                return (
                 <g key={si}>
                   {/* Soft two-layer recess shadow — grounds the bay like a real carved well */}
                   <circle cx={bc+0.56} cy={br+0.58} r={0.50}
-                    fill="#000000" fillOpacity={exists ? 0.10 : 0.03}/>
+                    fill="#000000" fillOpacity={slotOccupied ? 0.10 : 0.03}/>
                   <circle cx={bc+0.53} cy={br+0.54} r={0.47}
-                    fill="#000000" fillOpacity={exists ? 0.15 : 0.04}/>
+                    fill="#000000" fillOpacity={slotOccupied ? 0.15 : 0.04}/>
                   {/* Polished brass collar ring — the coin-slot "hardware" edge */}
                   <circle cx={bc+0.5} cy={br+0.5} r={0.47}
                     fill="none" stroke="url(#clbrass)" strokeWidth="0.055" strokeOpacity={0.90*fade}/>
                   {/* Dark inset rim — the recess wall, catches shadow all around */}
                   <circle cx={bc+0.5} cy={br+0.5} r={0.42}
-                    fill="none" stroke="#000000" strokeWidth="0.032" strokeOpacity={exists ? 0.26 : 0.06}/>
+                    fill="none" stroke="#000000" strokeWidth="0.032" strokeOpacity={slotOccupied ? 0.26 : 0.06}/>
                   <circle cx={bc+0.5} cy={br+0.5} r={0.41}
-                    fill={`url(#clsocket${player})`} fillOpacity={exists ? 0.96 : 0.18}
-                    stroke={border} strokeWidth="0.030" strokeOpacity={exists ? 0.85 : 0.18}/>
+                    fill={`url(#clsocket${player})`} fillOpacity={slotOccupied ? 0.96 : 0.18}
+                    stroke={border} strokeWidth="0.030" strokeOpacity={slotOccupied ? 0.85 : 0.18}/>
                   {/* Glossy highlight on pawn bay */}
                   <circle cx={bc+0.42} cy={br+0.40} r={0.15}
-                    fill="white" fillOpacity={exists ? 0.44 : 0.08}/>
+                    fill="white" fillOpacity={slotOccupied ? 0.44 : 0.08}/>
                   <circle cx={bc+0.36} cy={br+0.34} r={0.075}
-                    fill="white" fillOpacity={exists ? 0.74 : 0.12}/>
+                    fill="white" fillOpacity={slotOccupied ? 0.74 : 0.12}/>
                   {/* Lit lip along the upper-left rim — the recess "catching" light */}
                   <path d={`M ${bc+0.5-0.42*0.71},${br+0.5-0.42*0.71} A 0.42 0.42 0 0 1 ${bc+0.92},${br+0.5}`}
-                    fill="none" stroke="white" strokeWidth="0.022" strokeOpacity={exists ? 0.32 : 0.06}/>
+                    fill="none" stroke="white" strokeWidth="0.022" strokeOpacity={slotOccupied ? 0.32 : 0.06}/>
                   {homeImpact?.player === player && homeImpact?.index === si && (
                     <motion.circle
                       key={homeImpact.id}
@@ -1461,7 +1468,8 @@ function BoardSVG({
                     />
                   )}
                 </g>
-              ))}
+                );
+              })}
 
               {/* Centre ornament — a jeweled compass rosette replaces the old plain cross */}
               <circle cx={cx} cy={cy} r="0.66" fill="none" stroke="url(#clbrass)"
