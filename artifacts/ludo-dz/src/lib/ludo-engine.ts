@@ -136,9 +136,24 @@ export function createGame(numPlayers: number, pawnsPerPlayer = 4, playerSlots?:
   };
 }
 
+// ─── Weighted roll — early-game assist ────────────────────────────────────────
+// Used only when ALL of a player's pawns are still at home (relPos === -1),
+// meaning the player has not yet released a single pawn. Weights 6 at 3×
+// relative to each other face, giving P(6) ≈ 37.5% vs the normal 16.7%.
+// Faces 1–5 each land with P ≈ 12.5%. Looks identical to a normal roll.
+function weightedSixRoll(): number {
+  // Total weight = 3 (six) + 1+1+1+1+1 (faces 1-5) = 8
+  const r = Math.random() * 8;
+  if (r < 3) return 6;
+  return Math.floor(r - 3) + 1; // [3,4)→1, [4,5)→2, [5,6)→3, [6,7)→4, [7,8)→5
+}
+
 export function doRoll(state: GameState): GameState {
   if (state.diceRolled || state.phase !== 'rolling') return state;
-  const dice    = Math.floor(Math.random() * 6) + 1;
+  const allHome = state.pieces
+    .filter(p => p.player === state.activePlayer)
+    .every(p => p.relPos === -1);
+  const dice    = allHome ? weightedSixRoll() : Math.floor(Math.random() * 6) + 1;
   const movable = calcMovable(state.pieces, state.activePlayer, dice);
   const sixs    = dice === 6 ? state.consecutiveSixes + 1 : 0;
   const message = movable.length === 0 ? 'Aucun mouvement possible' : '';
