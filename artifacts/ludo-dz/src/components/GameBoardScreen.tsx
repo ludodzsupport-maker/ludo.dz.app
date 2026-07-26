@@ -1536,6 +1536,52 @@ function BoardSVG({
               <feGaussianBlur stdDeviation="0.22" result="b"/>
               <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
             </filter>
+
+            {/* ── Board frame gilt gradient — diagonal sweep for outer border accent ── */}
+            <linearGradient id="cl-frame-gilt" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%"   stopColor="#FFF5B0"/>
+              <stop offset="28%"  stopColor="#D4A840"/>
+              <stop offset="68%"  stopColor="#9A6C20"/>
+              <stop offset="100%" stopColor="#E8C860"/>
+            </linearGradient>
+
+            {/* ── Safe-star outer ring gradient — brighter than the star fill itself ── */}
+            <radialGradient id="cl-star-ring" cx="35%" cy="28%" r="78%">
+              <stop offset="0%"   stopColor="#FFFBE8"/>
+              <stop offset="40%"  stopColor="#E8A400"/>
+              <stop offset="100%" stopColor="#7A5210"/>
+            </radialGradient>
+
+            {/* ── Center star ambient bloom — wide warm haze beneath the focal star ── */}
+            <radialGradient id="cl-center-bloom" cx="50%" cy="50%" r="50%">
+              <stop offset="0%"   stopColor="#FFE566" stopOpacity="0.70"/>
+              <stop offset="55%"  stopColor="#FFB800" stopOpacity="0.28"/>
+              <stop offset="100%" stopColor="#B07818" stopOpacity="0.00"/>
+            </radialGradient>
+
+            {/* ── Center star deepened fill — extra stop for richer mid-tone ── */}
+            <radialGradient id="cl-center-star2" cx="30%" cy="22%" r="88%">
+              <stop offset="0%"   stopColor="#FFFFE0"/>
+              <stop offset="12%"  stopColor="#FFE566"/>
+              <stop offset="34%"  stopColor="#FFB700"/>
+              <stop offset="58%"  stopColor="#D07C00"/>
+              <stop offset="80%"  stopColor="#A05000"/>
+              <stop offset="100%" stopColor="#6C3800"/>
+            </radialGradient>
+
+            {/* ── Homecol cell depth overlay — subtle top-lit sheen per lane cell ── */}
+            <linearGradient id="cl-lane-sheen" x1="15%" y1="0%" x2="85%" y2="100%">
+              <stop offset="0%"   stopColor="white"   stopOpacity="0.28"/>
+              <stop offset="40%"  stopColor="white"   stopOpacity="0.06"/>
+              <stop offset="100%" stopColor="#000000"  stopOpacity="0.10"/>
+            </linearGradient>
+
+            {/* ── Home base inner vignette — darkens panel corners for depth ── */}
+            <radialGradient id="cl-panel-vignette" cx="50%" cy="50%" r="70%">
+              <stop offset="0%"   stopColor="white"    stopOpacity="0.00"/>
+              <stop offset="72%"  stopColor="white"    stopOpacity="0.00"/>
+              <stop offset="100%" stopColor="#6B4010"  stopOpacity="0.12"/>
+            </radialGradient>
           </>
         )}
       </defs>
@@ -1590,6 +1636,10 @@ function BoardSVG({
               {/* Glossy sheen across the upper third */}
               <rect x={zc+0.40} y={zr+0.40} width="5.20" height="1.35" rx="0.22"
                 fill="white" fillOpacity={exists ? 0.24 : 0.08}/>
+              {/* Corner vignette — darkens the panel edges for enclosure and depth */}
+              <rect x={zc+0.40} y={zr+0.40} width="5.20" height="5.20" rx="0.22"
+                fill="url(#cl-panel-vignette)" fillOpacity={0.92*fade}
+                pointerEvents="none"/>
 
               {/* Gilt double-line inset frame — a real bordered-cardstock/inlaid-wood edge */}
               <rect x={zc+0.68} y={zr+0.68} width="4.64" height="4.64" rx="0.14"
@@ -1681,47 +1731,78 @@ function BoardSVG({
                 );
               })}
 
-              {/* Centre ornament — a jeweled compass rosette replaces the old plain cross */}
-              {/* Outer decorative ring — compass perimeter */}
-              <circle cx={cx} cy={cy} r="0.74" fill="none" stroke={border}
-                strokeWidth="0.012" strokeOpacity={0.22*fade}/>
-              {/* Cardinal N/E/S/W tick marks — the four compass points */}
-              {([0, Math.PI/2, Math.PI, 3*Math.PI/2] as number[]).map((ang, i) => (
-                <line key={`tk-${i}`}
-                  x1={cx + Math.cos(ang)*0.60} y1={cy + Math.sin(ang)*0.60}
-                  x2={cx + Math.cos(ang)*0.74} y2={cy + Math.sin(ang)*0.74}
-                  stroke="url(#clbrass)" strokeWidth="0.022" strokeOpacity={0.55*fade}/>
-              ))}
-              {/* Diagonal NE/NW/SE/SW tick marks — shorter intercardinal marks */}
-              {([Math.PI/4, 3*Math.PI/4, 5*Math.PI/4, 7*Math.PI/4] as number[]).map((ang, i) => (
-                <line key={`tk2-${i}`}
-                  x1={cx + Math.cos(ang)*0.63} y1={cy + Math.sin(ang)*0.63}
-                  x2={cx + Math.cos(ang)*0.72} y2={cy + Math.sin(ang)*0.72}
-                  stroke={border} strokeWidth="0.014" strokeOpacity={0.36*fade}/>
-              ))}
-              <circle cx={cx} cy={cy} r="0.66" fill="none" stroke="url(#clbrass)"
-                strokeWidth="0.020" strokeOpacity={0.40*fade}/>
-              <polygon points={starPoints(cx, cy, 0.50, 0.225, 8)}
-                fill={solid} fillOpacity={0.30*fade}
-                stroke="url(#clbrass)" strokeWidth="0.028" strokeOpacity={0.75*fade}/>
-              <circle cx={cx} cy={cy} r="0.31" fill="url(#clivory)" fillOpacity={0.96*fade}
-                stroke="url(#clbrass)" strokeWidth="0.026" strokeOpacity={0.80*fade}/>
+              {/* Centre ornament — premium jeweled compass rosette */}
+              {/* Outermost halo ring — very soft ambient gold warmth */}
+              <circle cx={cx} cy={cy} r="0.90" fill={solid} fillOpacity={0.06*fade}/>
+              {/* Outer engraved band — double-ring compass perimeter */}
+              <circle cx={cx} cy={cy} r="0.82" fill="none" stroke="url(#clbrass)"
+                strokeWidth="0.018" strokeOpacity={0.35*fade}/>
+              <circle cx={cx} cy={cy} r="0.78" fill="none" stroke={border}
+                strokeWidth="0.008" strokeOpacity={0.22*fade}/>
+              {/* Eight outer spokes — compass needles touching the outer band */}
+              {Array.from({length:8},(_,i)=>{
+                const ang = (i/8)*Math.PI*2;
+                return <line key={`sp-${i}`}
+                  x1={cx+Math.cos(ang)*0.62} y1={cy+Math.sin(ang)*0.62}
+                  x2={cx+Math.cos(ang)*0.78} y2={cy+Math.sin(ang)*0.78}
+                  stroke={i%2===0 ? 'url(#clbrass)' : border}
+                  strokeWidth={i%2===0 ? 0.022 : 0.012}
+                  strokeOpacity={(i%2===0 ? 0.58 : 0.34)*fade}/>;
+              })}
+              {/* Sixteen small crown dots at the compass band — engraved beadwork */}
+              {Array.from({length:16},(_,i)=>{
+                const ang = (i/16)*Math.PI*2 + Math.PI/16;
+                return <circle key={`cr-${i}`}
+                  cx={cx+Math.cos(ang)*0.73} cy={cy+Math.sin(ang)*0.73}
+                  r="0.020" fill="url(#clbrass)" fillOpacity={0.60*fade}/>;
+              })}
+              {/* Inner ring — the compass rose circle */}
+              <circle cx={cx} cy={cy} r="0.62" fill="none" stroke="url(#clbrass)"
+                strokeWidth="0.024" strokeOpacity={0.45*fade}/>
+              {/* 8-point star polygon — richer fill, prominent gilt stroke */}
+              <polygon points={starPoints(cx, cy, 0.52, 0.230, 8)}
+                fill={solid} fillOpacity={0.38*fade}
+                stroke="url(#clbevel)" strokeWidth="0.032" strokeOpacity={0.85*fade}/>
+              {/* Star secondary rim — separates the fill from the ivory disc */}
+              <polygon points={starPoints(cx, cy, 0.52, 0.230, 8)}
+                fill="none"
+                stroke={border} strokeWidth="0.012" strokeOpacity={0.30*fade}/>
+              {/* Ivory disc — warm parchment inset that grounds the petals */}
+              <circle cx={cx} cy={cy} r="0.33" fill="url(#clivory)" fillOpacity={0.98*fade}
+                stroke="url(#clbrass)" strokeWidth="0.028" strokeOpacity={0.88*fade}/>
+              {/* Ivory disc inner shadow — subtle recess read */}
+              <circle cx={cx+0.04} cy={cy+0.05} r="0.29"
+                fill="#6B4010" fillOpacity={0.06*fade}/>
               {/* Four petals (N/E/S/W) sitting on the ivory disc */}
-              <ellipse cx={cx} cy={cy-0.155} rx={0.070} ry={0.145} fill={solid} fillOpacity={0.62*fade}/>
-              <ellipse cx={cx} cy={cy+0.155} rx={0.070} ry={0.145} fill={solid} fillOpacity={0.62*fade}/>
-              <ellipse cx={cx-0.155} cy={cy} rx={0.145} ry={0.070} fill={solid} fillOpacity={0.62*fade}/>
-              <ellipse cx={cx+0.155} cy={cy} rx={0.145} ry={0.070} fill={solid} fillOpacity={0.62*fade}/>
-              {/* Four diagonal accent dots complete the eight-point star motif */}
+              <ellipse cx={cx} cy={cy-0.164} rx={0.076} ry={0.152} fill={solid} fillOpacity={0.72*fade}/>
+              <ellipse cx={cx} cy={cy+0.164} rx={0.076} ry={0.152} fill={solid} fillOpacity={0.72*fade}/>
+              <ellipse cx={cx-0.164} cy={cy} rx={0.152} ry={0.076} fill={solid} fillOpacity={0.72*fade}/>
+              <ellipse cx={cx+0.164} cy={cy} rx={0.152} ry={0.076} fill={solid} fillOpacity={0.72*fade}/>
+              {/* Petal gilt edge catch-lights */}
+              <ellipse cx={cx-0.010} cy={cy-0.166} rx={0.030} ry={0.060} fill="white" fillOpacity={0.30*fade}/>
+              <ellipse cx={cx-0.010} cy={cy+0.162} rx={0.030} ry={0.060} fill="white" fillOpacity={0.22*fade}/>
+              <ellipse cx={cx-0.166} cy={cy-0.010} rx={0.060} ry={0.030} fill="white" fillOpacity={0.30*fade}/>
+              <ellipse cx={cx+0.162} cy={cy-0.010} rx={0.060} ry={0.030} fill="white" fillOpacity={0.22*fade}/>
+              {/* Four diagonal accent studs — brass rivets completing the eight-point motif */}
               {[[1,1],[1,-1],[-1,1],[-1,-1]].map(([sx3,sy3], i) => (
-                <circle key={`dd-${i}`} cx={cx+sx3*0.165} cy={cy+sy3*0.165} r="0.032"
-                  fill={border} fillOpacity={0.55*fade}/>
+                <g key={`dd-${i}`}>
+                  <circle cx={cx+sx3*0.172} cy={cy+sy3*0.172} r="0.038"
+                    fill="url(#clbrass)" fillOpacity={0.70*fade}
+                    stroke={border} strokeWidth="0.008" strokeOpacity={0.40*fade}/>
+                  <circle cx={cx+sx3*0.162} cy={cy+sy3*0.162} r="0.014"
+                    fill="white" fillOpacity={0.55*fade}/>
+                </g>
               ))}
-              {/* Centre jewel — gem-cut socket-toned dome with its own highlight */}
-              <circle cx={cx} cy={cy} r="0.115" fill={`url(#clsocket${player})`} fillOpacity={0.98*fade}
-                stroke="url(#clbrass)" strokeWidth="0.022" strokeOpacity={0.85*fade}/>
-              <circle cx={cx-0.032} cy={cy-0.032} r="0.032" fill="white" fillOpacity={0.70*fade}/>
+              {/* Centre jewel — deeper socket, larger dome, premium presence */}
+              <circle cx={cx} cy={cy} r="0.134" fill={`url(#clsocket${player})`} fillOpacity={0.99*fade}
+                stroke="url(#clbrass)" strokeWidth="0.026" strokeOpacity={0.92*fade}/>
+              {/* Jewel facet ring — inner engraved cut */}
+              <circle cx={cx} cy={cy} r="0.088"
+                fill="none" stroke="rgba(255,255,255,0.40)" strokeWidth="0.009" strokeOpacity={fade}/>
+              {/* Jewel primary specular */}
+              <circle cx={cx-0.038} cy={cy-0.038} r="0.038" fill="white" fillOpacity={0.72*fade}/>
               {/* Hot-spot — the jewel dome peak catching direct light */}
-              <circle cx={cx-0.018} cy={cy-0.018} r="0.014" fill="white" fillOpacity={0.90*fade}/>
+              <circle cx={cx-0.022} cy={cy-0.022} r="0.018" fill="white" fillOpacity={0.94*fade}/>
 
               {/* Border */}
               <rect x={zc} y={zr} width="6" height="6" fill="none"
@@ -1984,6 +2065,17 @@ function BoardSVG({
                   stroke="rgba(100,58,8,0.18)" strokeWidth="0.018"/>
               </>
             )}
+            {/* Classic homecol: diagonal top-light sheen — tonal depth per lane cell */}
+            {isClassic && cell.kind === 'homecol' && (
+              <rect x={c} y={r} width="1" height="1"
+                fill="url(#cl-lane-sheen)" fillOpacity="0.85"
+                pointerEvents="none"/>
+            )}
+            {/* Classic path cell: subtle warm vignette at bottom-right corner */}
+            {isClassic && cell.kind === 'path' && (
+              <rect x={c+0.50} y={r+0.50} width="0.50" height="0.50"
+                fill="rgba(140,90,20,0.045)" pointerEvents="none"/>
+            )}
             {/* Subtle glass sheen — neon mode only */}
             {!isClassic && (
               <rect x={c+0.04} y={r+0.04} width="0.28" height="0.13" rx="0.05"
@@ -2050,30 +2142,55 @@ function BoardSVG({
               if (isClassic) {
                 return (
                   <g transform={`translate(${c},${r})`} filter="url(#cl-safe-glow)">
+                    {/* Wide warm amber haze — warms the ivory cell before the star */}
+                    <circle cx="0.5" cy="0.5" r="0.46"
+                      fill="#FFB800" fillOpacity="0.14"/>
+                    {/* Outer gilt ring — engraved compass band around the star */}
+                    <circle cx="0.5" cy="0.5" r="0.435"
+                      fill="none" stroke="url(#cl-star-ring)" strokeWidth="0.026" strokeOpacity="0.70"/>
                     {/* Stamped impression ring — the star is pressed into the ivory like a seal */}
                     <circle cx="0.5" cy="0.5" r="0.412"
-                      fill="none" stroke="#8C6420" strokeWidth="0.016" strokeOpacity="0.28"/>
-                    {/* Warm amber bloom — the star radiates a soft golden warmth onto the cell */}
-                    <circle cx="0.5" cy="0.5" r="0.36"
-                      fill="#FFB800" fillOpacity="0.10"/>
-                    {/* Emboss drop-shadow — brass-dark offset copy underneath the main star */}
+                      fill="none" stroke="#8C6420" strokeWidth="0.014" strokeOpacity="0.32"/>
+                    <circle cx="0.5" cy="0.5" r="0.388"
+                      fill="none" stroke="rgba(184,134,59,0.22)" strokeWidth="0.008"/>
+                    {/* Deep emboss — two-layer offset shadow for real pressed-metal depth */}
                     <polygon
                       points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
-                      fill="#7A4C08" fillOpacity="0.24"
-                      transform="translate(0.013,0.013)"/>
+                      fill="#3A1E04" fillOpacity="0.20"
+                      transform="translate(0.022,0.022)"/>
+                    <polygon
+                      points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
+                      fill="#7A4C08" fillOpacity="0.28"
+                      transform="translate(0.012,0.012)"/>
                     {/* Main star — rich gradient gold from cream highlight to deep amber */}
                     <polygon
                       points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
                       fill="url(#cl-safe-star)" fillOpacity="1.0"
-                      stroke="#A07010" strokeWidth="0.020" strokeOpacity="0.72"/>
-                    {/* Faceted jewel dome at centre */}
-                    <circle cx="0.5" cy="0.5" r="0.078"
+                      stroke="#8C6010" strokeWidth="0.022" strokeOpacity="0.80"/>
+                    {/* Gilt rim highlight — bright catch-light on top of the star stroke */}
+                    <polygon
+                      points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
+                      fill="none"
+                      stroke="url(#clbevel)" strokeWidth="0.010" strokeOpacity="0.60"/>
+                    {/* Five tip accent dots — tiny brass studs at each outer star point */}
+                    {([
+                      [0.500,0.185],[0.800,0.400],[0.690,0.750],[0.310,0.750],[0.200,0.400]
+                    ] as [number,number][]).map(([tx,ty],ti)=>(
+                      <circle key={ti} cx={tx} cy={ty} r="0.024"
+                        fill="url(#clbrass)" fillOpacity="0.92"
+                        stroke="#5C3D14" strokeWidth="0.006" strokeOpacity="0.55"/>
+                    ))}
+                    {/* Faceted jewel dome at centre — slightly larger for presence */}
+                    <circle cx="0.5" cy="0.5" r="0.092"
                       fill="url(#cl-star-jewel)"
-                      stroke="#C8960C" strokeWidth="0.014" strokeOpacity="0.88"/>
+                      stroke="#C8960C" strokeWidth="0.016" strokeOpacity="0.92"/>
+                    {/* Jewel facet engraving — inner ring reads as a cut gem edge */}
+                    <circle cx="0.5" cy="0.5" r="0.060"
+                      fill="none" stroke="rgba(255,255,255,0.42)" strokeWidth="0.008"/>
                     {/* Jewel primary specular */}
-                    <circle cx="0.470" cy="0.467" r="0.028" fill="white" fillOpacity="0.82"/>
+                    <circle cx="0.468" cy="0.464" r="0.032" fill="white" fillOpacity="0.86"/>
                     {/* Jewel hot-spot — pin-point light at the dome peak */}
-                    <circle cx="0.480" cy="0.476" r="0.012" fill="white" fillOpacity="0.96"/>
+                    <circle cx="0.478" cy="0.474" r="0.014" fill="white" fillOpacity="0.98"/>
                   </g>
                 );
               }
@@ -2125,20 +2242,101 @@ function BoardSVG({
         fill={isClassic ? CL_SOLID[3] : E.PLAYER_COLORS[3]} opacity={game.playerSlots.includes(3) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
       <polygon points="6,9 6,6 7.5,7.5"
         fill={isClassic ? CL_SOLID[0] : E.PLAYER_COLORS[0]} opacity={isClassic ? 0.96 : 0.58}/>
-      {/* Classic: glossy sheen over center triangles */}
+      {/* Classic: glossy top-light sheens on all four center triangles */}
       {isClassic && (
-        <polygon points="6,6 9,6 7.5,7.5" fill="white" opacity="0.12"/>
-      )}
-      <rect x="6" y="6" width="3" height="3" fill="none"
-        stroke={isClassic ? 'rgba(30,30,70,0.35)' : 'rgba(255,255,255,0.12)'} strokeWidth="0.055"/>
-      {isClassic ? (
-        /* Classic: bold golden 5-point star */
         <>
+          {/* Blue — top triangle: sheen along the top edge */}
+          <polygon points="6,6 9,6 7.5,7.5" fill="white" opacity="0.16"/>
+          {/* Yellow — right triangle: sheen along the right edge */}
+          <polygon points="9,6 9,9 7.5,7.5" fill="white" opacity="0.10"/>
+          {/* Green — bottom triangle: subtle floor reflection */}
+          <polygon points="9,9 6,9 7.5,7.5" fill="white" opacity="0.08"/>
+          {/* Red — left triangle: left-edge catch-light */}
+          <polygon points="6,9 6,6 7.5,7.5" fill="white" opacity="0.12"/>
+          {/* Inner shadow lines along each seam — pressed-edge depth between triangles */}
+          <line x1="6" y1="6" x2="7.5" y2="7.5" stroke="rgba(0,0,0,0.18)" strokeWidth="0.040"/>
+          <line x1="9" y1="6" x2="7.5" y2="7.5" stroke="rgba(0,0,0,0.18)" strokeWidth="0.040"/>
+          <line x1="9" y1="9" x2="7.5" y2="7.5" stroke="rgba(0,0,0,0.18)" strokeWidth="0.040"/>
+          <line x1="6" y1="9" x2="7.5" y2="7.5" stroke="rgba(0,0,0,0.18)" strokeWidth="0.040"/>
+        </>
+      )}
+      {/* Center area border — gilt for Classic, subtle white for Neon */}
+      <rect x="6" y="6" width="3" height="3" fill="none"
+        stroke={isClassic ? 'url(#clbevel)' : 'rgba(255,255,255,0.12)'}
+        strokeWidth={isClassic ? 0.042 : 0.055}
+        strokeOpacity={isClassic ? 0.72 : 1}/>
+      {isClassic ? (
+        /* Classic: premium multi-layer focal star — the heart of the board */
+        <>
+          {/* Wide ambient warmth — gold haze radiating out beneath the star */}
+          <circle cx="7.5" cy="7.5" r="1.10" fill="url(#cl-center-bloom)" fillOpacity="0.85"/>
+          {/* Outer compass ring — engraved gilt band circling the star */}
+          <circle cx="7.5" cy="7.5" r="0.84"
+            fill="none" stroke="url(#clbevel)" strokeWidth="0.028" strokeOpacity="0.68"/>
+          <circle cx="7.5" cy="7.5" r="0.80"
+            fill="none" stroke="rgba(184,134,59,0.30)" strokeWidth="0.010"/>
+          {/* Eight filigree spokes — radiate from inner ring to outer band */}
+          {Array.from({length:8},(_,i)=>{
+            const a = (i/8)*Math.PI*2 - Math.PI/2;
+            return <line key={i}
+              x1={7.5+Math.cos(a)*0.52} y1={7.5+Math.sin(a)*0.52}
+              x2={7.5+Math.cos(a)*0.78} y2={7.5+Math.sin(a)*0.78}
+              stroke="url(#clbrass)" strokeWidth="0.016" strokeOpacity="0.55"/>;
+          })}
+          {/* Eight tiny diamond finials at spoke tips */}
+          {Array.from({length:8},(_,i)=>{
+            const a = (i/8)*Math.PI*2 - Math.PI/2;
+            const sx=7.5+Math.cos(a)*0.80, sy=7.5+Math.sin(a)*0.80;
+            return <rect key={i} x={sx-0.034} y={sy-0.034} width="0.068" height="0.068"
+              fill="url(#clbrass)" fillOpacity="0.80"
+              transform={`rotate(45 ${sx} ${sy})`}/>;
+          })}
+          {/* Inner glory ring */}
+          <circle cx="7.5" cy="7.5" r="0.52"
+            fill="none" stroke="url(#clbrass)" strokeWidth="0.022" strokeOpacity="0.50"/>
+          {/* Deep emboss — two offset shadow layers for genuine pressed-metal depth */}
           <polygon
-            points="7.500,6.880 7.740,7.400 8.310,7.406 7.892,7.714 8.049,8.228 7.500,7.920 6.951,8.228 7.108,7.714 6.690,7.406 7.260,7.400"
-            fill="#FFD700" fillOpacity="0.98"
-            stroke="#C8960C" strokeWidth="0.034" strokeOpacity="0.90"/>
-          <circle cx="7.5" cy="7.5" r="0.072" fill="#FFF8C0" fillOpacity="0.95"/>
+            points="7.500,6.840 7.653,7.290 8.128,7.296 7.747,7.580 7.888,8.034 7.500,7.760 7.112,8.034 7.253,7.580 6.872,7.296 7.347,7.290"
+            fill="#2E1400" fillOpacity="0.22"
+            transform="translate(0.040,0.040)"/>
+          <polygon
+            points="7.500,6.840 7.653,7.290 8.128,7.296 7.747,7.580 7.888,8.034 7.500,7.760 7.112,8.034 7.253,7.580 6.872,7.296 7.347,7.290"
+            fill="#6C3800" fillOpacity="0.30"
+            transform="translate(0.022,0.022)"/>
+          {/* Main star — deepened multi-stop gradient, full filter glow */}
+          <polygon
+            points="7.500,6.840 7.653,7.290 8.128,7.296 7.747,7.580 7.888,8.034 7.500,7.760 7.112,8.034 7.253,7.580 6.872,7.296 7.347,7.290"
+            fill="url(#cl-center-star2)"
+            filter="url(#cl-center-glow)"
+            stroke="#8C5E10" strokeWidth="0.030" strokeOpacity="0.90"/>
+          {/* Gilt rim highlight — bright top stroke over the dark edge */}
+          <polygon
+            points="7.500,6.840 7.653,7.290 8.128,7.296 7.747,7.580 7.888,8.034 7.500,7.760 7.112,8.034 7.253,7.580 6.872,7.296 7.347,7.290"
+            fill="none"
+            stroke="url(#clbevel)" strokeWidth="0.014" strokeOpacity="0.80"/>
+          {/* Five outer tip accent studs — brass rivets at each star point */}
+          {([
+            [7.500,6.840],[8.128,7.296],[7.888,8.034],[7.112,8.034],[6.872,7.296]
+          ] as [number,number][]).map(([tx,ty],ti)=>(
+            <circle key={ti} cx={tx} cy={ty} r="0.034"
+              fill="url(#clbrass)" fillOpacity="0.94"
+              stroke="#4E2A08" strokeWidth="0.008" strokeOpacity="0.60"/>
+          ))}
+          {/* Center ivory mounting disc */}
+          <circle cx="7.5" cy="7.5" r="0.182"
+            fill="url(#clivory)" fillOpacity="0.99"
+            stroke="url(#clbrass)" strokeWidth="0.030" strokeOpacity="0.95"/>
+          {/* Jewel dome — faceted gem, largest and richest on the board */}
+          <circle cx="7.5" cy="7.5" r="0.128"
+            fill="url(#cl-star-jewel)"
+            stroke="#C09020" strokeWidth="0.020" strokeOpacity="0.96"/>
+          {/* Jewel facet ring — engraved inner edge, reads as a cut gem */}
+          <circle cx="7.5" cy="7.5" r="0.084"
+            fill="none" stroke="rgba(255,255,255,0.48)" strokeWidth="0.011"/>
+          {/* Jewel primary specular */}
+          <circle cx="7.458" cy="7.455" r="0.046" fill="white" fillOpacity="0.90"/>
+          {/* Jewel micro hotspot — pin-point peak brilliance */}
+          <circle cx="7.470" cy="7.466" r="0.020" fill="white" fillOpacity="0.99"/>
         </>
       ) : (
         /* Neon: white glow dot */
@@ -2147,8 +2345,24 @@ function BoardSVG({
 
       {/* ── Board border ── */}
       {isClassic ? (
-        <rect x="0.08" y="0.08" width="14.84" height="14.84"
-          fill="none" rx="0.10" stroke="rgba(30,35,80,0.60)" strokeWidth="0.12" strokeOpacity="1"/>
+        <>
+          {/* Inner gilt accent line — warm gleam just inside the dark frame */}
+          <rect x="0.26" y="0.26" width="14.48" height="14.48"
+            fill="none" rx="0.07" stroke="url(#cl-frame-gilt)" strokeWidth="0.030" strokeOpacity="0.62"/>
+          {/* Outer dark frame — heavy border that grounds the entire board */}
+          <rect x="0.08" y="0.08" width="14.84" height="14.84"
+            fill="none" rx="0.10" stroke="rgba(28,32,72,0.75)" strokeWidth="0.14" strokeOpacity="1"/>
+          {/* Four corner diamond ornaments — brass rivets at the frame corners */}
+          {([[0.26,0.26],[14.74,0.26],[14.74,14.74],[0.26,14.74]] as [number,number][]).map(([ox,oy],i)=>(
+            <g key={i}>
+              <rect x={ox-0.072} y={oy-0.072} width="0.144" height="0.144"
+                fill="url(#clbrass)" fillOpacity="0.85"
+                transform={`rotate(45 ${ox} ${oy})`}/>
+              <circle cx={ox} cy={oy} r="0.030"
+                fill="white" fillOpacity="0.55"/>
+            </g>
+          ))}
+        </>
       ) : (
         <motion.rect x="0.05" y="0.05" width="14.90" height="14.90"
           fill="none" rx="0.20"
