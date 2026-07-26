@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
-import { ArrowLeft, Bot, RotateCcw, Settings, Trophy, X, Zap } from 'lucide-react';
+import { ArrowLeft, Bot, Settings, Trophy, X, Zap } from 'lucide-react';
 import { GamePiece } from './GamePiece';
 import * as E from '../lib/ludo-engine';
 import type { GameConfig } from './GameConfigOverlay';
@@ -295,6 +295,12 @@ const TAIL_W   = 5;   // px — half-width of the tail triangle
 const TAIL_H   = 4;   // px — tail height
 const TAIL_GAP = 2;   // px — clear buffer between the tail tip and the frame edge
 
+// ─── Panel layout type — passed from GameBoardScreen so panels scale with vw ──
+type PanelLayout = {
+  panelW: number; panelH: number; panelGap: number; panelInset: number;
+  tailW: number; tailH: number; tailGap: number;
+};
+
 // ─── Corner dice panel ────────────────────────────────────────────────────────
 // Sits outside its board corner, flat and mirror-symmetric across both axes,
 // with a small tail pointing at the frame so it reads as anchored, not
@@ -303,7 +309,7 @@ const TAIL_GAP = 2;   // px — clear buffer between the tail tip and the frame 
 function CornerDice({
   player, anchor, game, isAI, lang, boardStyle,
   rolling, animDice, justLanded, lastDice,
-  onRoll, canRoll,
+  onRoll, canRoll, panelLayout,
 }: {
   player: number;
   anchor: 'tl' | 'tr' | 'bl' | 'br';
@@ -311,6 +317,7 @@ function CornerDice({
   rolling: boolean; animDice: number; justLanded: boolean; lastDice: number[];
   onRoll: () => void; canRoll: boolean;
   boardStyle?: BoardStyle;
+  panelLayout: PanelLayout;
 }) {
   const col         = E.PLAYER_COLORS[player];
   const neon        = E.PLAYER_NEONS[player];
@@ -326,6 +333,10 @@ function CornerDice({
   const clSolid     = CL_SOLID[player as 0|1|2|3];
   const clLight     = CL_LIGHT[player as 0|1|2|3];
   const clBorder    = CL_BORDER[player as 0|1|2|3];
+  // Shadow module-level px constants with viewport-scaled values so panels
+  // grow/shrink proportionally with the board on all phone sizes.
+  // eslint-disable-next-line @typescript-eslint/no-shadow
+  const { panelW: PANEL_W, panelH: PANEL_H, panelGap: PANEL_GAP, panelInset: PANEL_INSET, tailW: TAIL_W, tailH: TAIL_H, tailGap: TAIL_GAP } = panelLayout;
 
   // Wrapper hovers entirely above/below the frame (outside the board vertically)
   // while hugging the frame's own left/right edge horizontally — this avoids
@@ -2252,6 +2263,24 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const cfg         = ANIM[animSpeed];
   const springCfg   = { stiffness: cfg.stiffness, damping: cfg.damping, mass: cfg.mass };
 
+  // ── Panel layout — proportionally scaled to actual board width ──────────────
+  // Board width ≈ 100vw − 2×BOARD_MARGIN. Reference point: 362 px board (390 px
+  // phone). Clamped to ±15 % so panels never look oversized or tiny.
+  const panelLayout = useMemo<PanelLayout>(() => {
+    const vw    = typeof window !== 'undefined' ? window.innerWidth : 390;
+    const boardW = Math.max(300, vw - 2 * BOARD_MARGIN);
+    const scale  = Math.min(1.15, Math.max(0.88, boardW / 362));
+    return {
+      panelW:     Math.round(PANEL_W     * scale),
+      panelH:     Math.round(PANEL_H     * scale),
+      panelGap:   Math.round(PANEL_GAP   * scale),
+      panelInset: Math.round(PANEL_INSET * scale),
+      tailW:      Math.round(TAIL_W      * scale),
+      tailH:      Math.round(TAIL_H      * scale),
+      tailGap:    Math.round(TAIL_GAP    * scale),
+    };
+  }, []); // computed once at mount — viewport is stable during a game session
+
   // ── Roll handler ──────────────────────────────────────────────────────────
   const handleRoll = useCallback(() => {
     if (rolling || game.phase !== 'rolling' || game.winner) return;
@@ -2534,34 +2563,30 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
         ))}
       </div>
 
-      {/* ── Header ── */}
-      <div className="relative z-10 flex-shrink-0 flex items-center gap-2 px-3 pt-10 pb-3">
-        {/* Back */}
+      {/* ── Header — back far-left, settings far-right, 44 px touch targets ── */}
+      <div className="relative z-10 flex-shrink-0 flex items-center gap-2 px-4"
+        style={{
+          paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)',
+          paddingBottom: 8,
+        }}>
+        {/* Back — far left */}
         <motion.button onClick={onBack}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
-          className="flex items-center justify-center w-9 h-9 rounded-full flex-shrink-0"
+          className="flex items-center justify-center w-11 h-11 rounded-full flex-shrink-0"
           style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
           <ArrowLeft className="w-4 h-4 text-white"
             style={{ transform: lang === 'ar' ? 'scaleX(-1)' : undefined }}/>
         </motion.button>
 
-        {/* Turn is communicated via card elevation at the corners — both themes */}
+        {/* Spacer — turn communicated via card elevation at the corners */}
         <div style={{ flex: 1 }}/>
 
-        {/* Settings */}
+        {/* Settings — far right */}
         <motion.button onClick={() => setShowSettings(true)}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
-          className="flex items-center justify-center w-9 h-9 rounded-full flex-shrink-0"
+          className="flex items-center justify-center w-11 h-11 rounded-full flex-shrink-0"
           style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
           <Settings className="w-4 h-4 text-white/50"/>
-        </motion.button>
-
-        {/* Restart */}
-        <motion.button onClick={handleRestart}
-          whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
-          className="flex items-center justify-center w-9 h-9 rounded-full flex-shrink-0"
-          style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
-          <RotateCcw className="w-4 h-4 text-white/50"/>
         </motion.button>
       </div>
 
@@ -2574,17 +2599,18 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           board grow to fill the available space. */}
       <div className="relative z-10 flex-1 min-h-0 flex items-center justify-center"
         style={{
-          paddingTop:    PANEL_H + PANEL_GAP + 4,
-          paddingBottom: PANEL_H + PANEL_GAP + 4,
+          paddingTop:    panelLayout.panelH + panelLayout.panelGap + 4,
+          paddingBottom: panelLayout.panelH + panelLayout.panelGap + 4,
           paddingLeft:   BOARD_MARGIN,
           paddingRight:  BOARD_MARGIN,
         }}>
         <motion.div
           style={{
             position: 'relative',
-            width: '100%',
+            // min() ensures the board is always square and never overflows:
+            // width-constrained on portrait phones, height-constrained on short screens.
+            width: `min(calc(100vw - ${2 * BOARD_MARGIN}px), calc(100dvh - 300px))`,
             aspectRatio: '1',
-            maxHeight: 'calc(100% - 4px)',
             boxSizing: 'border-box',
             borderRadius: 22,
             overflow: 'visible',
@@ -2631,16 +2657,16 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           {/* ── Corner dice panels — outside the board, adjacent to each corner ── */}
           {/* Red   → top-left    (player 0) */}
           <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
-            player={0} anchor="tl" isAI={false} boardStyle={boardStyle}/>
+            player={0} anchor="tl" isAI={false} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Blue  → top-right   (player 1) */}
           <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
-            player={1} anchor="tr" isAI={isComputer} boardStyle={boardStyle}/>
+            player={1} anchor="tr" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Yellow → bottom-right (player 2) */}
           <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
-            player={2} anchor="br" isAI={isComputer} boardStyle={boardStyle}/>
+            player={2} anchor="br" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Green  → bottom-left  (player 3) */}
           <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
-            player={3} anchor="bl" isAI={isComputer} boardStyle={boardStyle}/>
+            player={3} anchor="bl" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
         </motion.div>
       </div>
 
