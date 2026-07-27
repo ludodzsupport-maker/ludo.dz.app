@@ -70,10 +70,11 @@ const PATH_POS_MAP = new Map<string, number>(
 );
 
 // ─── Classic theme palette — Ludo King quality ────────────────────────────────
-const CL_SOLID  = ['#E8192C','#1565C0','#FFD700','#2E7D32'] as const;
-const CL_LIGHT  = ['#FFECEE','#E3EEFF','#FFFDE7','#E8F5E9'] as const;
-const CL_BORDER = ['#B71C1C','#0D47A1','#F9A825','#1B5E20'] as const;
-const CL_ARROW  = ['#8B0000','#003087','#7A5000','#004D10'] as const;
+// Richer, deeper hues: cardinal crimson / cobalt royal / burnished amber / forest deep
+const CL_SOLID  = ['#C31024','#1542B0','#E8A800','#1C6B2E'] as const;
+const CL_LIGHT  = ['#FAECEE','#E2ECFF','#FFF4D8','#E4F5EA'] as const;
+const CL_BORDER = ['#8A0B1E','#0C3082','#9C6E00','#10481C'] as const;
+const CL_ARROW  = ['#640016','#081B5A','#664600','#073010'] as const;
 const CL_GOLD   = '#B8863B'; // warm brass/gilt accent for premium home-base trim
 
 // Lighten (positive) or darken (negative) a hex colour by `percent` (-100..100).
@@ -1490,12 +1491,14 @@ function BoardSVG({
               <stop offset="50%"  stopColor="#C9A24B"/>
               <stop offset="100%" stopColor="#8C6423"/>
             </linearGradient>
-            {/* Recessed pawn-socket gradients — dark rim / lit floor, true inset-shadow read */}
+            {/* Recessed pawn-socket gradients — jewel-like depth: bright hotspot → rich body → deep shadow */}
             {CL_SOLID.map((c, i) => (
-              <radialGradient key={i} id={`clsocket${i}`} cx="46%" cy="40%" r="62%">
-                <stop offset="0%"   stopColor={shadeColor(c, 14)}/>
-                <stop offset="60%"  stopColor={c}/>
-                <stop offset="100%" stopColor={shadeColor(c, -34)}/>
+              <radialGradient key={i} id={`clsocket${i}`} cx="40%" cy="34%" r="68%">
+                <stop offset="0%"   stopColor={shadeColor(c, 42)}/>
+                <stop offset="18%"  stopColor={shadeColor(c, 22)}/>
+                <stop offset="52%"  stopColor={c}/>
+                <stop offset="82%"  stopColor={shadeColor(c, -28)}/>
+                <stop offset="100%" stopColor={shadeColor(c, -52)}/>
               </radialGradient>
             ))}
 
@@ -1580,16 +1583,34 @@ function BoardSVG({
             <radialGradient id="cl-panel-vignette" cx="50%" cy="50%" r="70%">
               <stop offset="0%"   stopColor="white"    stopOpacity="0.00"/>
               <stop offset="72%"  stopColor="white"    stopOpacity="0.00"/>
-              <stop offset="100%" stopColor="#6B4010"  stopOpacity="0.12"/>
+              <stop offset="100%" stopColor="#6B4010"  stopOpacity="0.16"/>
+            </radialGradient>
+
+            {/* ── Per-corner inner colour glow — warm coloured light rising through the ivory ── */}
+            {CL_SOLID.map((c, i) => (
+              <radialGradient key={i} id={`cl-corner-glow${i}`} cx="50%" cy="50%" r="68%">
+                <stop offset="0%"   stopColor={c} stopOpacity="0.26"/>
+                <stop offset="44%"  stopColor={c} stopOpacity="0.10"/>
+                <stop offset="100%" stopColor={c} stopOpacity="0.00"/>
+              </radialGradient>
+            ))}
+
+            {/* ── Warm board spotlight — very soft golden centre wash on the ivory surface ── */}
+            <radialGradient id="cl-board-warm" cx="50%" cy="50%" r="52%">
+              <stop offset="0%"   stopColor="#FFD878" stopOpacity="0.10"/>
+              <stop offset="55%"  stopColor="#FFB800" stopOpacity="0.04"/>
+              <stop offset="100%" stopColor="#FFB800" stopOpacity="0.00"/>
             </radialGradient>
           </>
         )}
       </defs>
 
       {/* ── Background ── */}
-      <rect width="15" height="15" fill={isClassic ? '#F0EEE8' : '#030b16'}/>
+      <rect width="15" height="15" fill={isClassic ? '#EEE9DF' : '#030b16'}/>
       {/* Classic: linen cross-hatch paper grain — the feel of a premium printed board */}
       {isClassic && <rect width="15" height="15" fill="url(#cl-linen)"/>}
+      {/* Classic: very soft warm golden spotlight — light from above hitting the centre */}
+      {isClassic && <rect width="15" height="15" fill="url(#cl-board-warm)" pointerEvents="none"/>}
 
       {/* ── Home zones ── */}
       {[0,1,2,3].map(player => {
@@ -1612,7 +1633,7 @@ function BoardSVG({
         if (isClassic) {
           const solid  = CL_SOLID[player as 0|1|2|3];
           const border = CL_BORDER[player as 0|1|2|3];
-          const mainOp = exists ? (isCurrent ? 0.94 : 0.85) : 0.24;
+          const mainOp = exists ? (isCurrent ? 0.98 : 0.92) : 0.26;
           const fade   = exists ? 1 : 0.30;
           const beads  = beadRect(zc+0.20, zr+0.20, zc+5.80, zr+5.80, 0.62);
           return (
@@ -1636,6 +1657,11 @@ function BoardSVG({
               {/* Glossy sheen across the upper third */}
               <rect x={zc+0.40} y={zr+0.40} width="5.20" height="1.35" rx="0.22"
                 fill="white" fillOpacity={exists ? 0.24 : 0.08}/>
+              {/* Inner colour glow — player colour washing up through the ivory like candlelight */}
+              <rect x={zc+0.40} y={zr+0.40} width="5.20" height="5.20" rx="0.22"
+                fill={`url(#cl-corner-glow${player})`}
+                fillOpacity={exists ? 1.0 : 0.18}
+                pointerEvents="none"/>
               {/* Corner vignette — darkens the panel edges for enclosure and depth */}
               <rect x={zc+0.40} y={zr+0.40} width="5.20" height="5.20" rx="0.22"
                 fill="url(#cl-panel-vignette)" fillOpacity={0.92*fade}
@@ -2014,9 +2040,9 @@ function BoardSVG({
 
         // Visual rule: ONLY homecol (middle lane) cells get player color.
         // Strip and path cells stay neutral/dark for clean contrast.
-        let fill    = isClassic ? '#FDFBF4' : '#0d1f38';
+        let fill    = isClassic ? '#FDF8E6' : '#0d1f38';
         let fillOp  = 1;
-        let stroke  = isClassic ? 'rgba(130,85,20,0.22)' : 'rgba(255,255,255,0.06)';
+        let stroke  = isClassic ? 'rgba(110,68,10,0.34)' : 'rgba(255,255,255,0.06)';
         let useGlow = false;
 
         if (cell.kind === 'homecol') {
@@ -2027,8 +2053,8 @@ function BoardSVG({
           const t = Math.max(0, Math.min(1, depth / 5));
           fill    = isClassic ? CL_SOLID[player as 0|1|2|3] : E.PLAYER_COLORS[player];
           fillOp  = game.playerSlots.includes(player)
-            ? (isClassic ? 0.80 + t * 0.16 : 0.18 + t * 0.52)
-            : (isClassic ? 0.16 : 0.04);
+            ? (isClassic ? 0.88 + t * 0.10 : 0.18 + t * 0.52)
+            : (isClassic ? 0.18 : 0.04);
           stroke  = game.playerSlots.includes(player)
             ? (isClassic ? CL_BORDER[player as 0|1|2|3] : E.PLAYER_NEONS[player])
             : 'transparent';
@@ -2273,8 +2299,9 @@ function BoardSVG({
       {isClassic ? (
         /* Classic: premium multi-layer focal star — the heart of the board */
         <>
-          {/* Wide ambient warmth — gold haze radiating out beneath the star */}
-          <circle cx="7.5" cy="7.5" r="1.10" fill="url(#cl-center-bloom)" fillOpacity="0.85"/>
+          {/* Wide ambient warmth — two-layer gold corona: broad soft haze + tight bright bloom */}
+          <circle cx="7.5" cy="7.5" r="2.10" fill="url(#cl-center-bloom)" fillOpacity="0.38"/>
+          <circle cx="7.5" cy="7.5" r="1.30" fill="url(#cl-center-bloom)" fillOpacity="0.90"/>
           {/* Outer compass ring — engraved gilt band circling the star */}
           <circle cx="7.5" cy="7.5" r="0.84"
             fill="none" stroke="url(#clbevel)" strokeWidth="0.028" strokeOpacity="0.68"/>
@@ -2845,9 +2872,11 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             'radial-gradient(circle at 28% 90%, rgba(255,220,100,0.08) 0px, transparent 1.5px)',
             'radial-gradient(circle at 67% 38%, rgba(255,220,100,0.06) 0px, transparent 1px)',
             'radial-gradient(circle at 55% 8%,  rgba(255,220,100,0.07) 0px, transparent 1.5px)',
-            // Diamond grid
-            'repeating-linear-gradient(45deg,  rgba(201,162,39,0.07) 0px, rgba(201,162,39,0.07) 1px, transparent 1px, transparent 32px)',
-            'repeating-linear-gradient(-45deg, rgba(201,162,39,0.07) 0px, rgba(201,162,39,0.07) 1px, transparent 1px, transparent 32px)',
+            // Warm golden spotlight — soft ellipse behind the board like a light from above
+            'radial-gradient(ellipse 56% 50% at 50% 52%, rgba(255,200,60,0.065) 0%, transparent 72%)',
+            // Diamond grid — slightly more visible for premium texture
+            'repeating-linear-gradient(45deg,  rgba(201,162,39,0.10) 0px, rgba(201,162,39,0.10) 1px, transparent 1px, transparent 32px)',
+            'repeating-linear-gradient(-45deg, rgba(201,162,39,0.10) 0px, rgba(201,162,39,0.10) 1px, transparent 1px, transparent 32px)',
             // Purple base
             'radial-gradient(ellipse 90% 70% at 50% 42%, #3d2566 0%, #2d1b4e 45%, #1a0f30 100%)',
           ].join(', ')
