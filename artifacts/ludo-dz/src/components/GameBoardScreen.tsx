@@ -1700,16 +1700,26 @@ function BoardSVG({
 
               {/* Lattice lines linking each pawn bay to the centre medallion —
                   bolder brass pinstripes give the panel real structure */}
-              {E.HOME_BASES[player].map(([br, bc], si) => (
-                <line key={`gl-${si}`}
-                  x1={cx} y1={cy} x2={bc+0.5} y2={br+0.5}
-                  stroke="url(#clbrass)" strokeWidth="0.034" strokeOpacity={0.42*fade}/>
-              ))}
-              {E.HOME_BASES[player].map(([br, bc], si) => (
-                <line key={`gl2-${si}`}
-                  x1={cx} y1={cy} x2={bc+0.5} y2={br+0.5}
-                  stroke={border} strokeWidth="0.012" strokeOpacity={0.30*fade}/>
-              ))}
+              {E.HOME_BASES[player].map(([br, bc], si) => {
+                const dx = bc+0.5 - cx, dy = br+0.5 - cy;
+                const d = Math.sqrt(dx*dx + dy*dy);
+                const ex2 = bc+0.5 - (dx/d)*0.50, ey2 = br+0.5 - (dy/d)*0.50;
+                return (
+                  <line key={`gl-${si}`}
+                    x1={cx} y1={cy} x2={ex2} y2={ey2}
+                    stroke="url(#clbrass)" strokeWidth="0.034" strokeOpacity={0.42*fade}/>
+                );
+              })}
+              {E.HOME_BASES[player].map(([br, bc], si) => {
+                const dx = bc+0.5 - cx, dy = br+0.5 - cy;
+                const d = Math.sqrt(dx*dx + dy*dy);
+                const ex2 = bc+0.5 - (dx/d)*0.50, ey2 = br+0.5 - (dy/d)*0.50;
+                return (
+                  <line key={`gl2-${si}`}
+                    x1={cx} y1={cy} x2={ex2} y2={ey2}
+                    stroke={border} strokeWidth="0.012" strokeOpacity={0.30*fade}/>
+                );
+              })}
 
               {/* Pawn bays — brass-collared wells with a true recessed inset-shadow read */}
               {E.HOME_BASES[player].map(([br, bc], si) => {
@@ -2120,14 +2130,14 @@ function BoardSVG({
                     {/* Classic: player-coloured tint + solid direction arrow */}
                     <rect x={c} y={r} width="1" height="1"
                       fill={player >= 0 ? CL_SOLID[player as 0|1|2|3] : 'transparent'}
-                      fillOpacity={exitActive ? 0.26 : 0.10}/>
+                      fillOpacity={0.92}/>
                     <g transform={`rotate(${exitRotDeg}, ${c+0.5}, ${r+0.5})`}>
                       <path
                         d={`M ${c+0.30},${r+0.26} L ${c+0.54},${r+0.50} L ${c+0.30},${r+0.74}`}
                         fill="none"
                         stroke={player >= 0 ? CL_ARROW[player as 0|1|2|3] : 'rgba(80,50,10,0.70)'}
                         strokeWidth="0.078" strokeLinecap="round" strokeLinejoin="round"
-                        strokeOpacity={exitActive ? 0.88 : 0.50}
+                        strokeOpacity={0.90}
                       />
                     </g>
                   </>
