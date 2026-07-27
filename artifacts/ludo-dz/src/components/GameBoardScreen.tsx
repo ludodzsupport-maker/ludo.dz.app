@@ -1687,12 +1687,17 @@ function BoardSVG({
 
               {/* Pawn bays — brass-collared wells with a true recessed inset-shadow read */}
               {E.HOME_BASES[player].map(([br, bc], si) => {
-                // slotOccupied: this specific pawn is still in the home bay (relPos === -1).
-                // 'exists' is only player-level; using it here caused empty bays to stay
-                // visually filled after their pawn left home.
-                const slotOccupied = game.pieces.some(
+                // slotOccupied: true only when the pawn is logically home (relPos === -1)
+                // AND not mid-animation. pieceAnims steps being non-null means the pawn is
+                // either hopping away from home (steps=[...]) or flying back via defeat arc
+                // (steps='defeat'). In both cases the slot must read as empty immediately —
+                // no faded-placeholder flash on departure, no premature fill on arrival.
+                const slotPid      = E.pieceId(player, si);
+                const slotInHome   = game.pieces.some(
                   p => p.player === player && p.index === si && p.relPos === -1
                 );
+                const slotAnimating = pieceAnims[slotPid]?.steps != null;
+                const slotOccupied  = slotInHome && !slotAnimating;
                 return (
                 <g key={si}>
                   {/* Soft two-layer recess shadow — grounds the bay like a real carved well */}
