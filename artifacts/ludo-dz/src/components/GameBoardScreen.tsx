@@ -134,6 +134,20 @@ function crescentPath(
   return `${circle(ocx, ocy, rOuter)} ${circle(icx, icy, rInner)}`;
 }
 
+// Onion-dome / lantern silhouette for the DZ pawn body — a bulbous dome that
+// bulges wide just above its neck and tapers to a point, evoking a small
+// minaret finial. Verified by standalone rasterization before wiring in
+// (see artifact-preview-fallback memory note) so the curve reads cleanly at
+// on-board pawn scale, not just in the abstract. DZ board theme only.
+function dzDomePath(cx: number, cy: number, R: number): string {
+  return `M ${cx - 0.62*R},${cy + 0.55*R}
+    C ${cx - 1.14*R},${cy + 0.30*R} ${cx - 1.14*R},${cy - 0.26*R} ${cx - 0.66*R},${cy - 0.56*R}
+    C ${cx - 0.30*R},${cy - 0.86*R} ${cx - 0.12*R},${cy - 1.05*R} ${cx},${cy - 1.15*R}
+    C ${cx + 0.12*R},${cy - 1.05*R} ${cx + 0.30*R},${cy - 0.86*R} ${cx + 0.66*R},${cy - 0.56*R}
+    C ${cx + 1.14*R},${cy - 0.26*R} ${cx + 1.14*R},${cy + 0.30*R} ${cx + 0.62*R},${cy + 0.55*R}
+    Z`;
+}
+
 // ─── Fixed resting slots for finished pawns inside each player's center triangle ──
 // Center 3×3 spans columns/rows 6–9, apex at (7.5, 7.5). [x, y] = [col, row].
 // Red=left, Blue=top, Yellow=right, Green=bottom.
@@ -196,10 +210,10 @@ function cubeFaceTransform(fv: number, half: number): string {
 }
 
 function DieFace({
-  value, neon, col, size, rolling, justLanded, dim, classic,
+  value, neon, col, size, rolling, justLanded, dim, classic, dz,
 }: {
   value: number; neon: string; col: string; size: number;
-  rolling?: boolean; justLanded?: boolean; dim?: boolean; classic?: boolean;
+  rolling?: boolean; justLanded?: boolean; dim?: boolean; classic?: boolean; dz?: boolean;
 }) {
   const opacity = dim ? 0.82 : 1;
   const ctrl    = useAnimationControls();
@@ -262,21 +276,23 @@ function DieFace({
               WebkitBackfaceVisibility: 'hidden',
               background: classic
                 ? `radial-gradient(ellipse at 38% 32%, #fffdf8 0%, #f5e8c8 62%, #e8d4a0 100%)`
+                : dz
+                ? `radial-gradient(ellipse at 38% 32%, #FFFCF2 0%, ${DZ.PATH_CREAM} 58%, #E4CE9C 100%)`
                 : `radial-gradient(circle at 36% 28%, rgba(255,255,255,0.26), ${neon}28 42%, ${col}cc)`,
-              border: `${Math.max(1, Math.round(size * 0.038))}px solid ${classic ? '#a87820' : neon}`,
+              border: `${Math.max(1, Math.round(size * 0.038))}px solid ${classic ? '#a87820' : dz ? DZ.BORDER_GOLD : neon}`,
               borderRadius: `${size * 0.14}px`,
               overflow: 'hidden',
             }}>
               <svg width={size} height={size} viewBox="-3 -3 6 6"
                 style={{ display: 'block', position: 'absolute', top: 0, left: 0 }}>
                 {/* Glass sheen — neon only */}
-                {!classic && (
+                {!classic && !dz && (
                   <rect x="-2.6" y="-2.7" width="2.1" height="0.76" rx="0.30"
                     fill="white" opacity="0.20"/>
                 )}
-                {/* Dots — classic: ivory cream on dark wood */}
+                {/* Dots — classic: ivory cream on dark wood; DZ: deep green on cream */}
                 {d.map(([dx, dy], i) => (
-                  <circle key={i} cx={dx} cy={dy} r="0.52" fill={classic ? '#1e0e00' : neon}/>
+                  <circle key={i} cx={dx} cy={dy} r="0.52" fill={classic ? '#1e0e00' : dz ? DZ.BORDER_DEEP : neon}/>
                 ))}
               </svg>
             </div>
@@ -346,9 +362,11 @@ function CornerDice({
   const canTap      = canRoll && isActive;
   const isTop       = anchor === 'tl' || anchor === 'tr';
   const isClassic   = boardStyle === 'classic';
+  const isDz        = boardStyle === 'dz';
   const clSolid     = CL_SOLID[player as 0|1|2|3];
   const clLight     = CL_LIGHT[player as 0|1|2|3];
   const clBorder    = CL_BORDER[player as 0|1|2|3];
+  const dzColor     = DZ.HOME_COLORS[player as 0|1|2|3];
   // Shadow module-level px constants with viewport-scaled values so panels
   // grow/shrink proportionally with the board on all phone sizes.
   // eslint-disable-next-line @typescript-eslint/no-shadow
@@ -380,17 +398,17 @@ function CornerDice({
           width: 0, height: 0,
           borderLeft: `${TAIL_W}px solid transparent`,
           borderRight: `${TAIL_W}px solid transparent`,
-          [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? 'rgba(160,120,32,0.28)' : 'rgba(255,255,255,0.05)'}`,
+          [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? 'rgba(160,120,32,0.28)' : isDz ? 'rgba(201,162,39,0.22)' : 'rgba(255,255,255,0.05)'}`,
         }}/>
         <div style={{
           width: '100%', height: '100%',
           borderRadius: isClassic ? 10 : 16,
-          background: isClassic ? 'rgba(240,228,190,0.45)' : 'rgba(3,10,22,0.40)',
-          border: `1px solid ${isClassic ? 'rgba(160,120,32,0.32)' : 'rgba(255,255,255,0.04)'}`,
+          background: isClassic ? 'rgba(240,228,190,0.45)' : isDz ? 'rgba(0,58,29,0.40)' : 'rgba(3,10,22,0.40)',
+          border: `1px solid ${isClassic ? 'rgba(160,120,32,0.32)' : isDz ? 'rgba(201,162,39,0.28)' : 'rgba(255,255,255,0.04)'}`,
           opacity: 0.5,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: isClassic ? 'rgba(160,120,32,0.18)' : '#1a2a40' }}/>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: isClassic ? 'rgba(160,120,32,0.18)' : isDz ? 'rgba(201,162,39,0.22)' : '#1a2a40' }}/>
         </div>
       </div>
     );
@@ -404,8 +422,8 @@ function CornerDice({
         width: 0, height: 0,
         borderLeft: `${TAIL_W}px solid transparent`,
         borderRight: `${TAIL_W}px solid transparent`,
-        [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? (isActive ? '#a07820' : 'rgba(160,120,32,0.32)') : (isActive ? neon : col + '55')}`,
-        filter: isClassic ? 'none' : (isActive ? `drop-shadow(0 0 3px ${neon})` : 'none'),
+        [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? (isActive ? '#a07820' : 'rgba(160,120,32,0.32)') : isDz ? (isActive ? DZ.BORDER_GOLD : 'rgba(201,162,39,0.35)') : (isActive ? neon : col + '55')}`,
+        filter: isClassic ? 'none' : isDz ? (isActive ? `drop-shadow(0 0 3px ${DZ.BORDER_GOLD}90)` : 'none') : (isActive ? `drop-shadow(0 0 3px ${neon})` : 'none'),
         transition: 'border-color 0.4s',
         pointerEvents: 'none',
       }}/>
@@ -422,6 +440,16 @@ function CornerDice({
               `0 0 0 2px ${clLight}, 0 0 0 3.5px ${clBorder}, 0 5px 18px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.82)`,
             ]
           : `0 2px 8px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.65)`,
+      } : isDz ? {
+        scale: isActive ? 1.08 : 0.88,
+        opacity: isActive ? 1 : 0.74,
+        boxShadow: isActive
+          ? [
+              `0 0 0 1.5px ${DZ.BORDER_GOLD}, 0 0 0 3px ${DZ.BORDER_DEEP}, 0 5px 16px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,238,190,0.30)`,
+              `0 0 0 1.5px ${DZ.BORDER_GOLD}, 0 0 0 3px ${DZ.BORDER_DEEP}, 0 8px 22px rgba(0,0,0,0.52), inset 0 1px 0 rgba(255,238,190,0.42)`,
+              `0 0 0 1.5px ${DZ.BORDER_GOLD}, 0 0 0 3px ${DZ.BORDER_DEEP}, 0 5px 16px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,238,190,0.30)`,
+            ]
+          : `0 2px 10px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,238,190,0.14)`,
       } : {
         scale: isActive ? 1.08 : 0.88,
         opacity: isActive ? 1 : 0.68,
@@ -431,7 +459,7 @@ function CornerDice({
           `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
         ] : `0 2px 12px rgba(0,0,0,0.55), 0 0 8px ${col}28`,
       }}
-      transition={isClassic
+      transition={(isClassic || isDz)
         ? {
             scale:     { type: 'spring', stiffness: 260, damping: 28 },
             opacity:   { duration: 0.38, ease: 'easeOut' },
@@ -451,14 +479,20 @@ function CornerDice({
         cursor: canTap ? 'pointer' : 'default',
         background: isClassic
           ? `linear-gradient(168deg, #fefdf6 0%, #f6e9c6 45%, #ead5a0 100%)`
+          : isDz
+          ? (isActive
+            ? `linear-gradient(150deg, ${dzColor}38 0%, ${DZ.BOARD_BG}d8 100%)`
+            : `linear-gradient(150deg, ${dzColor}20 0%, ${DZ.BOARD_BG}c0 100%)`)
           : (isActive
             ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
             : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`),
         border: isClassic
           ? (isActive ? `1.5px solid ${clBorder}` : `1px solid rgba(160,120,32,0.48)`)
+          : isDz
+          ? `1.5px solid ${isActive ? DZ.BORDER_GOLD : DZ.BORDER_GOLD + '80'}`
           : `1.5px solid ${isActive ? neon : col + '55'}`,
-        backdropFilter: isClassic ? 'none' : 'blur(10px)',
-        WebkitBackdropFilter: isClassic ? 'none' : 'blur(10px)',
+        backdropFilter: (isClassic || isDz) ? 'none' : 'blur(10px)',
+        WebkitBackdropFilter: (isClassic || isDz) ? 'none' : 'blur(10px)',
         transition: 'background 0.4s, border-color 0.4s',
         overflow: 'hidden',
         userSelect: 'none',
@@ -466,12 +500,35 @@ function CornerDice({
         transformOrigin: { tl: 'top left', tr: 'top right', bl: 'bottom left', br: 'bottom right' }[anchor],
       }}
     >
+      {/* Islamic geometric edge patterning (DZ only) — four tiny 8-point star
+          rivets tucked at the panel corners, echoing the board's najma motif. */}
+      {isDz && (
+        <svg width="100%" height="100%" viewBox={`0 0 ${PANEL_W} ${PANEL_H}`}
+          style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+          {([[5,5],[PANEL_W-5,5],[5,PANEL_H-5],[PANEL_W-5,PANEL_H-5]] as const).map(([sx,sy],i) => (
+            <polygon key={i} points={starPoints(sx, sy, 2.6, 1.05, 8)}
+              fill={DZ.BORDER_GOLD} fillOpacity={isActive ? 0.85 : 0.45}/>
+          ))}
+        </svg>
+      )}
       {/* Active edge shimmer — neon only */}
-      {isActive && !isClassic && (
+      {isActive && !isClassic && !isDz && (
         <motion.div style={{
           position: 'absolute',
           top: 0, left: 0, right: 0, height: 1.5,
           background: `linear-gradient(90deg, transparent, ${neon}cc, transparent)`,
+          pointerEvents: 'none',
+        }}
+          animate={{ opacity: [0.4, 1, 0.4] }}
+          transition={{ duration: 1.4, repeat: Infinity }}
+        />
+      )}
+      {/* Active edge shimmer — DZ gold */}
+      {isActive && isDz && (
+        <motion.div style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, height: 1.5,
+          background: `linear-gradient(90deg, transparent, ${DZ.BORDER_GOLD}cc, transparent)`,
           pointerEvents: 'none',
         }}
           animate={{ opacity: [0.4, 1, 0.4] }}
@@ -488,6 +545,26 @@ function CornerDice({
           opacity: isActive ? 1 : 0.68,
           pointerEvents: 'none',
           transition: 'opacity 0.4s',
+        }}/>
+      )}
+      {/* DZ — player-colour top stripe + gold hairline (mirrors board home-zone identity) */}
+      {isDz && (
+        <div style={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, height: 5,
+          background: dzColor,
+          borderRadius: '8px 8px 0 0',
+          opacity: isActive ? 1 : 0.60,
+          pointerEvents: 'none',
+          transition: 'opacity 0.4s',
+        }}/>
+      )}
+      {isDz && (
+        <div style={{
+          position: 'absolute',
+          top: 5, left: 0, right: 0, height: 1,
+          background: 'linear-gradient(90deg, rgba(201,162,39,0.05) 0%, rgba(201,162,39,0.75) 26%, rgba(201,162,39,0.75) 74%, rgba(201,162,39,0.05) 100%)',
+          pointerEvents: 'none',
         }}/>
       )}
       {/* Classic — antique-gold hairline under stripe */}
@@ -511,26 +588,40 @@ function CornerDice({
           transition={{ duration: 1.9, repeat: Infinity }}
         />
       )}
+      {/* DZ active — warm gold breath shimmer inside body */}
+      {isActive && isDz && (
+        <motion.div style={{
+          position: 'absolute',
+          top: 7, left: 0, right: 0, height: 1.5,
+          background: 'linear-gradient(90deg, transparent, rgba(201,162,39,0.55), transparent)',
+          pointerEvents: 'none',
+        }}
+          animate={{ opacity: [0.18, 0.82, 0.18] }}
+          transition={{ duration: 1.9, repeat: Infinity }}
+        />
+      )}
 
       {/* Colour dot + name row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <motion.div
-          animate={isClassic ? {} : (isActive
+          animate={(isClassic || isDz) ? {} : (isActive
             ? { boxShadow: [`0 0 3px ${neon}80`, `0 0 10px ${neon}`, `0 0 3px ${neon}80`] }
             : {})}
           transition={{ duration: 1.4, repeat: Infinity }}
           style={{
             width: 6, height: 6, borderRadius: '50%',
-            background: isClassic ? clSolid : col,
+            background: isClassic ? clSolid : isDz ? dzColor : col,
             flexShrink: 0,
-            boxShadow: isClassic ? `0 0 0 1px rgba(160,120,32,0.42)` : undefined,
-            opacity: isActive ? 1 : (isClassic ? 0.60 : 0.50),
+            boxShadow: (isClassic || isDz) ? `0 0 0 1px rgba(160,120,32,0.42)` : undefined,
+            opacity: isActive ? 1 : ((isClassic || isDz) ? 0.60 : 0.50),
           }}
         />
         <span style={{
-          fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 9,
+          fontFamily: isDz ? 'Cairo, sans-serif' : 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 9,
           color: isClassic
             ? (isActive ? CL_ARROW[player as 0|1|2|3] : 'rgba(100,70,20,0.48)')
+            : isDz
+            ? (isActive ? DZ.BORDER_GOLD : dzColor + 'B0')
             : (isActive ? neon : col + '90'),
           letterSpacing: '0.06em', textTransform: 'uppercase',
           lineHeight: 1,
@@ -538,7 +629,7 @@ function CornerDice({
         }}>
           {name.slice(0, 4)}
         </span>
-        {isAI && <Bot size={8} color={isClassic ? 'rgba(80,50,10,0.42)' : 'rgba(255,255,255,0.30)'} style={{ flexShrink: 0 }}/>}
+        {isAI && <Bot size={8} color={isClassic ? 'rgba(80,50,10,0.42)' : isDz ? 'rgba(201,162,39,0.60)' : 'rgba(255,255,255,0.30)'} style={{ flexShrink: 0 }}/>}
       </div>
 
       {/* Die face with pulse ring — perspective establishes the 3D rendering context */}
@@ -546,7 +637,7 @@ function CornerDice({
         {canTap && !rolling && (
           <motion.div style={{
             position: 'absolute', inset: -6, borderRadius: 10,
-            border: `1.5px solid ${isClassic ? clBorder : neon}`,
+            border: `1.5px solid ${isClassic ? clBorder : isDz ? DZ.BORDER_GOLD : neon}`,
             pointerEvents: 'none',
           }}
             animate={{ scale: [1, 1.22, 1], opacity: [0.80, 0, 0.80] }}
@@ -560,6 +651,7 @@ function CornerDice({
           justLanded={justLanded && isActive}
           dim={!isActive}
           classic={isClassic}
+          dz={isDz}
         />
       </div>
 
@@ -571,16 +663,16 @@ function CornerDice({
               initial={{ opacity: 0, y: 2 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -2 }}
               style={{
-                fontFamily: 'Rajdhani, sans-serif', fontSize: 9, fontWeight: 700,
-                color: isClassic ? CL_ARROW[player as 0|1|2|3] : neon, letterSpacing: '0.08em',
-                textShadow: isClassic ? 'none' : `0 0 7px ${neon}`,
+                fontFamily: isDz ? 'Cairo, sans-serif' : 'Rajdhani, sans-serif', fontSize: 9, fontWeight: 700,
+                color: isClassic ? CL_ARROW[player as 0|1|2|3] : isDz ? DZ.BORDER_GOLD : neon, letterSpacing: '0.08em',
+                textShadow: isClassic ? 'none' : isDz ? `0 0 4px ${DZ.BORDER_GOLD}66` : `0 0 7px ${neon}`,
               }}>
               {lang === 'ar' ? 'ارمِ' : 'TAP'}
             </motion.span>
           ) : isRollingMe ? (
             <motion.span key="roll"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 9, color: isClassic ? 'rgba(100,70,20,0.38)' : 'rgba(255,255,255,0.40)' }}>
+              style={{ fontFamily: isDz ? 'Cairo, sans-serif' : 'Rajdhani, sans-serif', fontSize: 9, color: isClassic ? 'rgba(100,70,20,0.38)' : isDz ? 'rgba(220,200,150,0.42)' : 'rgba(255,255,255,0.40)' }}>
               …
             </motion.span>
           ) : null}
@@ -600,9 +692,11 @@ function CornerDice({
               width: 5, height: 5, borderRadius: '50%',
               background: isClassic
                 ? (st === 'done' ? clSolid : st === 'on' ? `${clSolid}bb` : st === 'home' ? `${clSolid}50` : 'rgba(180,140,40,0.10)')
+                : isDz
+                ? (st === 'done' ? DZ.BORDER_GOLD : st === 'on' ? dzColor : st === 'home' ? `${dzColor}55` : 'rgba(201,162,39,0.12)')
                 : (st === 'done' ? neon : st === 'on' ? col : `${col}35`),
-              border: `0.5px solid ${isClassic ? (st !== 'none' ? `${clBorder}72` : 'rgba(160,120,32,0.26)') : col + '45'}`,
-              boxShadow: isClassic
+              border: `0.5px solid ${isClassic ? (st !== 'none' ? `${clBorder}72` : 'rgba(160,120,32,0.26)') : isDz ? (st !== 'none' ? `${DZ.BORDER_GOLD}80` : 'rgba(201,162,39,0.25)') : col + '45'}`,
+              boxShadow: (isClassic || isDz)
                 ? 'none'
                 : (st === 'done' ? `0 0 5px ${neon}` : 'none'),
               transition: 'all 0.3s',
@@ -874,7 +968,7 @@ function buildHopPath(
 // 45% of step duration, then descends and snaps to canonical stacking position.
 function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
-  onLastHopLand, onDefeatArrived, isClassic,
+  onLastHopLand, onDefeatArrived, isClassic, isDz,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
@@ -888,6 +982,7 @@ function PawnToken({
   onLastHopLand?: () => void;   // fires when captor's final hop lands → shockwave
   onDefeatArrived?: () => void; // fires when defeated piece reaches home → impact flash
   isClassic?: boolean; // Classic Board theme only — swaps hex/neon body for a 3D dome token
+  isDz?: boolean; // DZ Board theme only — swaps hex/neon body for an onion-dome lantern token
 }) {
   const baseCtrl = useAnimationControls();
   const arcCtrl  = useAnimationControls();
@@ -1050,9 +1145,10 @@ function PawnToken({
   const ph3      = pR * 0.866;
   const pulsePts = `0,${-pR} ${ph3},${-pR*0.5} ${ph3},${pR*0.5} 0,${pR} ${-ph3},${pR*0.5} ${-ph3},${-pR*0.5}`;
 
-  // ── Classic 3D dome-token geometry (Classic Board theme only) ───────────────
+  // ── 3D dome-token geometry (shared by Classic's ball dome and DZ's onion dome) ──
   const clSolid   = CL_SOLID[player as 0|1|2|3];
   const clBorder  = CL_BORDER[player as 0|1|2|3];
+  const dzColor   = DZ.HOME_COLORS[player as 0|1|2|3];
   const domeR     = 0.275;
   const domeCY    = -0.06;
   const baseRX    = 0.30;
@@ -1069,8 +1165,8 @@ function PawnToken({
 
       {/* Ground shadow — anchored to base elevation, NOT lifted by arc */}
       <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
-        fill={isClassic ? 'rgba(30,20,8,0.38)' : 'rgba(0,0,0,0.62)'}
-        filter={isClassic ? 'url(#cl-pawn-shadow)' : undefined}/>
+        fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : 'rgba(0,0,0,0.62)'}
+        filter={isClassic ? 'url(#cl-pawn-shadow)' : isDz ? 'url(#dz-pawn-shadow)' : undefined}/>
 
       {/* Inner group: parabolic Y-arc overlay — GPU-composited for buttery arcs */}
       <motion.g animate={arcCtrl} initial={{ y: 0 }} style={{ willChange: 'transform' }}>
@@ -1127,6 +1223,47 @@ function PawnToken({
             {/* Secondary sheen streak along the upper rim, glass-like curvature cue */}
             <path d={`M ${-domeR*0.55},${domeCY - domeR*0.72} A ${domeR} ${domeR} 0 0 1 ${domeR*0.15},${domeCY - domeR*0.985}`}
               fill="none" stroke="white" strokeOpacity="0.30" strokeWidth="0.012" strokeLinecap="round"/>
+          </>
+        ) : isDz ? (
+          <>
+            {/* Ambient warm halo — mirrors the neon bloom's radius so tap/click hit-area
+                stays identical between themes. */}
+            <circle cx={0} cy={0} r={HR*1.55} fill={dzColor} fillOpacity="0.06"/>
+
+            {/* Movable piece — soft gold halo pulse, premium & quiet vs. the neon pulse */}
+            {isMovable && (
+              <motion.circle cx={0} cy={domeCY} r={domeR + 0.09}
+                fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.032"
+                animate={{ opacity: [0.30, 0.92, 0.30] }}
+                transition={{ duration: 1.0, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            )}
+
+            {/* Base pedestal — shared brass/gold foot across all four players */}
+            <ellipse cx={0} cy={baseCY} rx={baseRX} ry={baseRY}
+              fill="url(#dzbase)" stroke={DZ.BORDER_DEEP} strokeWidth="0.018" strokeOpacity="0.70"/>
+            <ellipse cx={0} cy={baseCY - baseRY*0.55} rx={baseRX*0.68} ry={baseRY*0.30}
+              fill="white" fillOpacity="0.30"/>
+
+            {/* Onion-dome / lantern body — the player's Algerian home colour */}
+            <path d={dzDomePath(0, domeCY, domeR)}
+              fill={`url(#dzpawn${player})`} stroke={DZ.BORDER_GOLD} strokeWidth="0.022" strokeOpacity="0.95"/>
+
+            {/* Gold belt at the dome neck */}
+            <path d={`M ${-0.66*domeR},${domeCY-0.56*domeR} A ${0.66*domeR} ${0.14*domeR} 0 0 0 ${0.66*domeR},${domeCY-0.56*domeR}`}
+              fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.030" strokeOpacity="0.92"/>
+
+            {/* Facet hairline lattice on the dome face — echoes the board's star-lattice motif */}
+            <path d={`M 0,${domeCY-0.95*domeR} L ${0.28*domeR},${domeCY-0.30*domeR} L 0,${domeCY+0.30*domeR} L ${-0.28*domeR},${domeCY-0.30*domeR} Z`}
+              fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.012" strokeOpacity="0.40"/>
+
+            {/* Specular highlight */}
+            <ellipse cx={-0.16*domeR} cy={domeCY-0.55*domeR} rx={0.13*domeR} ry={0.20*domeR}
+              fill="white" fillOpacity="0.42"/>
+
+            {/* Eight-point star finial */}
+            <polygon points={starPoints(0, domeCY - 1.15*domeR - 0.075, 0.075, 0.030, 8)} fill={DZ.BORDER_GOLD}/>
+            <circle cx={0} cy={domeCY - 1.15*domeR - 0.075} r="0.022" fill="#fff" fillOpacity="0.7"/>
           </>
         ) : (
           <>
@@ -1657,6 +1794,27 @@ function BoardSVG({
               <polygon points={starPoints(0, 0, 0.37, 0.155, 8)}
                 fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.028"/>
             </pattern>
+            {/* Soft ground-shadow blur for the DZ pawn — a dedicated filter (rather
+                  than reusing cl-pawn-shadow) so DZ never depends on a filter id that
+                  only exists when Classic is active. */}
+            <filter id="dz-pawn-shadow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur stdDeviation="0.05"/>
+            </filter>
+            {/* DZ pawn body — onion-dome lantern gradient, one per player's home colour */}
+            {DZ.HOME_COLORS.map((c, i) => (
+              <radialGradient key={i} id={`dzpawn${i}`} cx="32%" cy="20%" r="92%">
+                <stop offset="0%"   stopColor="#FFFFFF" stopOpacity="0.75"/>
+                <stop offset="26%"  stopColor={shadeColor(c, 18)}/>
+                <stop offset="55%"  stopColor={c}/>
+                <stop offset="100%" stopColor={shadeColor(c, -30)}/>
+              </radialGradient>
+            ))}
+            {/* DZ pawn base — shared brass/gold pedestal foot across all four players */}
+            <linearGradient id="dzbase" x1="20%" y1="0%" x2="75%" y2="100%">
+              <stop offset="0%"   stopColor="#F6E3A8"/>
+              <stop offset="48%"  stopColor={DZ.BORDER_GOLD}/>
+              <stop offset="100%" stopColor={shadeColor(DZ.BORDER_GOLD, -38)}/>
+            </linearGradient>
           </>
         )}
       </defs>
@@ -2618,6 +2776,7 @@ function BoardSVG({
             onLastHopLand={anim.onLastHop}
             onDefeatArrived={anim.onArrival}
             isClassic={isClassic}
+            isDz={isDz}
           />
         );
       })}

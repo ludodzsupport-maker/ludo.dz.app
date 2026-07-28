@@ -1,0 +1,18 @@
+This is a visual-only design task. Do NOT touch any game logic, functions, state management, event handlers, or gameplay behavior in any way. The only goal is to finish the visual identity of the "DZ" board (Algerian/Islamic theme) that we started earlier.
+Current issue:
+The board itself (cells, ornamental patterns, colors, crescent-and-star motifs, central rosette) has already been beautifully redesigned in the Algerian theme. However, the following elements still use the old neon theme and haven't been updated yet:
+The four player cards (ROUG / BLEU / VERT / JAUN) — glowing neon frames, font style, "TAP" button shape
+The pawns — their current shape is geometric/neon (hexagonal glow style), which doesn't match the Algerian ornamental style of the board
+Any other UI elements specifically tied to this board (buttons, dice-roll indicators, etc.)
+Requirements:
+Redesign the four pawns (red/blue/green/yellow) with a premium Algerian/Islamic aesthetic that matches the board's ornamentation — you can draw inspiration from a small dome shape, an eight-pointed star, or a form reminiscent of a lantern or zellige tilework, while keeping each player's color clearly distinguishable
+Redesign the four player cards to drop the neon glow and instead use thin gold/brass frames with subtle Islamic geometric patterning along the edges, matching the board's existing color palette (gold, deep green, petrol blue, terracotta)
+Preserve full readability and touch/interaction usability — no functional changes whatsoever
+Maintain maximum quality and professionalism (premium quality) in every detail: gradients, shadows, geometric patterns — no simplified solutions or placeholders
+Strict constraints:
+❌ Do NOT modify any game logic (dice roll logic, movement, win conditions, state management)
+❌ Do NOT push anything to GitHub or perform any commit/push — changes must remain local to this Replit session only
+❌ Do NOT add any new features that weren't requested
+✅ Changes are limited strictly to the visual layer (CSS/styling/assets/SVG shapes)
+✅ Keep the same component and variable names wherever possible to avoid breaking anything else
+Once done, give me only a summary of what was visually changed — no details about any underlying logic or code.
