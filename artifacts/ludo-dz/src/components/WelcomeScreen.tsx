@@ -166,7 +166,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) 
             animate={{ y: [0, -10, 0] }}
             transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
           >
-            {/* ── LEFT: Algerian pawn — neon updated to #00A550 ── */}
+            {/* ── LEFT: Proud Algerian pawn — chechia, moustache & flag medallion ── */}
             <motion.div
               className="flex-shrink-0"
               animate={{ y: [0, -7, 0] }}
@@ -180,7 +180,9 @@ export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) 
                 xmlns="http://www.w3.org/2000/svg"
               >
                 <defs>
-                  <clipPath id={clipId}><circle cx="50" cy="40" r="27"/></clipPath>
+                  <clipPath id={clipId}>
+                    <path d="M 25 130 Q 30 100 40 70 Q 40 50 50 40 Q 60 50 60 70 Q 70 100 75 130 Q 90 130 90 145 L 10 145 Q 10 130 25 130 Z"/>
+                  </clipPath>
                   <filter id={`${pfxId}-shad`} x="-40%" y="-40%" width="180%" height="180%">
                     <feGaussianBlur stdDeviation="4"/>
                   </filter>
@@ -202,10 +204,10 @@ export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) 
                     <stop offset="45%"  stopColor="#00A550"/>
                     <stop offset="100%" stopColor="#002e14"/>
                   </radialGradient>
-                  <radialGradient id={`${pfxId}-sg`} cx="38%" cy="28%" r="68%">
-                    <stop offset="0%"   stopColor="#FFFDE0"/>
-                    <stop offset="35%"  stopColor="#FFD700"/>
-                    <stop offset="100%" stopColor="#9A6200"/>
+                  <radialGradient id={`${pfxId}-che`} cx="35%" cy="24%" r="75%">
+                    <stop offset="0%"   stopColor="#FFFFFF"/>
+                    <stop offset="50%"  stopColor="#F3EEDD"/>
+                    <stop offset="100%" stopColor="#C7BC9C"/>
                   </radialGradient>
                 </defs>
                 {/* shadows */}
@@ -235,12 +237,20 @@ export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) 
                 <path d="M 25 130 C 35 125, 65 125, 75 130" stroke="white" strokeWidth="4" fill="none" strokeLinecap="round" opacity="0.38"/>
                 <path d="M 15 140 L 85 140" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.26"/>
                 <path d="M 72 76 Q 76 96 74 122" stroke="#6EE89A" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.32"/>
-                {/* haik/veil */}
-                <ellipse cx="40" cy="29" rx="10" ry="7" fill="white" opacity="0.42" transform="rotate(-18 40 29)"/>
-                <circle cx="37" cy="25" r="3.5" fill="white" opacity="0.32"/>
-                <path d="M 73 33 Q 77 41 75 53" stroke="#6EE89A" strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.26"/>
-                <path d="M 23 42 Q 50 7 77 42 Q 68 22 50 17 Q 32 22 23 42Z" fill="white" opacity="0.90" clipPath={`url(#${clipId})`}/>
-                <path d="M 27 35 Q 50 16 73 35" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.45" clipPath={`url(#${clipId})`}/>
+                {/* flag sash — white diagonal band across the robe */}
+                <polygon points="34,66 47,66 79,132 66,132" fill="white" opacity="0.94" clipPath={`url(#${clipId})`}/>
+                <line x1="34" y1="66" x2="66" y2="132" stroke="rgba(0,0,0,0.12)" strokeWidth="1" clipPath={`url(#${clipId})`}/>
+                <line x1="47" y1="66" x2="79" y2="132" stroke="white" strokeWidth="1.2" opacity="0.5" clipPath={`url(#${clipId})`}/>
+                {/* chechia — traditional cap, tilted with a little tassel */}
+                <path d="M 26 31 Q 24 16 50 11 Q 76 16 74 31 Q 75 36 65 34 Q 50 30 35 34 Q 25 36 26 31 Z"
+                  fill={`url(#${pfxId}-che)`} stroke="rgba(0,0,0,0.22)" strokeWidth="1.5" strokeLinejoin="round"/>
+                <path d="M 29 28 Q 50 24 71 28" stroke="#00A550" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.55"/>
+                <path d="M 31 32 Q 50 28.5 69 32" stroke="white" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity="0.6"/>
+                <path d="M 71 15 Q 80 20 78 28" stroke="#2B1810" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                <circle cx="78" cy="29" r="2.4" fill="#2B1810"/>
+                {/* eyebrows — bold, right brow cocked for a cheeky look */}
+                <path d="M 30 36 Q 38 31 46 35" stroke="#1a1a2e" strokeWidth="3" fill="none" strokeLinecap="round"/>
+                <path d="M 55 33 Q 63 27 71 31" stroke="#1a1a2e" strokeWidth="3" fill="none" strokeLinecap="round"/>
                 {/* eyes */}
                 <ellipse cx="38" cy="45" rx="5.5" ry="6.5" fill="white"/>
                 <ellipse cx="62" cy="45" rx="5.5" ry="6.5" fill="white"/>
@@ -248,25 +258,23 @@ export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) 
                 <circle cx="63"   cy="46"   r="3.8" fill="#1a1a2e"/>
                 <circle cx="40.5" cy="44.5" r="1.5" fill="white"/>
                 <circle cx="64.5" cy="44.5" r="1.5" fill="white"/>
-                <line x1="33" y1="39" x2="30" y2="34" stroke="#1a1a2e" strokeWidth="2"   strokeLinecap="round"/>
-                <line x1="37" y1="38" x2="36" y2="33" stroke="#1a1a2e" strokeWidth="1.5" strokeLinecap="round"/>
-                <line x1="67" y1="39" x2="70" y2="34" stroke="#1a1a2e" strokeWidth="2"   strokeLinecap="round"/>
-                <line x1="63" y1="38" x2="64" y2="33" stroke="#1a1a2e" strokeWidth="1.5" strokeLinecap="round"/>
-                <path d="M 40 55 Q 50 63 60 55" stroke="#1a1a2e" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
-                {/* belt star */}
+                {/* small proud moustache — compact, stays clear of the eyes */}
+                <path d="M 50 54 Q 55 57.5 59.5 56 Q 64.5 54.5 66 49.5" stroke="#2B1810" strokeWidth="5.5" fill="none" strokeLinecap="round"/>
+                <path d="M 50 54 Q 45 57.5 40.5 56 Q 35.5 54.5 34 49.5" stroke="#2B1810" strokeWidth="5.5" fill="none" strokeLinecap="round"/>
+                <path d="M 50 53 Q 54.5 56 57.7 55" stroke="#6b4226" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity="0.55"/>
+                <path d="M 50 53 Q 45.5 56 42.3 55" stroke="#6b4226" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity="0.55"/>
+                {/* grin — confident and a little cheeky */}
+                <path d="M 41 61 Q 50 68 61 59" stroke="#1a1a2e" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+                {/* flag medallion — crescent & star pinned on the sash */}
                 <motion.g animate={{ opacity: [0.80, 1, 0.80] }} transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}>
-                  <circle cx="50" cy="79" r="12"   fill="#001408" opacity="0.80"/>
-                  <circle cx="50" cy="79" r="10.5" fill="#002210" opacity="0.55"/>
+                  <circle cx="50" cy="80" r="13.5" fill="#000" opacity="0.30" filter={`url(#${pfxId}-sf)`}/>
+                  <circle cx="50" cy="80" r="12.5" fill="#00A550" stroke="#FFFFFF" strokeWidth="2.2"/>
+                  <circle cx="50" cy="80" r="10.5" fill="#FFFFFF"/>
+                  <circle cx="48" cy="80" r="7.4"  fill="#D21034"/>
+                  <circle cx="51.2" cy="80" r="6.1" fill="#FFFFFF"/>
                   <polygon
-                    points="50,70 52.35,75.76 58.56,76.22 53.80,80.24 55.29,86.28 50,83 44.71,86.28 46.20,80.24 41.44,76.22 47.65,75.76"
-                    fill="#FFD700" filter={`url(#${pfxId}-sf)`} opacity="0.70"/>
-                  <polygon
-                    points="50,70 52.35,75.76 58.56,76.22 53.80,80.24 55.29,86.28 50,83 44.71,86.28 46.20,80.24 41.44,76.22 47.65,75.76"
-                    fill={`url(#${pfxId}-sg)`} stroke="#8A5C00" strokeWidth="0.7"/>
-                  <polygon
-                    points="50,71.8 51.6,76.2 56.0,76.5 52.9,78.9 54.0,83.0 50,80.4 46.0,83.0 47.1,78.9 44.0,76.5 48.4,76.2"
-                    fill="white" opacity="0.30"/>
-                  <circle cx="50" cy="78.5" r="1.8" fill="white" opacity="0.88"/>
+                    points="55.2,75.6 56.2,78.1 58.9,78.3 56.8,80 57.5,82.6 55.2,81.1 52.9,82.6 53.6,80 51.5,78.3 54.2,78.1"
+                    fill="#D21034"/>
                 </motion.g>
               </svg>
             </motion.div>
