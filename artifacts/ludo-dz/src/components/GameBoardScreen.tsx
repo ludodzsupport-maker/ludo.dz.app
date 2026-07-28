@@ -9,6 +9,7 @@ import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { ArrowLeft, Bot, Settings, Trophy, X, Zap } from 'lucide-react';
 import { GamePiece } from './GamePiece';
 import * as E from '../lib/ludo-engine';
+import * as DZ from '../lib/board-theme-dz';
 import type { GameConfig } from './GameConfigOverlay';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1335,7 +1336,9 @@ function BoardSVG({
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   const isClassic   = boardStyle === 'classic';
+  const isDz        = boardStyle === 'dz';
   // Classic palette: uses module-level CL_SOLID / CL_LIGHT / CL_BORDER / CL_ARROW
+  // DZ palette: uses ../lib/board-theme-dz (Phase 1 — base colors only)
   const pieces      = game.pieces;
 
   const piecePositions = useMemo(
@@ -1606,7 +1609,7 @@ function BoardSVG({
       </defs>
 
       {/* ── Background ── */}
-      <rect width="15" height="15" fill={isClassic ? '#EEE9DF' : '#030b16'}/>
+      <rect width="15" height="15" fill={isClassic ? '#EEE9DF' : isDz ? DZ.BOARD_BG : '#030b16'}/>
       {/* Classic: linen cross-hatch paper grain — the feel of a premium printed board */}
       {isClassic && <rect width="15" height="15" fill="url(#cl-linen)"/>}
       {/* Classic: very soft warm golden spotlight — light from above hitting the centre */}
@@ -1629,6 +1632,21 @@ function BoardSVG({
           const s = R * 0.866;
           return `${x},${y-R} ${x+s},${y-R*0.5} ${x+s},${y+R*0.5} ${x},${y+R} ${x-s},${y+R*0.5} ${x-s},${y-R*0.5}`;
         };
+
+        if (isDz) {
+          // Flat, structural home base — base colors only (Phase 1, no ornamentation).
+          const solid = DZ.HOME_COLORS[player as 0|1|2|3];
+          return (
+            <g key={`hz-${player}`}>
+              <rect x={zc} y={zr} width="6" height="6" fill={solid}
+                fillOpacity={exists ? (isCurrent ? 1 : 0.94) : 0.30}/>
+              <rect x={zc} y={zr} width="6" height="6" fill="none"
+                stroke={DZ.BORDER_DEEP}
+                strokeWidth={isCurrent ? 0.10 : 0.05}
+                strokeOpacity={isCurrent ? 0.95 : exists ? 0.68 : 0.20}/>
+            </g>
+          );
+        }
 
         if (isClassic) {
           const solid  = CL_SOLID[player as 0|1|2|3];
@@ -2050,9 +2068,9 @@ function BoardSVG({
 
         // Visual rule: ONLY homecol (middle lane) cells get player color.
         // Strip and path cells stay neutral/dark for clean contrast.
-        let fill    = isClassic ? '#FDF8E6' : '#0d1f38';
+        let fill    = isClassic ? '#FDF8E6' : isDz ? DZ.PATH_CREAM : '#0d1f38';
         let fillOp  = 1;
-        let stroke  = isClassic ? 'rgba(110,68,10,0.34)' : 'rgba(255,255,255,0.06)';
+        let stroke  = isClassic ? 'rgba(110,68,10,0.34)' : isDz ? 'rgba(0,98,51,0.22)' : 'rgba(255,255,255,0.06)';
         let useGlow = false;
 
         if (cell.kind === 'homecol') {
@@ -2061,14 +2079,14 @@ function BoardSVG({
             ? (player === 0 ? c - 1 : 13 - c)   // horizontal arms
             : (player === 1 ? r - 1 : 13 - r);   // vertical arms
           const t = Math.max(0, Math.min(1, depth / 5));
-          fill    = isClassic ? CL_SOLID[player as 0|1|2|3] : E.PLAYER_COLORS[player];
+          fill    = isClassic ? CL_SOLID[player as 0|1|2|3] : isDz ? DZ.STRIP_COLORS[player as 0|1|2|3] : E.PLAYER_COLORS[player];
           fillOp  = game.playerSlots.includes(player)
-            ? (isClassic ? 0.88 + t * 0.10 : 0.18 + t * 0.52)
-            : (isClassic ? 0.18 : 0.04);
+            ? (isClassic || isDz ? 0.88 + t * 0.10 : 0.18 + t * 0.52)
+            : (isClassic || isDz ? 0.18 : 0.04);
           stroke  = game.playerSlots.includes(player)
-            ? (isClassic ? CL_BORDER[player as 0|1|2|3] : E.PLAYER_NEONS[player])
+            ? (isClassic ? CL_BORDER[player as 0|1|2|3] : isDz ? DZ.BORDER_DEEP : E.PLAYER_NEONS[player])
             : 'transparent';
-          useGlow = !isClassic && game.playerSlots.includes(player) && t > 0.5;
+          useGlow = !isClassic && !isDz && game.playerSlots.includes(player) && t > 0.5;
         }
         // strip + path → remain the neutral dark fill defined above,
         // EXCEPT the 4 exit squares (below), which get their house tint.
@@ -2118,7 +2136,7 @@ function BoardSVG({
                 fill="rgba(140,90,20,0.045)" pointerEvents="none"/>
             )}
             {/* Subtle glass sheen — neon mode only */}
-            {!isClassic && (
+            {!isClassic && !isDz && (
               <rect x={c+0.04} y={r+0.04} width="0.28" height="0.13" rx="0.05"
                 fill="rgba(255,255,255,0.07)"/>
             )}
@@ -2140,6 +2158,13 @@ function BoardSVG({
                         strokeOpacity={0.90}
                       />
                     </g>
+                  </>
+                ) : isDz ? (
+                  <>
+                    {/* DZ: flat player-coloured tint, no arrow (Phase 1 — no decoration) */}
+                    <rect x={c} y={r} width="1" height="1"
+                      fill={player >= 0 ? DZ.HOME_COLORS[player as 0|1|2|3] : 'transparent'}
+                      fillOpacity={0.88}/>
                   </>
                 ) : (
                   <>
@@ -2235,6 +2260,7 @@ function BoardSVG({
                   </g>
                 );
               }
+              if (isDz) return null; // Phase 1 — no decoration on safe cells
               const T = `translate(${c},${r})`;
               const seed = (r * 15 + c) * 0.06;
               return (
@@ -2275,14 +2301,22 @@ function BoardSVG({
       ))}
 
       {/* ── Center 3×3 — triangles point toward each player's home column ── */}
-      <polygon points="6,6 9,6 7.5,7.5"
-        fill={isClassic ? CL_SOLID[1] : E.PLAYER_COLORS[1]} opacity={game.playerSlots.includes(1) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
-      <polygon points="9,6 9,9 7.5,7.5"
-        fill={isClassic ? CL_SOLID[2] : E.PLAYER_COLORS[2]} opacity={game.playerSlots.includes(2) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
-      <polygon points="9,9 6,9 7.5,7.5"
-        fill={isClassic ? CL_SOLID[3] : E.PLAYER_COLORS[3]} opacity={game.playerSlots.includes(3) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
-      <polygon points="6,9 6,6 7.5,7.5"
-        fill={isClassic ? CL_SOLID[0] : E.PLAYER_COLORS[0]} opacity={isClassic ? 0.96 : 0.58}/>
+      {/* DZ (Phase 1): flat gold field instead of 4 player-colored triangles. */}
+      {!isDz && (
+        <>
+          <polygon points="6,6 9,6 7.5,7.5"
+            fill={isClassic ? CL_SOLID[1] : E.PLAYER_COLORS[1]} opacity={game.playerSlots.includes(1) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
+          <polygon points="9,6 9,9 7.5,7.5"
+            fill={isClassic ? CL_SOLID[2] : E.PLAYER_COLORS[2]} opacity={game.playerSlots.includes(2) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
+          <polygon points="9,9 6,9 7.5,7.5"
+            fill={isClassic ? CL_SOLID[3] : E.PLAYER_COLORS[3]} opacity={game.playerSlots.includes(3) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
+          <polygon points="6,9 6,6 7.5,7.5"
+            fill={isClassic ? CL_SOLID[0] : E.PLAYER_COLORS[0]} opacity={isClassic ? 0.96 : 0.58}/>
+        </>
+      )}
+      {isDz && (
+        <rect x="6" y="6" width="3" height="3" fill={DZ.CENTER_GOLD} fillOpacity="1"/>
+      )}
       {/* Classic: glossy top-light sheens on all four center triangles */}
       {isClassic && (
         <>
@@ -2301,12 +2335,12 @@ function BoardSVG({
           <line x1="6" y1="9" x2="7.5" y2="7.5" stroke="rgba(0,0,0,0.18)" strokeWidth="0.040"/>
         </>
       )}
-      {/* Center area border — gilt for Classic, subtle white for Neon */}
+      {/* Center area border — gilt for Classic, subtle white for Neon, deep green for DZ */}
       <rect x="6" y="6" width="3" height="3" fill="none"
-        stroke={isClassic ? 'url(#clbevel)' : 'rgba(255,255,255,0.12)'}
-        strokeWidth={isClassic ? 0.042 : 0.055}
-        strokeOpacity={isClassic ? 0.72 : 1}/>
-      {isClassic ? (
+        stroke={isClassic ? 'url(#clbevel)' : isDz ? DZ.BORDER_DEEP : 'rgba(255,255,255,0.12)'}
+        strokeWidth={isClassic ? 0.042 : isDz ? 0.050 : 0.055}
+        strokeOpacity={isClassic ? 0.72 : isDz ? 0.85 : 1}/>
+      {isDz ? null : isClassic ? (
         /* Classic: premium multi-layer focal star — the heart of the board */
         <>
           {/* Wide ambient warmth — two-layer gold corona: broad soft haze + tight bright bloom */}
@@ -2386,7 +2420,16 @@ function BoardSVG({
       )}
 
       {/* ── Board border ── */}
-      {isClassic ? (
+      {isDz ? (
+        <>
+          {/* Deep green outer frame — flat, no ornaments (Phase 1) */}
+          <rect x="0.08" y="0.08" width="14.84" height="14.84"
+            fill="none" rx="0.10" stroke={DZ.BORDER_DEEP} strokeWidth="0.14" strokeOpacity="1"/>
+          {/* Thin gold accent line just inside the frame */}
+          <rect x="0.26" y="0.26" width="14.48" height="14.48"
+            fill="none" rx="0.07" stroke={DZ.BORDER_GOLD} strokeWidth="0.030" strokeOpacity="0.85"/>
+        </>
+      ) : isClassic ? (
         <>
           {/* Inner gilt accent line — warm gleam just inside the dark frame */}
           <rect x="0.26" y="0.26" width="14.48" height="14.48"
@@ -2603,6 +2646,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
 
   const isComputer  = config.modeId === 'computer';
   const isClassic   = boardStyle === 'classic';
+  const isDz        = boardStyle === 'dz';
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   const isHumanTurn = !isComputer || game.activePlayer === 0;
@@ -2964,10 +3008,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             borderRadius: 22,
             overflow: 'visible',
             padding: '6px',
-            background: isClassic
+            background: (isClassic || isDz)
               ? 'transparent'
               : 'radial-gradient(ellipse 120% 100% at 50% 50%, #0e2647 0%, #030b16 70%)',
-            border: isClassic ? 'none' : '1px solid rgba(255,255,255,0.07)',
+            border: (isClassic || isDz) ? 'none' : '1px solid rgba(255,255,255,0.07)',
           }}
           animate={{
             boxShadow: [
@@ -2984,7 +3028,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             height: '100%',
             borderRadius: 14,
             overflow: 'hidden',
-            boxShadow: isClassic
+            boxShadow: (isClassic || isDz)
               ? 'inset 0 6px 32px rgba(0,0,0,0.78), inset 0 0 80px rgba(0,0,0,0.48)'
               : 'inset 0 4px 20px rgba(0,0,0,0.60), inset 0 0 0 1px rgba(255,255,255,0.05)',
           }}>
