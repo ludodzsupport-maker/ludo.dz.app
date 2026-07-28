@@ -1637,14 +1637,25 @@ function BoardSVG({
               <stop offset="55%"  stopColor={DZ.BORDER_GOLD} stopOpacity="0.20"/>
               <stop offset="100%" stopColor={DZ.BORDER_GOLD} stopOpacity="0"/>
             </radialGradient>
-            {/* Islamic star-lattice — subtle engraved texture for the home-base corners */}
+            {/* Islamic star-lattice (najma) — 8-point stars centered on each tile reach exactly
+                  to the tile edges, so neighbouring tiles' points touch and chain into a
+                  continuous woven lattice; a smaller companion star at each tile corner
+                  (shared by 4 tiles) fills the diamond gap left between them. Stroke-only
+                  hairlines read as fine engraving rather than a filled stamp. */}
             <pattern id="dz-corner-motif" x="0" y="0" width="1" height="1" patternUnits="userSpaceOnUse">
-              <polygon points={starPoints(0.5, 0.5, 0.46, 0.16, 4)}
-                fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.045"/>
+              <polygon points={starPoints(0.5, 0.5, 0.5, 0.21, 8)}
+                fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.026"/>
+              <polygon points={starPoints(0, 0, 0.185, 0.078, 8)}
+                fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.026"/>
             </pattern>
-            {/* Zellige compass-star tracery — faint warm gold texture for the board felt */}
-            <pattern id="dz-zellige" x="0" y="0" width="1.6" height="1.6" patternUnits="userSpaceOnUse">
-              <polygon points={starPoints(0.8, 0.8, 0.62, 0.26, 8)} fill={DZ.BORDER_GOLD}/>
+            {/* Zellige compass-star tracery — the same najma lattice as the corner motif, doubled
+                  in scale and drawn in gold hairlines for a faint engraved-floor overlay across
+                  the whole board. */}
+            <pattern id="dz-zellige" x="0" y="0" width="2" height="2" patternUnits="userSpaceOnUse">
+              <polygon points={starPoints(1, 1, 1.0, 0.42, 8)}
+                fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.028"/>
+              <polygon points={starPoints(0, 0, 0.37, 0.155, 8)}
+                fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.028"/>
             </pattern>
           </>
         )}
@@ -1656,8 +1667,9 @@ function BoardSVG({
       {isClassic && <rect width="15" height="15" fill="url(#cl-linen)"/>}
       {/* Classic: very soft warm golden spotlight — light from above hitting the centre */}
       {isClassic && <rect width="15" height="15" fill="url(#cl-board-warm)" pointerEvents="none"/>}
-      {/* DZ: faint zellige-tile star tracery — warm gold texture on the deep green felt */}
-      {isDz && <rect width="15" height="15" fill="url(#dz-zellige)" fillOpacity="0.055" pointerEvents="none"/>}
+      {/* DZ: the zellige overlay is drawn after every cell (see Board border section below) so
+            the pattern actually reads as a texture on the felt, instead of being hidden under
+            the opaque home-zone and path-cell fills painted on top of this background rect. */}
 
       {/* ── Home zones ── */}
       {[0,1,2,3].map(player => {
@@ -2309,14 +2321,16 @@ function BoardSVG({
               }
               if (isDz) {
                 // Crescent-and-star safe-square marker — bold gold linework sized to
-                // hold up at 1-cell scale, sitting on a soft warm radial glow.
+                // hold up at 1-cell scale, sitting on a soft warm radial glow. Star is
+                // pushed clear of the crescent's horn tips so the two read as distinct
+                // shapes instead of fusing into one gold blob at this small scale.
                 const T = `translate(${c},${r})`;
                 return (
                   <g transform={T}>
                     <circle cx="0.475" cy="0.5" r="0.42" fill="url(#dz-safe-glow-grad)"/>
                     <path fillRule="evenodd" fill={DZ.BORDER_GOLD}
-                      d={crescentPath(0.36, 0.5, 0.28, 0.47, 0.5, 0.23)}/>
-                    <polygon points={starPoints(0.72, 0.5, 0.15, 0.06, 5)} fill={DZ.BORDER_GOLD}/>
+                      d={crescentPath(0.36, 0.5, 0.28, 0.465, 0.5, 0.225)}/>
+                    <polygon points={starPoints(0.80, 0.5, 0.135, 0.054, 5)} fill={DZ.BORDER_GOLD}/>
                   </g>
                 );
               }
@@ -2403,33 +2417,36 @@ function BoardSVG({
         <>
           {/* Warm ambient bloom beneath the medallion — soft vignette on the gold field */}
           <circle cx="7.5" cy="7.5" r="1.00" fill={DZ.BORDER_DEEP} fillOpacity="0.12" filter="url(#dz-safe-glow)"/>
-          {/* Outer rosette — two nested 12-point star-lattice rings, engraved deep green on gold */}
-          <polygon points={starPoints(7.5, 7.5, 1.12, 0.86, 12)}
-            fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.032" strokeOpacity="0.55"/>
-          <polygon points={starPoints(7.5, 7.5, 0.86, 0.66, 12)}
-            fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.022" strokeOpacity="0.38"/>
+          {/* Outer rosette — two nested 12-point star-lattice rings, engraved deep green on gold.
+                Hairline strokes and shallower points read as fine filigree, not a bold stamp. */}
+          <polygon points={starPoints(7.5, 7.5, 1.12, 0.90, 12)}
+            fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.018" strokeOpacity="0.50"/>
+          <polygon points={starPoints(7.5, 7.5, 0.86, 0.70, 12)}
+            fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.013" strokeOpacity="0.36"/>
           {/* Eight filigree spokes with star finials — compass points radiating outward */}
           {Array.from({ length: 8 }, (_, i) => {
             const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
-            const x1 = 7.5 + Math.cos(a) * 0.60, y1 = 7.5 + Math.sin(a) * 0.60;
-            const x2 = 7.5 + Math.cos(a) * 0.94, y2 = 7.5 + Math.sin(a) * 0.94;
+            const x1 = 7.5 + Math.cos(a) * 0.62, y1 = 7.5 + Math.sin(a) * 0.62;
+            const x2 = 7.5 + Math.cos(a) * 0.95, y2 = 7.5 + Math.sin(a) * 0.95;
             return <line key={`dz-sp-${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke={DZ.BORDER_DEEP} strokeWidth="0.026" strokeOpacity="0.50"/>;
+              stroke={DZ.BORDER_DEEP} strokeWidth="0.016" strokeOpacity="0.42"/>;
           })}
           {Array.from({ length: 8 }, (_, i) => {
             const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
-            const sx = 7.5 + Math.cos(a) * 0.94, sy = 7.5 + Math.sin(a) * 0.94;
-            return <polygon key={`dz-fn-${i}`} points={starPoints(sx, sy, 0.072, 0.028, 4)}
-              fill={DZ.BORDER_DEEP} fillOpacity="0.65"/>;
+            const sx = 7.5 + Math.cos(a) * 0.95, sy = 7.5 + Math.sin(a) * 0.95;
+            return <polygon key={`dz-fn-${i}`} points={starPoints(sx, sy, 0.058, 0.023, 4)}
+              fill={DZ.BORDER_DEEP} fillOpacity="0.55"/>;
           })}
           {/* Medallion disc — deep green roundel framed in gold, the seat for the crown emblem */}
           <circle cx="7.5" cy="7.5" r="0.60" fill={DZ.BOARD_BG} stroke={DZ.BORDER_GOLD} strokeWidth="0.045" strokeOpacity="0.95"/>
           <circle cx="7.5" cy="7.5" r="0.52" fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.016" strokeOpacity="0.55"/>
-          {/* Prominent crescent-and-star — the crown of the board, gold on the green roundel */}
+          {/* Prominent crescent-and-star — the crown of the board, gold on the green roundel.
+                Star sits just clear of the crescent's horn tips (numerically verified gap) so
+                the two read as distinct forms instead of fusing into one gold blob. */}
           <g filter="url(#dz-safe-glow)">
             <path fillRule="evenodd" fill={DZ.BORDER_GOLD}
-              d={crescentPath(7.42, 7.5, 0.32, 7.59, 7.5, 0.26)}/>
-            <polygon points={starPoints(7.80, 7.5, 0.145, 0.058, 5)} fill={DZ.BORDER_GOLD}/>
+              d={crescentPath(7.42, 7.5, 0.30, 7.555, 7.5, 0.235)}/>
+            <polygon points={starPoints(7.80, 7.5, 0.095, 0.038, 5)} fill={DZ.BORDER_GOLD}/>
           </g>
         </>
       ) : isClassic ? (
@@ -2509,6 +2526,12 @@ function BoardSVG({
       ) : (
         /* Neon: white glow dot */
         <circle cx="7.5" cy="7.5" r="0.52" fill="white" opacity="0.16"/>
+      )}
+
+      {/* ── DZ: zellige-tile overlay — drawn after every cell so the faint engraved-floor
+            texture actually reads across path, home and center tiles, not just bare felt ── */}
+      {isDz && (
+        <rect width="15" height="15" fill="url(#dz-zellige)" fillOpacity="0.05" pointerEvents="none"/>
       )}
 
       {/* ── Board border ── */}
