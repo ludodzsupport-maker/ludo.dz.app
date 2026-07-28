@@ -1,7 +1,9 @@
-// ─── DZ board theme — Phase 1: structure + base colors only ──────────────────
-// Algerian-inspired palette. No patterns/decorations yet, and no theme-selector
-// wiring yet — BoardStyle in App.tsx only exposes this as a value, GameBoardScreen's
-// `isDz` branches render it, nothing lets a player pick it in the UI yet.
+// ─── DZ board theme — Algerian palette + decorative pass ─────────────────────
+// Phase 1 (base colors/layout) is complete and selectable in Settings.
+// Phase 2 (this pass) layers on ornamentation: crescent-and-star safe-square
+// markers, a rosette + crescent-and-star center medallion, a faint star-lattice
+// texture on the home corners, a faint zellige tracery on the board felt, and a
+// warm hairline between neutral cells.
 //
 // Player index → corner mapping matches the existing engine corner assignment
 // (see classifyCell() in GameBoardScreen.tsx): 0=Red/TL, 1=Blue/TR, 2=Yellow/BR, 3=Green/BL.
@@ -28,3 +30,6 @@ export const BORDER_DEEP = '#004d26'; // deep green board border
 export const BORDER_GOLD = '#C9A227'; // thin gold accent line on the border
 
 export const CENTER_GOLD = '#C9A227'; // center area — flat gold field
+
+// ─── Phase 2 decorative tokens ────────────────────────────────────────────────
+export const PATH_HAIRLINE = 'rgba(180, 140, 60, 0.15)'; // warm hairline between neutral path/strip cells

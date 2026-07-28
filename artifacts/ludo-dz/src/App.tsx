@@ -19,7 +19,7 @@ function AppContent() {
   const [screen, setScreen]           = useState<Screen>('game');
   const [lang, setLang]               = useState<'fr' | 'ar'>('fr');
   const [gameConfig, setGameConfig]   = useState<GameConfig | null>({ rule: 'classic', players: 4, modeId: 'computer' });
-  const [boardStyle, setBoardStyle]   = useState<BoardStyle>('classic');
+  const [boardStyle, setBoardStyle]   = useState<BoardStyle>('dz');
 
   useEffect(() => {
     const timer = setTimeout(() => setShowSplash(false), 2500);

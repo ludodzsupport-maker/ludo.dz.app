@@ -120,6 +120,20 @@ function starPoints(cx: number, cy: number, rOuter: number, rInner: number, spik
   return pts.join(' ');
 }
 
+// Crescent path (evenodd two-circle subtraction) for the DZ crescent-and-star
+// motif: an outer circle minus an overlapping inner "cutting" circle leaves a
+// moon-sliver whose horns open toward the cutting circle — the companion star
+// (via starPoints) sits in that gap. Used for both safe-square markers and the
+// center medallion, at different scales.
+function crescentPath(
+  ocx: number, ocy: number, rOuter: number,
+  icx: number, icy: number, rInner: number,
+): string {
+  const circle = (cx: number, cy: number, r: number) =>
+    `M ${cx - r},${cy} a ${r},${r} 0 1,0 ${2 * r},0 a ${r},${r} 0 1,0 ${-2 * r},0 Z`;
+  return `${circle(ocx, ocy, rOuter)} ${circle(icx, icy, rInner)}`;
+}
+
 // ─── Fixed resting slots for finished pawns inside each player's center triangle ──
 // Center 3×3 spans columns/rows 6–9, apex at (7.5, 7.5). [x, y] = [col, row].
 // Red=left, Blue=top, Yellow=right, Green=bottom.
@@ -1606,6 +1620,34 @@ function BoardSVG({
             </radialGradient>
           </>
         )}
+        {/* ── DZ-only defs (Algerian decorative pass). Gated so nothing new is
+              emitted when Classic/Neon are active. ── */}
+        {isDz && (
+          <>
+            {/* Soft warm glow for the crescent-and-star emblems (safe squares + center) */}
+            <filter id="dz-safe-glow" x="-100%" y="-100%" width="300%" height="300%">
+              <feGaussianBlur stdDeviation="0.14" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            {/* Warm radial glow for the safe-square emblem — a gradient reads crisply
+                  at small cell scale, where a Gaussian blur would smear the fine
+                  crescent/star linework into a blob. */}
+            <radialGradient id="dz-safe-glow-grad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%"   stopColor={DZ.BORDER_GOLD} stopOpacity="0.55"/>
+              <stop offset="55%"  stopColor={DZ.BORDER_GOLD} stopOpacity="0.20"/>
+              <stop offset="100%" stopColor={DZ.BORDER_GOLD} stopOpacity="0"/>
+            </radialGradient>
+            {/* Islamic star-lattice — subtle engraved texture for the home-base corners */}
+            <pattern id="dz-corner-motif" x="0" y="0" width="1" height="1" patternUnits="userSpaceOnUse">
+              <polygon points={starPoints(0.5, 0.5, 0.46, 0.16, 4)}
+                fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.045"/>
+            </pattern>
+            {/* Zellige compass-star tracery — faint warm gold texture for the board felt */}
+            <pattern id="dz-zellige" x="0" y="0" width="1.6" height="1.6" patternUnits="userSpaceOnUse">
+              <polygon points={starPoints(0.8, 0.8, 0.62, 0.26, 8)} fill={DZ.BORDER_GOLD}/>
+            </pattern>
+          </>
+        )}
       </defs>
 
       {/* ── Background ── */}
@@ -1614,6 +1656,8 @@ function BoardSVG({
       {isClassic && <rect width="15" height="15" fill="url(#cl-linen)"/>}
       {/* Classic: very soft warm golden spotlight — light from above hitting the centre */}
       {isClassic && <rect width="15" height="15" fill="url(#cl-board-warm)" pointerEvents="none"/>}
+      {/* DZ: faint zellige-tile star tracery — warm gold texture on the deep green felt */}
+      {isDz && <rect width="15" height="15" fill="url(#dz-zellige)" fillOpacity="0.055" pointerEvents="none"/>}
 
       {/* ── Home zones ── */}
       {[0,1,2,3].map(player => {
@@ -1634,12 +1678,15 @@ function BoardSVG({
         };
 
         if (isDz) {
-          // Flat, structural home base — base colors only (Phase 1, no ornamentation).
+          // Structural home base (Phase 1) + a very subtle star-lattice texture (Phase 2).
           const solid = DZ.HOME_COLORS[player as 0|1|2|3];
           return (
             <g key={`hz-${player}`}>
               <rect x={zc} y={zr} width="6" height="6" fill={solid}
                 fillOpacity={exists ? (isCurrent ? 1 : 0.94) : 0.30}/>
+              {/* Islamic star-lattice — felt, not seen: a quiet engraved texture */}
+              <rect x={zc} y={zr} width="6" height="6" fill="url(#dz-corner-motif)"
+                fillOpacity="0.08" pointerEvents="none"/>
               <rect x={zc} y={zr} width="6" height="6" fill="none"
                 stroke={DZ.BORDER_DEEP}
                 strokeWidth={isCurrent ? 0.10 : 0.05}
@@ -2070,7 +2117,7 @@ function BoardSVG({
         // Strip and path cells stay neutral/dark for clean contrast.
         let fill    = isClassic ? '#FDF8E6' : isDz ? DZ.PATH_CREAM : '#0d1f38';
         let fillOp  = 1;
-        let stroke  = isClassic ? 'rgba(110,68,10,0.34)' : isDz ? 'rgba(0,98,51,0.22)' : 'rgba(255,255,255,0.06)';
+        let stroke  = isClassic ? 'rgba(110,68,10,0.34)' : isDz ? DZ.PATH_HAIRLINE : 'rgba(255,255,255,0.06)';
         let useGlow = false;
 
         if (cell.kind === 'homecol') {
@@ -2260,7 +2307,19 @@ function BoardSVG({
                   </g>
                 );
               }
-              if (isDz) return null; // Phase 1 — no decoration on safe cells
+              if (isDz) {
+                // Crescent-and-star safe-square marker — bold gold linework sized to
+                // hold up at 1-cell scale, sitting on a soft warm radial glow.
+                const T = `translate(${c},${r})`;
+                return (
+                  <g transform={T}>
+                    <circle cx="0.475" cy="0.5" r="0.42" fill="url(#dz-safe-glow-grad)"/>
+                    <path fillRule="evenodd" fill={DZ.BORDER_GOLD}
+                      d={crescentPath(0.36, 0.5, 0.28, 0.47, 0.5, 0.23)}/>
+                    <polygon points={starPoints(0.72, 0.5, 0.15, 0.06, 5)} fill={DZ.BORDER_GOLD}/>
+                  </g>
+                );
+              }
               const T = `translate(${c},${r})`;
               const seed = (r * 15 + c) * 0.06;
               return (
@@ -2340,7 +2399,40 @@ function BoardSVG({
         stroke={isClassic ? 'url(#clbevel)' : isDz ? DZ.BORDER_DEEP : 'rgba(255,255,255,0.12)'}
         strokeWidth={isClassic ? 0.042 : isDz ? 0.050 : 0.055}
         strokeOpacity={isClassic ? 0.72 : isDz ? 0.85 : 1}/>
-      {isDz ? null : isClassic ? (
+      {isDz ? (
+        <>
+          {/* Warm ambient bloom beneath the medallion — soft vignette on the gold field */}
+          <circle cx="7.5" cy="7.5" r="1.00" fill={DZ.BORDER_DEEP} fillOpacity="0.12" filter="url(#dz-safe-glow)"/>
+          {/* Outer rosette — two nested 12-point star-lattice rings, engraved deep green on gold */}
+          <polygon points={starPoints(7.5, 7.5, 1.12, 0.86, 12)}
+            fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.032" strokeOpacity="0.55"/>
+          <polygon points={starPoints(7.5, 7.5, 0.86, 0.66, 12)}
+            fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.022" strokeOpacity="0.38"/>
+          {/* Eight filigree spokes with star finials — compass points radiating outward */}
+          {Array.from({ length: 8 }, (_, i) => {
+            const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+            const x1 = 7.5 + Math.cos(a) * 0.60, y1 = 7.5 + Math.sin(a) * 0.60;
+            const x2 = 7.5 + Math.cos(a) * 0.94, y2 = 7.5 + Math.sin(a) * 0.94;
+            return <line key={`dz-sp-${i}`} x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke={DZ.BORDER_DEEP} strokeWidth="0.026" strokeOpacity="0.50"/>;
+          })}
+          {Array.from({ length: 8 }, (_, i) => {
+            const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+            const sx = 7.5 + Math.cos(a) * 0.94, sy = 7.5 + Math.sin(a) * 0.94;
+            return <polygon key={`dz-fn-${i}`} points={starPoints(sx, sy, 0.072, 0.028, 4)}
+              fill={DZ.BORDER_DEEP} fillOpacity="0.65"/>;
+          })}
+          {/* Medallion disc — deep green roundel framed in gold, the seat for the crown emblem */}
+          <circle cx="7.5" cy="7.5" r="0.60" fill={DZ.BOARD_BG} stroke={DZ.BORDER_GOLD} strokeWidth="0.045" strokeOpacity="0.95"/>
+          <circle cx="7.5" cy="7.5" r="0.52" fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.016" strokeOpacity="0.55"/>
+          {/* Prominent crescent-and-star — the crown of the board, gold on the green roundel */}
+          <g filter="url(#dz-safe-glow)">
+            <path fillRule="evenodd" fill={DZ.BORDER_GOLD}
+              d={crescentPath(7.42, 7.5, 0.32, 7.59, 7.5, 0.26)}/>
+            <polygon points={starPoints(7.80, 7.5, 0.145, 0.058, 5)} fill={DZ.BORDER_GOLD}/>
+          </g>
+        </>
+      ) : isClassic ? (
         /* Classic: premium multi-layer focal star — the heart of the board */
         <>
           {/* Wide ambient warmth — two-layer gold corona: broad soft haze + tight bright bloom */}
