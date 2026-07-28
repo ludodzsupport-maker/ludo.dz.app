@@ -4,6 +4,7 @@ import { ArrowLeft, Globe, Volume2, Vibrate, Info, ChevronRight, Check } from "l
 import { GamePiece } from "./GamePiece";
 
 import type { BoardStyle } from '../App';
+import * as DZ from '../lib/board-theme-dz';
 interface SettingsScreenProps {
   lang: 'fr' | 'ar';
   setLang: (lang: 'fr' | 'ar') => void;
@@ -38,6 +39,7 @@ const T = {
     boardStyleSub:   "Choisissez l'apparence visuelle du plateau",
     neonBoard:       "Neon Board",
     classicBoard:    "Classic Board",
+    dzBoard:         "DZ Board",
 
     sectionAbout: "À propos",
     about:       "Ludo DZ",
@@ -70,6 +72,7 @@ const T = {
     boardStyleSub:   "اختر المظهر البصري للوحة",
     neonBoard:       "نيون بورد",
     classicBoard:    "بورد كلاسيكي",
+    dzBoard:         "لوحة DZ",
 
     sectionAbout: "حول اللعبة",
     about:       "لودو DZ",
@@ -510,10 +513,12 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                 className="flex-shrink-0 text-[11px] font-heading font-bold px-2.5 py-1 rounded-full"
                 style={boardStyle === 'neon'
                   ? { background: "rgba(0,255,238,0.15)", color: "#00FFEE", border: "1px solid rgba(0,255,238,0.32)", letterSpacing: "0.08em" }
-                  : { background: "rgba(180,130,40,0.18)", color: "#C8960A", border: "1px solid rgba(180,130,40,0.40)", letterSpacing: "0.08em" }
+                  : boardStyle === 'classic'
+                  ? { background: "rgba(180,130,40,0.18)", color: "#C8960A", border: "1px solid rgba(180,130,40,0.40)", letterSpacing: "0.08em" }
+                  : { background: "rgba(0,98,51,0.20)", color: "#C9A227", border: "1px solid rgba(0,98,51,0.45)", letterSpacing: "0.08em" }
                 }
               >
-                {boardStyle === 'neon' ? t.neonBoard : t.classicBoard}
+                {boardStyle === 'neon' ? t.neonBoard : boardStyle === 'classic' ? t.classicBoard : t.dzBoard}
               </span>
 
               <motion.div
@@ -696,6 +701,69 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                         style={{ background: boardStyle === 'classic' ? "#C8960A" : "rgba(255,255,255,0.12)" }}
                       >
                         {boardStyle === 'classic' ? <Check className="w-3 h-3 text-black" strokeWidth={3} /> : null}
+                      </div>
+                    </motion.button>
+
+                    {/* ── DZ Board option ── */}
+                    <motion.button
+                      onClick={() => { setBoardStyle("dz"); setBoardOpen(false); }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl relative overflow-hidden mt-2"
+                      style={boardStyle === 'dz' ? {
+                        background: "rgba(0,98,51,0.18)",
+                        border: "1px solid rgba(201,162,39,0.50)",
+                        boxShadow: "0 0 18px rgba(0,98,51,0.20)",
+                      } : {
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                      }}
+                    >
+                      {boardStyle === 'dz' && (
+                        <motion.div
+                          className="absolute inset-0"
+                          layoutId="activeBoardBg"
+                          style={{ background: "rgba(0,98,51,0.08)" }}
+                        />
+                      )}
+                      {/* Mini DZ board thumbnail */}
+                      <div className="relative z-10 flex-shrink-0 rounded-lg overflow-hidden"
+                        style={boardStyle === 'dz'
+                          ? { boxShadow: "0 0 10px rgba(201,162,39,0.35)", border: "1px solid rgba(201,162,39,0.40)" }
+                          : { border: "1px solid rgba(255,255,255,0.14)" }}>
+                        <svg viewBox="0 0 60 60" width="42" height="42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect width="60" height="60" fill={DZ.BOARD_BG}/>
+                          {/* Corner home areas — TL=P0, TR=P1, BR=P2, BL=P3 (matches engine corner assignment) */}
+                          <rect x="1"  y="1"  width="22" height="22" rx="2" fill={DZ.HOME_COLORS[0]} opacity="0.92"/>
+                          <rect x="37" y="1"  width="22" height="22" rx="2" fill={DZ.HOME_COLORS[1]} opacity="0.92"/>
+                          <rect x="37" y="37" width="22" height="22" rx="2" fill={DZ.HOME_COLORS[2]} opacity="0.92"/>
+                          <rect x="1"  y="37" width="22" height="22" rx="2" fill={DZ.HOME_COLORS[3]} opacity="0.92"/>
+                          {/* Cream cross lanes */}
+                          <rect x="23" y="1"  width="14" height="58" fill={DZ.PATH_CREAM}/>
+                          <rect x="1"  y="23" width="58" height="14" fill={DZ.PATH_CREAM}/>
+                          {/* Home-stretch tints (top=P0, bottom=P1, left=P3, right=P2 — matches Neon/Classic thumbnail convention) */}
+                          <rect x="25" y="1"  width="10" height="20" fill={DZ.STRIP_COLORS[0]} opacity="0.55"/>
+                          <rect x="25" y="39" width="10" height="20" fill={DZ.STRIP_COLORS[1]} opacity="0.55"/>
+                          <rect x="1"  y="25" width="20" height="10" fill={DZ.STRIP_COLORS[3]} opacity="0.55"/>
+                          <rect x="39" y="25" width="20" height="10" fill={DZ.STRIP_COLORS[2]} opacity="0.55"/>
+                          {/* Center — flat gold field, Phase 1 has no ornamentation */}
+                          <rect x="23" y="23" width="14" height="14" fill={DZ.CENTER_GOLD}/>
+                          {/* Outer deep-green frame + inner gold accent line */}
+                          <rect x="0.5" y="0.5" width="59" height="59" rx="2" stroke={DZ.BORDER_DEEP} strokeWidth="1.6" fill="none"/>
+                          <rect x="2.6" y="2.6" width="54.8" height="54.8" rx="1.5" stroke={DZ.BORDER_GOLD} strokeWidth="0.6" fill="none" opacity="0.85"/>
+                        </svg>
+                      </div>
+                      <span
+                        className="font-heading font-bold relative z-10 flex-1 px-3"
+                        style={{ fontSize: "14px", color: boardStyle === 'dz' ? "#C9A227" : "rgba(255,255,255,0.55)", letterSpacing: "0.08em" }}
+                      >
+                        {t.dzBoard}
+                      </span>
+                      <div
+                        className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 relative z-10"
+                        style={{ background: boardStyle === 'dz' ? "#C9A227" : "rgba(255,255,255,0.12)" }}
+                      >
+                        {boardStyle === 'dz' ? <Check className="w-3 h-3 text-black" strokeWidth={3} /> : null}
                       </div>
                     </motion.button>
                   </div>
