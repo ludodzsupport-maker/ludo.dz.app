@@ -1785,6 +1785,15 @@ function BoardSVG({
               <polygon points={starPoints(0, 0, 0.185, 0.078, 8)}
                 fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.026"/>
             </pattern>
+            {/* Same najma motif, stroked in warm ivory instead of deep green — used on the
+                  blue (TR) and terracotta (BR) corners, where the deep-green stroke above
+                  loses too much contrast against their darker/warmer field colour. */}
+            <pattern id="dz-corner-motif-light" x="0" y="0" width="1" height="1" patternUnits="userSpaceOnUse">
+              <polygon points={starPoints(0.5, 0.5, 0.5, 0.21, 8)}
+                fill="none" stroke={DZ.PATH_CREAM} strokeWidth="0.026"/>
+              <polygon points={starPoints(0, 0, 0.185, 0.078, 8)}
+                fill="none" stroke={DZ.PATH_CREAM} strokeWidth="0.026"/>
+            </pattern>
             {/* Zellige compass-star tracery — the same najma lattice as the corner motif, doubled
                   in scale and drawn in gold hairlines for a faint engraved-floor overlay across
                   the whole board. */}
@@ -1850,12 +1859,16 @@ function BoardSVG({
         if (isDz) {
           // Structural home base (Phase 1) + a very subtle star-lattice texture (Phase 2).
           const solid = DZ.HOME_COLORS[player as 0|1|2|3];
+          // Blue (TR, index 1) and terracotta (BR, index 2) are dark/mid-saturated enough
+          // that the deep-green motif stroke (fine against gold/cream) nearly disappears —
+          // swap to the ivory-stroke variant for just those two corners.
+          const motifId = (player === 1 || player === 2) ? 'dz-corner-motif-light' : 'dz-corner-motif';
           return (
             <g key={`hz-${player}`}>
               <rect x={zc} y={zr} width="6" height="6" fill={solid}
                 fillOpacity={exists ? (isCurrent ? 1 : 0.94) : 0.30}/>
               {/* Islamic star-lattice — felt, not seen: a quiet engraved texture */}
-              <rect x={zc} y={zr} width="6" height="6" fill="url(#dz-corner-motif)"
+              <rect x={zc} y={zr} width="6" height="6" fill={`url(#${motifId})`}
                 fillOpacity="0.08" pointerEvents="none"/>
               <rect x={zc} y={zr} width="6" height="6" fill="none"
                 stroke={DZ.BORDER_DEEP}

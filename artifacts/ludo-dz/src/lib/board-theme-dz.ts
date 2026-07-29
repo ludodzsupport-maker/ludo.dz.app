@@ -32,4 +32,4 @@ export const BORDER_GOLD = '#C9A227'; // thin gold accent line on the border
 export const CENTER_GOLD = '#C9A227'; // center area — flat gold field
 
 // ─── Phase 2 decorative tokens ────────────────────────────────────────────────
-export const PATH_HAIRLINE = 'rgba(180, 140, 60, 0.15)'; // warm hairline between neutral path/strip cells
+export const PATH_HAIRLINE = 'rgba(0, 77, 38, 0.35)'; // deep-green hairline between neutral path/strip cells
