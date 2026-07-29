@@ -3208,6 +3208,26 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             // Purple base
             'radial-gradient(ellipse 90% 70% at 50% 42%, #3d2566 0%, #2d1b4e 45%, #1a0f30 100%)',
           ].join(', ')
+        : isDz
+        ? [
+            // Warm gold spotlight — soft focus glow centred behind the board
+            'radial-gradient(ellipse 58% 50% at 50% 50%, rgba(201,162,39,0.14) 0%, rgba(201,162,39,0.06) 42%, transparent 74%)',
+            // Corner colour blooms — echo each player's home colour where their dice
+            // card floats, so the card doesn't land on a flat, unrelated backdrop
+            'radial-gradient(ellipse 34% 26% at 13% 15%, rgba(212,160,23,0.10) 0%, transparent 75%)',  // TL — saffron gold
+            'radial-gradient(ellipse 34% 26% at 87% 15%, rgba(0,105,148,0.12) 0%, transparent 75%)',   // TR — Mediterranean blue
+            'radial-gradient(ellipse 34% 26% at 87% 87%, rgba(194,112,58,0.12) 0%, transparent 75%)',  // BR — Saharan terracotta
+            'radial-gradient(ellipse 34% 26% at 13% 87%, rgba(245,230,200,0.08) 0%, transparent 75%)', // BL — ivory cream
+            // Najma star-lattice echo — same diamond-trellis technique as the Classic
+            // texture below, re-themed in gold and kept whisper-faint so it reads as
+            // the zellige floor pattern bleeding softly into the shadows
+            'repeating-linear-gradient(45deg,  rgba(201,162,39,0.045) 0px, rgba(201,162,39,0.045) 1px, transparent 1px, transparent 38px)',
+            'repeating-linear-gradient(-45deg, rgba(201,162,39,0.045) 0px, rgba(201,162,39,0.045) 1px, transparent 1px, transparent 38px)',
+            // Deep vignette — edges recede so focus stays on the board
+            'radial-gradient(ellipse 100% 100% at 50% 48%, transparent 38%, rgba(0,8,5,0.55) 100%)',
+            // Deep emerald-black base — a darker, richer relative of the board's own green
+            'radial-gradient(ellipse 95% 80% at 50% 40%, #0c3120 0%, #06210f 48%, #02100a 100%)',
+          ].join(', ')
         : 'linear-gradient(175deg, #060f1d 0%, #09152a 55%, #050d18 100%)' }}
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
