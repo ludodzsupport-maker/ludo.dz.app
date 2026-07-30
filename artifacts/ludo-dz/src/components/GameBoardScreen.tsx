@@ -1154,6 +1154,18 @@ function PawnToken({
   const baseRX    = 0.30;
   const baseRY    = 0.10;
   const baseCY    = 0.19;
+  // DZ-only pedestal geometry — a taller/wider foot plus a stepped collar band at the
+  // neck, so the onion-dome reads as resting on a solid plinth instead of a flat disc.
+  // Deliberately separate from baseRX/baseRY/baseCY above so Classic's pedestal is
+  // untouched. dzBaseRX clears the dome's true widest point (~0.279) with margin, and
+  // dzBaseRY/dzBaseCY are tuned so the foot's curve meets the dome's flat underside with
+  // no seam gap (verified numerically, not just by eye).
+  const dzBaseRX   = 0.32;
+  const dzBaseRY   = 0.13;
+  const dzBaseCY   = 0.20;
+  const dzCollarRX = 0.215;
+  const dzCollarRY = 0.048;
+  const dzCollarCY = 0.10;
 
   return (
     // Outer group: tile-to-tile x/y movement — GPU-composited layer
@@ -1239,11 +1251,23 @@ function PawnToken({
               />
             )}
 
-            {/* Base pedestal — shared brass/gold foot across all four players */}
-            <ellipse cx={0} cy={baseCY} rx={baseRX} ry={baseRY}
-              fill="url(#dzbase)" stroke={DZ.BORDER_DEEP} strokeWidth="0.018" strokeOpacity="0.70"/>
-            <ellipse cx={0} cy={baseCY - baseRY*0.55} rx={baseRX*0.68} ry={baseRY*0.30}
-              fill="white" fillOpacity="0.30"/>
+            {/* Base pedestal — shared brass/gold foot across all four players. A wider,
+                taller foot plus a stepped collar band at the neck (echoing the dome's own
+                gold belt above) reads as a proper plinth instead of a flat disc, and the
+                collar also bridges the seam where the dome's flat underside meets the foot. */}
+            <ellipse cx={0} cy={dzBaseCY} rx={dzBaseRX} ry={dzBaseRY}
+              fill="url(#dzbase)" stroke={DZ.BORDER_DEEP} strokeWidth="0.020" strokeOpacity="0.75"/>
+            {/* Underside shadow — grounds the foot against the board, mirrors Classic's treatment */}
+            <path d={`M ${dzBaseRX},${dzBaseCY} A ${dzBaseRX} ${dzBaseRY} 0 0 1 ${-dzBaseRX},${dzBaseCY}`}
+              fill="none" stroke="#000000" strokeOpacity="0.24" strokeWidth="0.028"/>
+            {/* Foot rim catch-light */}
+            <ellipse cx={0} cy={dzBaseCY - dzBaseRY*0.52} rx={dzBaseRX*0.62} ry={dzBaseRY*0.26}
+              fill="white" fillOpacity="0.24"/>
+            {/* Collar / step band bridging the dome's neck into the foot below */}
+            <ellipse cx={0} cy={dzCollarCY} rx={dzCollarRX} ry={dzCollarRY}
+              fill={shadeColor(DZ.BORDER_GOLD, -12)} stroke={DZ.BORDER_GOLD} strokeWidth="0.016" strokeOpacity="0.90"/>
+            <ellipse cx={0} cy={dzCollarCY - dzCollarRY*0.45} rx={dzCollarRX*0.66} ry={dzCollarRY*0.30}
+              fill="white" fillOpacity="0.22"/>
 
             {/* Onion-dome / lantern body — the player's Algerian home colour */}
             <path d={dzDomePath(0, domeCY, domeR)}
