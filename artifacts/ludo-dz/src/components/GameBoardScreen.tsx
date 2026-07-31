@@ -66,13 +66,13 @@ const GRID: Cell[][] = Array.from({ length: 15 }, (_, r) =>
   Array.from({ length: 15 }, (_, c) => classifyCell(r, c))
 );
 
-// DZ-only outer frames for the six-cell home approaches. Insets preserve the
-// hairline grid while creating a continuous, player-coloured route to the centre.
+// DZ-only frames for the four six-cell home approaches. Each frame holds a
+// zellige seal at its inner threshold, just before the central rosette.
 const DZ_HOME_LANE_FRAMES = [
-  { x: 1.055, y: 7.055, width: 5.89, height: 0.89 }, // Gold → right
-  { x: 7.055, y: 1.055, width: 0.89, height: 5.89 }, // Blue → down
-  { x: 8.055, y: 7.055, width: 5.89, height: 0.89 }, // Terracotta → left
-  { x: 7.055, y: 8.055, width: 0.89, height: 5.89 }, // Cream → up
+  { x: 1.055, y: 7.055, width: 5.89, height: 0.89, sealX: 5.66, sealY: 7.5 }, // Gold → right
+  { x: 7.055, y: 1.055, width: 0.89, height: 5.89, sealX: 7.5, sealY: 5.66 }, // Blue → down
+  { x: 8.055, y: 7.055, width: 5.89, height: 0.89, sealX: 9.34, sealY: 7.5 }, // Terracotta → left
+  { x: 7.055, y: 8.055, width: 0.89, height: 5.89, sealX: 7.5, sealY: 9.34 }, // Cream → up
 ] as const;
 
 const PATH_POS_MAP = new Map<string, number>(
@@ -2592,13 +2592,41 @@ function BoardSVG({
         );
       }))}
 
-      {/* DZ victory lanes: a fine continuous player-colour frame ties the six
-          individual home-column cells into one ceremonial path to the centre. */}
+      {/* DZ victory lanes: nested keylines and a small eight-point zellige seal
+          turn each home approach into a distinct ceremonial route. The seal sits
+          just outside the center field, so it frames—not competes with—the rosette. */}
       {isDz && DZ_HOME_LANE_FRAMES.map((frame, player) => (
-        <rect key={`dz-lane-frame-${player}`}
-          x={frame.x} y={frame.y} width={frame.width} height={frame.height} rx="0.055"
-          fill="none" stroke={DZ.PLAYER_ACCENT_COLORS[player as 0|1|2|3]}
-          strokeWidth="0.044" strokeOpacity="0.92" pointerEvents="none"/>
+        <g key={`dz-lane-frame-${player}`} pointerEvents="none">
+          {/* Outer keyline — the darker, engraved edge that cleanly separates
+              every lane from both its neighbours and the cream board path. */}
+          <rect
+            x={frame.x} y={frame.y} width={frame.width} height={frame.height} rx="0.055"
+            fill="none" stroke={DZ.PLAYER_LANE_KEYLINE_COLORS[player as 0|1|2|3]}
+            strokeWidth="0.052" strokeOpacity="0.96"/>
+          {/* Inner companion keyline — a fine light-catching inlay, deliberately
+              inset so the pair reads like an ornamental border rather than a box. */}
+          <rect
+            x={frame.x + 0.080} y={frame.y + 0.080}
+            width={frame.width - 0.160} height={frame.height - 0.160} rx="0.032"
+            fill="none" stroke={DZ.PLAYER_LANE_HIGHLIGHT_COLORS[player as 0|1|2|3]}
+            strokeWidth="0.016" strokeOpacity="0.86"/>
+          {/* Nested eight-point najma: dark outer engraving, lighter inner inlay,
+              and a small diamond heart. This seals the lane at its final step
+              before it reaches the central Algerian rosette. */}
+          <polygon
+            points={starPoints(frame.sealX, frame.sealY, 0.205, 0.085, 8)}
+            fill={DZ.HOME_COLORS[player as 0|1|2|3]} fillOpacity="0.16"
+            stroke={DZ.PLAYER_LANE_KEYLINE_COLORS[player as 0|1|2|3]}
+            strokeWidth="0.024" strokeOpacity="0.94" strokeLinejoin="round"/>
+          <polygon
+            points={starPoints(frame.sealX, frame.sealY, 0.137, 0.057, 8)}
+            fill="none" stroke={DZ.PLAYER_LANE_HIGHLIGHT_COLORS[player as 0|1|2|3]}
+            strokeWidth="0.016" strokeOpacity="0.96" strokeLinejoin="round"/>
+          <rect
+            x={frame.sealX - 0.040} y={frame.sealY - 0.040} width="0.080" height="0.080"
+            fill={DZ.PLAYER_LANE_KEYLINE_COLORS[player as 0|1|2|3]}
+            fillOpacity="0.88" transform={`rotate(45 ${frame.sealX} ${frame.sealY})`}/>
+        </g>
       ))}
 
       {/* ── Movable-piece tile highlights ── */}

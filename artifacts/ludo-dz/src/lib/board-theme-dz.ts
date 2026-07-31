@@ -43,6 +43,23 @@ export const PLAYER_ACCENT_COLORS = [
   '#FFF8E8', // ivory cream
 ] as const;
 
+// DZ home-lane keylines are tuned separately from the player fills. The dark
+// line defines the lane edge while the lighter companion line carries the fine
+// zellige detail, preserving contrast for every one of the four palettes.
+export const PLAYER_LANE_KEYLINE_COLORS = [
+  '#7D5700', // rich brass against saffron
+  '#004A69', // deep Atlantic blue against Mediterranean blue
+  '#7C391D', // burnt umber against terracotta
+  '#7A6035', // warm umber against ivory cream
+] as const;
+
+export const PLAYER_LANE_HIGHLIGHT_COLORS = [
+  '#FFE49A', // gilt highlight
+  '#9EDFF2', // pale sea-glass highlight
+  '#F3C296', // sun-warmed clay highlight
+  '#FFF9E9', // porcelain highlight
+] as const;
+
 // High-contrast ink for the directional gate mark and its small crescent-star.
 // Cream/gold need deep green; blue/terracotta need warm ivory.
 export const PLAYER_GATE_INKS = [
