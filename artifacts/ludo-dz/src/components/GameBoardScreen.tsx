@@ -2640,7 +2640,6 @@ function BoardSVG({
       ))}
 
       {/* ── Center 3×3 — triangles point toward each player's home column ── */}
-      {/* DZ (Phase 1): flat gold field instead of 4 player-colored triangles. */}
       {!isDz && (
         <>
           <polygon points="6,6 9,6 7.5,7.5"
@@ -2654,7 +2653,15 @@ function BoardSVG({
         </>
       )}
       {isDz && (
-        <rect x="6" y="6" width="3" height="3" fill={DZ.CENTER_GOLD} fillOpacity="1"/>
+        <>
+          {/* DZ: four player-facing fields meet at the exact board centre. Their
+              placement follows the adjacent approach lanes: gold enters from the
+              left, blue from above, terracotta from the right, and cream below. */}
+          <polygon points="6,6 7.5,7.5 6,9" fill={DZ.HOME_COLORS[0]}/>
+          <polygon points="6,6 9,6 7.5,7.5" fill={DZ.HOME_COLORS[1]}/>
+          <polygon points="9,6 9,9 7.5,7.5" fill={DZ.HOME_COLORS[2]}/>
+          <polygon points="9,9 6,9 7.5,7.5" fill={DZ.HOME_COLORS[3]}/>
+        </>
       )}
       {/* Classic: glossy top-light sheens on all four center triangles */}
       {isClassic && (
