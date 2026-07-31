@@ -3325,23 +3325,27 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           ].join(', ')
         : isDz
         ? [
-            // Warm gold spotlight — soft focus glow centred behind the board
-            'radial-gradient(ellipse 58% 50% at 50% 50%, rgba(201,162,39,0.14) 0%, rgba(201,162,39,0.06) 42%, transparent 74%)',
-            // Corner colour blooms — echo each player's home colour where their dice
-            // card floats, so the card doesn't land on a flat, unrelated backdrop
-            'radial-gradient(ellipse 34% 26% at 13% 15%, rgba(212,160,23,0.10) 0%, transparent 75%)',  // TL — saffron gold
-            'radial-gradient(ellipse 34% 26% at 87% 15%, rgba(0,105,148,0.12) 0%, transparent 75%)',   // TR — Mediterranean blue
-            'radial-gradient(ellipse 34% 26% at 87% 87%, rgba(194,112,58,0.12) 0%, transparent 75%)',  // BR — Saharan terracotta
-            'radial-gradient(ellipse 34% 26% at 13% 87%, rgba(245,230,200,0.08) 0%, transparent 75%)', // BL — ivory cream
-            // Najma star-lattice echo — same diamond-trellis technique as the Classic
-            // texture below, re-themed in gold and kept whisper-faint so it reads as
-            // the zellige floor pattern bleeding softly into the shadows
-            'repeating-linear-gradient(45deg,  rgba(201,162,39,0.045) 0px, rgba(201,162,39,0.045) 1px, transparent 1px, transparent 38px)',
-            'repeating-linear-gradient(-45deg, rgba(201,162,39,0.045) 0px, rgba(201,162,39,0.045) 1px, transparent 1px, transparent 38px)',
-            // Deep vignette — edges recede so focus stays on the board
-            'radial-gradient(ellipse 100% 100% at 50% 48%, transparent 38%, rgba(0,8,5,0.55) 100%)',
-            // Deep emerald-black base — a darker, richer relative of the board's own green
-            'radial-gradient(ellipse 95% 80% at 50% 40%, #0c3120 0%, #06210f 48%, #02100a 100%)',
+            // Velvet vignette — lets the board remain the focal point.
+            'radial-gradient(ellipse 110% 105% at 50% 48%, transparent 36%, rgba(0,18,9,0.68) 100%)',
+            // A diffuse ivory aurora — an artistic echo of Algeria’s white field,
+            // diffused through the emerald instead of rendered as a literal flag.
+            'radial-gradient(ellipse 72% 74% at 76% 46%, rgba(251,255,248,0.15) 0%, rgba(241,251,240,0.07) 34%, transparent 72%)',
+            // Crescent shadow and light: the shifted emerald cutout sits over a
+            // soft ivory moon, leaving an oversized, atmospheric crescent at right.
+            'radial-gradient(circle at 84.5% 61%, rgba(0,57,29,0.86) 0%, rgba(0,57,29,0.86) 12.1%, transparent 12.6%)',
+            'radial-gradient(circle at 80.5% 61%, rgba(247,255,247,0.16) 0%, rgba(231,249,234,0.09) 14.8%, transparent 15.4%)',
+            // Five restrained red glints form a star-like constellation beside the
+            // crescent, a nod to the national emblem without turning into an icon.
+            'radial-gradient(circle at 92.0% 50.0%, rgba(218,50,57,0.34) 0px, rgba(218,50,57,0.22) 1.5px, transparent 3px)',
+            'radial-gradient(circle at 89.4% 47.2%, rgba(218,50,57,0.30) 0px, rgba(218,50,57,0.18) 1.2px, transparent 2.8px)',
+            'radial-gradient(circle at 94.7% 47.2%, rgba(218,50,57,0.30) 0px, rgba(218,50,57,0.18) 1.2px, transparent 2.8px)',
+            'radial-gradient(circle at 90.4% 53.2%, rgba(218,50,57,0.27) 0px, rgba(218,50,57,0.16) 1.1px, transparent 2.6px)',
+            'radial-gradient(circle at 93.6% 53.2%, rgba(218,50,57,0.27) 0px, rgba(218,50,57,0.16) 1.1px, transparent 2.6px)',
+            // Fine ivory zellige lines add depth at the dice-card perimeter.
+            'repeating-linear-gradient(45deg, rgba(235,251,237,0.035) 0px, rgba(235,251,237,0.035) 1px, transparent 1px, transparent 42px)',
+            'repeating-linear-gradient(-45deg, rgba(235,251,237,0.035) 0px, rgba(235,251,237,0.035) 1px, transparent 1px, transparent 42px)',
+            // Green-and-ivory silk sweep — #006233 remains the prominent anchor.
+            'linear-gradient(112deg, #003c1f 0%, #006233 34%, #0b6e3b 47%, #174a2d 62%, #062d18 100%)',
           ].join(', ')
         : 'linear-gradient(175deg, #060f1d 0%, #09152a 55%, #050d18 100%)' }}
       initial={{ opacity: 0, scale: 0.97 }}
