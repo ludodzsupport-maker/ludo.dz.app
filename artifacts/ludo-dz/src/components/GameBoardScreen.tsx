@@ -66,6 +66,15 @@ const GRID: Cell[][] = Array.from({ length: 15 }, (_, r) =>
   Array.from({ length: 15 }, (_, c) => classifyCell(r, c))
 );
 
+// DZ-only outer frames for the six-cell home approaches. Insets preserve the
+// hairline grid while creating a continuous, player-coloured route to the centre.
+const DZ_HOME_LANE_FRAMES = [
+  { x: 1.055, y: 7.055, width: 5.89, height: 0.89 }, // Gold → right
+  { x: 7.055, y: 1.055, width: 0.89, height: 5.89 }, // Blue → down
+  { x: 8.055, y: 7.055, width: 5.89, height: 0.89 }, // Terracotta → left
+  { x: 7.055, y: 8.055, width: 0.89, height: 5.89 }, // Cream → up
+] as const;
+
 const PATH_POS_MAP = new Map<string, number>(
   E.MAIN_PATH.map(([r, c], i) => [`${r},${c}`, i])
 );
@@ -2415,10 +2424,35 @@ function BoardSVG({
                   </>
                 ) : isDz ? (
                   <>
-                    {/* DZ: flat player-coloured tint, no arrow (Phase 1 — no decoration) */}
+                    {/* DZ gate: a clear player-coloured frame, directional arrow, and a
+                        tiny Algerian crescent-star at the arrow's trailing edge. The
+                        emblem is intentionally kept separate from the arrowhead, so the
+                        exit direction remains instantly readable. */}
                     <rect x={c} y={r} width="1" height="1"
                       fill={player >= 0 ? DZ.HOME_COLORS[player as 0|1|2|3] : 'transparent'}
-                      fillOpacity={0.88}/>
+                      fillOpacity={0.68}/>
+                    <rect x={c+0.052} y={r+0.052} width="0.896" height="0.896" rx="0.065"
+                      fill="none"
+                      stroke={player >= 0 ? DZ.PLAYER_ACCENT_COLORS[player as 0|1|2|3] : 'transparent'}
+                      strokeWidth="0.064"
+                      strokeOpacity="0.98"/>
+                    <rect x={c+0.025} y={r+0.025} width="0.95" height="0.95" rx="0.082"
+                      fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.018" strokeOpacity="0.62"/>
+                    <g transform={`rotate(${exitRotDeg}, ${c+0.5}, ${r+0.5})`}>
+                      <path
+                        d={`M ${c+0.23},${r+0.47} H ${c+0.64} M ${c+0.48},${r+0.30} L ${c+0.66},${r+0.47} L ${c+0.48},${r+0.64}`}
+                        fill="none"
+                        stroke={player >= 0 ? DZ.PLAYER_GATE_INKS[player as 0|1|2|3] : DZ.BORDER_DEEP}
+                        strokeWidth="0.060" strokeLinecap="round" strokeLinejoin="round"
+                        strokeOpacity="0.96"/>
+                      <path
+                        fillRule="evenodd"
+                        fill={player >= 0 ? DZ.PLAYER_GATE_INKS[player as 0|1|2|3] : DZ.BORDER_DEEP}
+                        d={crescentPath(c+0.23, r+0.73, 0.105, c+0.265, r+0.73, 0.083)}/>
+                      <polygon
+                        points={starPoints(c+0.45, r+0.73, 0.052, 0.021, 5)}
+                        fill={player >= 0 ? DZ.PLAYER_GATE_INKS[player as 0|1|2|3] : DZ.BORDER_DEEP}/>
+                    </g>
                   </>
                 ) : (
                   <>
@@ -2557,6 +2591,15 @@ function BoardSVG({
           </g>
         );
       }))}
+
+      {/* DZ victory lanes: a fine continuous player-colour frame ties the six
+          individual home-column cells into one ceremonial path to the centre. */}
+      {isDz && DZ_HOME_LANE_FRAMES.map((frame, player) => (
+        <rect key={`dz-lane-frame-${player}`}
+          x={frame.x} y={frame.y} width={frame.width} height={frame.height} rx="0.055"
+          fill="none" stroke={DZ.PLAYER_ACCENT_COLORS[player as 0|1|2|3]}
+          strokeWidth="0.044" strokeOpacity="0.92" pointerEvents="none"/>
+      ))}
 
       {/* ── Movable-piece tile highlights ── */}
       {movableHighlights.map(({ col, row, neon }, i) => (

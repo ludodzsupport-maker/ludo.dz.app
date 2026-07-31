@@ -33,3 +33,21 @@ export const CENTER_GOLD = '#C9A227'; // center area — flat gold field
 
 // ─── Phase 2 decorative tokens ────────────────────────────────────────────────
 export const PATH_HAIRLINE = 'rgba(0, 77, 38, 0.35)'; // deep-green hairline between neutral path/strip cells
+
+// Gate and victory-lane accents stay in each player's palette, but are lifted
+// above the lane/base fill so the framing remains legible at board scale.
+export const PLAYER_ACCENT_COLORS = [
+  '#F6CF58', // saffron gold
+  '#55BDE0', // Mediterranean blue
+  '#E4A574', // Saharan terracotta
+  '#FFF8E8', // ivory cream
+] as const;
+
+// High-contrast ink for the directional gate mark and its small crescent-star.
+// Cream/gold need deep green; blue/terracotta need warm ivory.
+export const PLAYER_GATE_INKS = [
+  BORDER_DEEP,
+  PATH_CREAM,
+  PATH_CREAM,
+  BORDER_DEEP,
+] as const;
