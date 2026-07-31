@@ -299,9 +299,13 @@ function DieFace({
                   <rect x="-2.6" y="-2.7" width="2.1" height="0.76" rx="0.30"
                     fill="white" opacity="0.20"/>
                 )}
-                {/* Dots — classic: ivory cream on dark wood; DZ: deep green on cream */}
+                {/* Dots — classic: dark on cream; DZ: deep green on cream with fine gold ring (zellige tile edge) */}
                 {d.map(([dx, dy], i) => (
-                  <circle key={i} cx={dx} cy={dy} r="0.52" fill={classic ? '#1e0e00' : dz ? DZ.BORDER_DEEP : neon}/>
+                  <circle key={i} cx={dx} cy={dy} r="0.52"
+                    fill={classic ? '#1e0e00' : dz ? DZ.BORDER_DEEP : neon}
+                    stroke={dz ? DZ.BORDER_GOLD : 'none'}
+                    strokeWidth={dz ? '0.14' : '0'}
+                    strokeOpacity={dz ? 0.72 : 0}/>
                 ))}
               </svg>
             </div>
@@ -454,11 +458,11 @@ function CornerDice({
         opacity: isActive ? 1 : 0.74,
         boxShadow: isActive
           ? [
-              `0 0 0 1.5px ${DZ.BORDER_GOLD}, 0 0 0 3px ${DZ.BORDER_DEEP}, 0 5px 16px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,238,190,0.30)`,
-              `0 0 0 1.5px ${DZ.BORDER_GOLD}, 0 0 0 3px ${DZ.BORDER_DEEP}, 0 8px 22px rgba(0,0,0,0.52), inset 0 1px 0 rgba(255,238,190,0.42)`,
-              `0 0 0 1.5px ${DZ.BORDER_GOLD}, 0 0 0 3px ${DZ.BORDER_DEEP}, 0 5px 16px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,238,190,0.30)`,
+              `0 0 0 1.5px ${DZ.BORDER_GOLD}, 0 0 0 3.5px ${DZ.BORDER_DEEP}, 0 0 0 5px ${DZ.BORDER_GOLD}40, 0 6px 18px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,238,190,0.36)`,
+              `0 0 0 1.5px ${DZ.BORDER_GOLD}, 0 0 0 3.5px ${DZ.BORDER_DEEP}, 0 0 0 7px ${DZ.BORDER_GOLD}62, 0 10px 28px rgba(0,0,0,0.62), inset 0 1px 0 rgba(255,238,190,0.52)`,
+              `0 0 0 1.5px ${DZ.BORDER_GOLD}, 0 0 0 3.5px ${DZ.BORDER_DEEP}, 0 0 0 5px ${DZ.BORDER_GOLD}40, 0 6px 18px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,238,190,0.36)`,
             ]
-          : `0 2px 10px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,238,190,0.14)`,
+          : `0 0 0 1px ${DZ.BORDER_GOLD}52, 0 0 0 2px ${DZ.BORDER_DEEP}88, 0 3px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,238,190,0.14)`,
       } : {
         scale: isActive ? 1.08 : 0.88,
         opacity: isActive ? 1 : 0.68,
@@ -490,15 +494,15 @@ function CornerDice({
           ? `linear-gradient(168deg, #fefdf6 0%, #f6e9c6 45%, #ead5a0 100%)`
           : isDz
           ? (isActive
-            ? `linear-gradient(150deg, ${dzColor}38 0%, ${DZ.BOARD_BG}d8 100%)`
-            : `linear-gradient(150deg, ${dzColor}20 0%, ${DZ.BOARD_BG}c0 100%)`)
+            ? `linear-gradient(160deg, #003820 0%, #001a0e 55%, ${dzColor}22 100%)`
+            : `linear-gradient(160deg, #002814 0%, #00110a 55%, ${dzColor}10 100%)`)
           : (isActive
             ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
             : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`),
         border: isClassic
           ? (isActive ? `1.5px solid ${clBorder}` : `1px solid rgba(160,120,32,0.48)`)
           : isDz
-          ? `1.5px solid ${isActive ? DZ.BORDER_GOLD : DZ.BORDER_GOLD + '80'}`
+          ? `2px solid ${isActive ? DZ.BORDER_GOLD : DZ.BORDER_GOLD + '65'}`
           : `1.5px solid ${isActive ? neon : col + '55'}`,
         backdropFilter: (isClassic || isDz) ? 'none' : 'blur(10px)',
         WebkitBackdropFilter: (isClassic || isDz) ? 'none' : 'blur(10px)',
@@ -509,14 +513,27 @@ function CornerDice({
         transformOrigin: { tl: 'top left', tr: 'top right', bl: 'bottom left', br: 'bottom right' }[anchor],
       }}
     >
-      {/* Islamic geometric edge patterning (DZ only) — four tiny 8-point star
-          rivets tucked at the panel corners, echoing the board's najma motif. */}
+      {/* DZ — zellige diamond lattice texture + corner najma rivets */}
       {isDz && (
         <svg width="100%" height="100%" viewBox={`0 0 ${PANEL_W} ${PANEL_H}`}
           style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+          <defs>
+            {/* Repeating zellige tile: outer diamond outline + inner diamond fill */}
+            <pattern id={`dz-zel-${player}`} x="0" y="0" width="9" height="9" patternUnits="userSpaceOnUse">
+              <path d="M 4.5,0.5 L 8.5,4.5 L 4.5,8.5 L 0.5,4.5 Z"
+                fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.45"/>
+              <path d="M 4.5,2.8 L 6.2,4.5 L 4.5,6.2 L 2.8,4.5 Z"
+                fill={DZ.BORDER_GOLD} opacity="0.55"/>
+            </pattern>
+          </defs>
+          {/* Zellige texture — starts below the top colour stripe */}
+          <rect x="0" y="6" width={PANEL_W} height={PANEL_H - 6}
+            fill={`url(#dz-zel-${player})`}
+            opacity={isActive ? 0.14 : 0.07}/>
+          {/* Corner 8-point najma rivets */}
           {([[5,5],[PANEL_W-5,5],[5,PANEL_H-5],[PANEL_W-5,PANEL_H-5]] as const).map(([sx,sy],i) => (
             <polygon key={i} points={starPoints(sx, sy, 2.6, 1.05, 8)}
-              fill={DZ.BORDER_GOLD} fillOpacity={isActive ? 0.85 : 0.45}/>
+              fill={DZ.BORDER_GOLD} fillOpacity={isActive ? 0.92 : 0.50}/>
           ))}
         </svg>
       )}
@@ -610,21 +627,32 @@ function CornerDice({
         />
       )}
 
-      {/* Colour dot + name row */}
+      {/* Colour indicator + name row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <motion.div
-          animate={(isClassic || isDz) ? {} : (isActive
-            ? { boxShadow: [`0 0 3px ${neon}80`, `0 0 10px ${neon}`, `0 0 3px ${neon}80`] }
-            : {})}
-          transition={{ duration: 1.4, repeat: Infinity }}
-          style={{
-            width: 6, height: 6, borderRadius: '50%',
-            background: isClassic ? clSolid : isDz ? dzColor : col,
-            flexShrink: 0,
-            boxShadow: (isClassic || isDz) ? `0 0 0 1px rgba(160,120,32,0.42)` : undefined,
-            opacity: isActive ? 1 : ((isClassic || isDz) ? 0.60 : 0.50),
-          }}
-        />
+        {/* DZ: crescent-and-star replaces plain dot — colour when inactive, gold when active */}
+        {isDz ? (
+          <svg width="11" height="9" viewBox="0 0 10 8"
+            style={{ flexShrink: 0, opacity: isActive ? 1 : 0.62 }}>
+            <path d={crescentPath(3.2, 4, 3.0, 4.8, 3.2, 2.5)}
+              fill={isActive ? DZ.BORDER_GOLD : dzColor} fillRule="evenodd"/>
+            <polygon points={starPoints(7.6, 2.8, 1.6, 0.65, 5)}
+              fill={isActive ? DZ.BORDER_GOLD : dzColor}/>
+          </svg>
+        ) : (
+          <motion.div
+            animate={isClassic ? {} : (isActive
+              ? { boxShadow: [`0 0 3px ${neon}80`, `0 0 10px ${neon}`, `0 0 3px ${neon}80`] }
+              : {})}
+            transition={{ duration: 1.4, repeat: Infinity }}
+            style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: isClassic ? clSolid : col,
+              flexShrink: 0,
+              boxShadow: isClassic ? `0 0 0 1px rgba(160,120,32,0.42)` : undefined,
+              opacity: isActive ? 1 : (isClassic ? 0.60 : 0.50),
+            }}
+          />
+        )}
         <span style={{
           fontFamily: isDz ? 'Cairo, sans-serif' : 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 9,
           color: isClassic
@@ -713,6 +741,15 @@ function CornerDice({
           );
         })}
       </div>
+      {/* DZ — inner deep-green hairline: gold outer border + green inner = double-frame */}
+      {isDz && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          borderRadius: 11,
+          border: `1px solid rgba(0,58,24,0.92)`,
+          pointerEvents: 'none',
+        }}/>
+      )}
     </motion.div>
     </div>
   );
