@@ -1896,6 +1896,11 @@ function BoardSVG({
           // that the deep-green motif stroke (fine against gold/cream) nearly disappears —
           // swap to the ivory-stroke variant for just those two corners.
           const motifId = (player === 1 || player === 2) ? 'dz-corner-motif-light' : 'dz-corner-motif';
+          // Same light/deep split reused for the empty-perch marker below — it sits on the
+          // same solid field colour as the star-lattice motif, so it needs the identical
+          // per-corner contrast fix (see ludo-dz-theme memory: one hardcoded ink silently
+          // fails on 2 of the 4 home colours).
+          const perchInk = (player === 1 || player === 2) ? DZ.PATH_CREAM : DZ.BORDER_DEEP;
           return (
             <g key={`hz-${player}`}>
               <rect x={zc} y={zr} width="6" height="6" fill={solid}
@@ -1903,6 +1908,40 @@ function BoardSVG({
               {/* Islamic star-lattice — felt, not seen: a quiet engraved texture */}
               <rect x={zc} y={zr} width="6" height="6" fill={`url(#${motifId})`}
                 fillOpacity="0.08" pointerEvents="none"/>
+              {/* Empty-perch markers — a faint echo of the onion-dome pawn silhouette
+                  marks any home slot with no pawn in it, so a vacated bay still reads as
+                  "this is a pawn's designated spot" instead of a blank void. Occupancy is
+                  read from existing piece/animation state only (the same slotInHome +
+                  slotAnimating check the Classic pawn bays already use) — zero changes to
+                  movement, entry/exit, or game state. Flat, stroke-led, low-opacity by
+                  design so it never competes with an actual pawn on the tile. */}
+              {exists && E.HOME_BASES[player].map(([br, bc], si) => {
+                const slotInHome = game.pieces.some(
+                  p => p.player === player && p.index === si && p.relPos === -1
+                );
+                const slotAnimating = pieceAnims[E.pieceId(player, si)]?.steps != null;
+                if (slotInHome && !slotAnimating) return null; // occupied — no perch drawn
+
+                const px = bc + 0.5, py = br + 0.5;
+                // Radii mirror PawnToken's own domeR/domeCY/dzBase* constants so the ghost
+                // silhouette is a true scale-echo of the real pawn, not an approximation.
+                const perchR      = 0.275;
+                const perchDomeCY = py - 0.06;
+                const perchBaseCY = py + 0.20;
+                return (
+                  <g key={`perch-${si}`} opacity={isCurrent ? 0.34 : 0.22} pointerEvents="none">
+                    {/* Pedestal-foot echo */}
+                    <ellipse cx={px} cy={perchBaseCY} rx={0.32} ry={0.13}
+                      fill="none" stroke={perchInk} strokeWidth="0.020"/>
+                    {/* Onion-dome silhouette echo — same path fn as the real pawn body */}
+                    <path d={dzDomePath(px, perchDomeCY, perchR)}
+                      fill={perchInk} fillOpacity="0.06" stroke={perchInk} strokeWidth="0.022"/>
+                    {/* Tiny star-finial echo */}
+                    <polygon points={starPoints(px, perchDomeCY - 1.15*perchR - 0.075, 0.062, 0.025, 8)}
+                      fill={perchInk} fillOpacity="0.40"/>
+                  </g>
+                );
+              })}
               <rect x={zc} y={zr} width="6" height="6" fill="none"
                 stroke={DZ.BORDER_DEEP}
                 strokeWidth={isCurrent ? 0.10 : 0.05}
