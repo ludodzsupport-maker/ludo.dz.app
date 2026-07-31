@@ -1879,6 +1879,21 @@ function BoardSVG({
             <filter id="dz-pawn-shadow" x="-80%" y="-80%" width="260%" height="260%">
               <feGaussianBlur stdDeviation="0.05"/>
             </filter>
+            {/* Empty-perch home-slot marker — dedicated soften filter + contact-shadow
+                  gradient. At the perch's tiny on-board scale its hairline stroke and
+                  8-point star finial alias visibly; this filter feathers those edges by
+                  a fraction of a unit without blurring the silhouette into a blob. The
+                  shadow gradient stays neutral black like every other shadow on this
+                  board, independent of each corner's perchInk colour. Scoped to the
+                  empty-perch marker only — no other element references these ids. */}
+            <filter id="dz-perch-soften" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="0.007"/>
+            </filter>
+            <radialGradient id="dz-perch-shadow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%"   stopColor="#000000" stopOpacity="0.28"/>
+              <stop offset="70%"  stopColor="#000000" stopOpacity="0.10"/>
+              <stop offset="100%" stopColor="#000000" stopOpacity="0"/>
+            </radialGradient>
             {/* DZ pawn body — onion-dome lantern gradient, one per player's home colour */}
             {DZ.HOME_COLORS.map((c, i) => (
               <radialGradient key={i} id={`dzpawn${i}`} cx="32%" cy="20%" r="92%">
@@ -1966,16 +1981,29 @@ function BoardSVG({
                 const perchDomeCY = py - 0.06;
                 const perchBaseCY = py + 0.20;
                 return (
-                  <g key={`perch-${si}`} opacity={isCurrent ? 0.34 : 0.22} pointerEvents="none">
+                  <g key={`perch-${si}`} opacity={isCurrent ? 0.34 : 0.22} pointerEvents="none"
+                    filter="url(#dz-perch-soften)">
+                    {/* Soft contact shadow — grounds the ghost silhouette with the same
+                        neutral black-based shadow technique used under the real pawn's
+                        foot, just much fainter. Adds depth without a new base colour. */}
+                    <ellipse cx={px} cy={perchBaseCY + 0.03} rx={0.30} ry={0.11}
+                      fill="url(#dz-perch-shadow)"/>
                     {/* Pedestal-foot echo */}
                     <ellipse cx={px} cy={perchBaseCY} rx={0.32} ry={0.13}
-                      fill="none" stroke={perchInk} strokeWidth="0.020"/>
+                      fill="none" stroke={perchInk} strokeWidth="0.020" strokeLinejoin="round"/>
                     {/* Onion-dome silhouette echo — same path fn as the real pawn body */}
                     <path d={dzDomePath(px, perchDomeCY, perchR)}
-                      fill={perchInk} fillOpacity="0.06" stroke={perchInk} strokeWidth="0.022"/>
+                      fill={perchInk} fillOpacity="0.09" stroke={perchInk} strokeWidth="0.022" strokeLinejoin="round"/>
+                    {/* Soft highlight — hints the dome's curvature/volume, mirroring the
+                        real pawn's specular highlight at a much fainter strength */}
+                    <ellipse cx={px - 0.16*perchR} cy={perchDomeCY - 0.55*perchR} rx={0.16*perchR} ry={0.24*perchR}
+                      fill="#ffffff" fillOpacity="0.22"/>
                     {/* Tiny star-finial echo */}
                     <polygon points={starPoints(px, perchDomeCY - 1.15*perchR - 0.075, 0.062, 0.025, 8)}
-                      fill={perchInk} fillOpacity="0.40"/>
+                      fill={perchInk} fillOpacity="0.46"/>
+                    {/* Star sparkle dot — echoes the real pawn's finial highlight */}
+                    <circle cx={px} cy={perchDomeCY - 1.15*perchR - 0.075} r="0.016"
+                      fill="#ffffff" fillOpacity="0.5"/>
                   </g>
                 );
               })}
