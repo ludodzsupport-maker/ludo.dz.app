@@ -369,7 +369,12 @@ function CornerDice({
   const isActive    = game.activePlayer === player && game.phase !== 'done';
   const exists      = game.playerSlots.includes(player);
   const pieces      = game.pieces.filter(p => p.player === player);
-  const name        = lang === 'ar' ? E.PLAYER_NAMES_AR[player] : E.PLAYER_NAMES_FR[player];
+  // DZ board only: Arabic corner-panel labels use the requested position-based
+  // copy. All shared player names (Classic, Neon, French, winner UI) remain intact.
+  const dzArabicNames = ['أصفر', 'أزرق', 'بني', 'أبيض'] as const;
+  const name = lang === 'ar'
+    ? (boardStyle === 'dz' ? dzArabicNames[player] : E.PLAYER_NAMES_AR[player])
+    : E.PLAYER_NAMES_FR[player];
   const isRollingMe = rolling && isActive;
   const diceVal     = isActive ? animDice : (lastDice[player] || 1);
   const canTap      = canRoll && isActive;
