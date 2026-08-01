@@ -1,0 +1,19 @@
+I'm working on a Ludo game app called "Ludo DZ" with multiple board visual themes (Classic, DZ, and Neon). I need you to work only on the DZ board theme this time (the ornate board with gold, blue, ivory/cream, and orange sections, moon-and-star decorative icons). Do not touch the Classic or Neon boards — they were already worked on separately and must remain exactly as they are.
+What I want:
+Every time a pawn hops/moves on the DZ board only, I want it to leave behind a subtle golden sparkle/shimmer trail, fitting the board's ornate, elegant, star-and-moon decorative style — think small glimmering gold particles or a soft shimmering light trail, like fine gold dust or twinkling stars trailing behind the pawn.
+Specifically:
+At each step/cell the pawn passes through during its hop, emit a small burst of soft golden sparkle/shimmer particles (or a subtle star-glint effect) at its previous position, consistent with the board's existing gold/star decorative motifs.
+Keep the effect elegant and refined — small, soft-glowing gold particles or a fine shimmer, not colored like the pawn itself, and not overdone. Duration roughly 200–350ms per burst, fading out smoothly (ease-out).
+It should repeat at each step/cell the pawn passes through during a multi-cell move (so a pawn moving 5 cells leaves a light trail of sparkle bursts along its path), not just once at the final cell.
+The effect must feel premium and tasteful, matching the DZ board's ornate gold/ivory aesthetic — no cartoonish particles, no screen shake, no bouncing, nothing that clashes with the existing decorative style.
+After implementing, actually test a pawn move in the live preview and visually confirm the sparkle trail renders clearly and looks good before reporting completion. Don't report success without visual confirmation.
+This applies only to the DZ board. Classic and Neon boards must remain completely untouched — do not modify their code, styles, or behavior in any way.
+Strictly forbidden / professionalism requirements:
+Do not touch any game logic (turn order, dice rules, win conditions, capturing rules, etc.) — visual only.
+Do not change gameplay speed/timing — only the visual effect during the existing movement animation.
+Do not modify any other visual element on the DZ board (colors, textures, dice, buttons, star cells, home icons, etc.) beyond this specific sparkle trail effect.
+Do not modify Classic or Neon board styles at all.
+Do not refactor or touch any file/component outside the exact scope of this task.
+Do not commit, push, or deploy anything — local changes only, for my review.
+If anything is unclear or out of scope, stop and ask instead of assuming.
+After implementing and visually verifying, give me a precise summary of only the files and lines changed.
