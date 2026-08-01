@@ -1014,7 +1014,7 @@ function buildHopPath(
 // 45% of step duration, then descends and snaps to canonical stacking position.
 function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
-  onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand,
+  onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand, onDustStep,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
@@ -1030,6 +1030,7 @@ function PawnToken({
   isClassic?: boolean; // Classic Board theme only — swaps hex/neon body for a 3D dome token
   isDz?: boolean; // DZ Board theme only — swaps hex/neon body for an onion-dome lantern token
   onStepLand?: (x: number, y: number, neon: string) => void; // Neon-only: fires at every hop-step landing (see HopBurstEffect)
+  onDustStep?: (x: number, y: number) => void; // Classic-only: fires at every hop-step's vacated cell (see DustPuffEffect)
 }) {
   const baseCtrl = useAnimationControls();
   const arcCtrl  = useAnimationControls();
@@ -1042,11 +1043,13 @@ function PawnToken({
   const onLastHopRef   = useRef(onLastHopLand);
   const onDefeatRef    = useRef(onDefeatArrived);
   const onStepLandRef  = useRef(onStepLand);
+  const onDustStepRef  = useRef(onDustStep);
   finalRef.current     = { x: finalX, y: finalY };
   springCfgRef.current = springCfg;
   onLastHopRef.current = onLastHopLand;
   onDefeatRef.current  = onDefeatArrived;
   onStepLandRef.current = onStepLand;
+  onDustStepRef.current = onDustStep;
 
   // ── Effect 1: hop sequence or defeat arc ────────────────────────────────────
   useEffect(() => {
@@ -1137,6 +1140,12 @@ function PawnToken({
               }),
         ]);
 
+        // Cell the pawn is leaving THIS step — captured before prevX/prevY are
+        // reassigned below, so the Classic dust puff (fired further down) can
+        // render behind the pawn's new position rather than under it.
+        const leftX = prevX;
+        const leftY = prevY;
+
         prevX = step.x;
         prevY = step.y;
 
@@ -1148,6 +1157,17 @@ function PawnToken({
         // onStepLand is only ever wired up for this callback path.
         if (!stale() && !isClassic && !isDz) {
           onStepLandRef.current?.(step.x, step.y, E.PLAYER_NEONS[player]);
+        }
+
+        // ── Classic-only per-step dust puff ──────────────────────────────────
+        // Fires the instant the pawn physically lands on the NEW cell, placing
+        // the puff at the cell it just left (leftX/leftY) so it reads as dust
+        // kicked up behind the pawn. Repeats for every step of a multi-cell
+        // move, mirroring the Neon burst above. Purely visual — does not gate
+        // or delay game-state resolution. Neon/DZ boards are untouched: this
+        // callback is only ever invoked when isClassic is true.
+        if (!stale() && isClassic) {
+          onDustStepRef.current?.(leftX, leftY);
         }
 
         // ── Squash & stretch on landing ──────────────────────────────────────
@@ -1601,12 +1621,57 @@ function HopBurstEffect({
   );
 }
 
+// ─── Dust puff — Classic board only ───────────────────────────────────────────
+// A soft, muted dust puff left behind at the cell a pawn just vacated mid-hop.
+// Mirrors HopBurstEffect's per-step lifecycle (fires once per hop of a multi-
+// cell move, not just the final landing) but reads as a gentle ground-kick cue
+// rather than an energy burst: earthy/grayish tones only — never tinted to the
+// player's color — no bright core, no rays, no expanding ring. Classic board
+// (isClassic) only; Neon and DZ never spawn this effect.
+const DUST_TONES = ['#B7A688', '#A6906E', '#8F7B60'] as const; // warm gray-tan, board-neutral
+
+function DustPuffEffect({
+  x, y, onDone,
+}: { x: number; y: number; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 320);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  // Three small overlapping puffs, gently staggered, so the cloud reads as a
+  // soft irregular puff rather than a single perfect circle.
+  const PUFFS = [
+    { dx: -0.075, dy:  0.03,  r: 0.115, delay: 0 },
+    { dx:  0.08,  dy:  0.015, r: 0.13,  delay: 0.025 },
+    { dx:  0.0,   dy: -0.04,  r: 0.10,  delay: 0.05 },
+  ];
+
+  return (
+    <g pointerEvents="none">
+      {PUFFS.map((p, i) => (
+        <motion.circle
+          key={i}
+          cx={x + p.dx} cy={y + p.dy} r={p.r}
+          fill={DUST_TONES[i]}
+          style={{ transformOrigin: `${x + p.dx}px ${y + p.dy}px` }}
+          initial={{ scale: 0.45, opacity: 0.30 }}
+          animate={{ scale: 1.6, opacity: 0 }}
+          transition={{ duration: 0.26, delay: p.delay, ease: 'easeOut' }}
+        />
+      ))}
+    </g>
+  );
+}
+
 // ─── Shared animation types (used by BoardSVG and GameBoardScreen) ────────────
 type ShockwaveEvent = { x: number; y: number; neon: string; id: number };
 type HomeImpactEvent = { player: number; index: number; id: number };
 // Neon-only per-step hop light burst (see HopBurstEffect) — one fires at every
 // cell a pawn lands on mid-move, not just the final destination.
 type HopBurstEvent = { x: number; y: number; neon: string; id: number };
+// Classic-only per-step dust puff (see DustPuffEffect) — one fires at every
+// cell a pawn vacates mid-move, not just the final destination.
+type DustPuffEvent = { x: number; y: number; id: number };
 type PieceAnim = {
   steps: HopStep[] | 'defeat' | null;
   startX?: number;   // piece's visual X before the hop starts (for axis-diff)
@@ -1633,6 +1698,11 @@ interface BoardSVGProps {
   hopBursts: HopBurstEvent[];
   onHopBurstDone: (id: number) => void;
   onHopStepLand: (x: number, y: number, neon: string) => void;
+  // Classic-only per-step dust puffs — list because a multi-cell move can have
+  // several puffs alive at once. Owned by GameBoardScreen.
+  dustPuffs: DustPuffEvent[];
+  onDustPuffDone: (id: number) => void;
+  onDustStep: (x: number, y: number) => void;
   boardStyle?: BoardStyle;
 }
 
@@ -1641,6 +1711,7 @@ function BoardSVG({
   pieceAnims, shockwave, onShockwaveDone,
   homeImpact, homeFinishVFX, onHomeFinishDone,
   hopBursts, onHopBurstDone, onHopStepLand,
+  dustPuffs, onDustPuffDone, onDustStep,
   boardStyle,
 }: BoardSVGProps) {
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
@@ -3074,6 +3145,16 @@ function BoardSVG({
         />
       ))}
 
+      {/* ── Dust puffs — Classic board only, one per vacated cell ── */}
+      {dustPuffs.map(p => (
+        <DustPuffEffect
+          key={p.id}
+          x={p.x}
+          y={p.y}
+          onDone={() => onDustPuffDone(p.id)}
+        />
+      ))}
+
       {/* ── Pieces ── each PawnToken manages its own dual-control animation ── */}
       {piecePositions.map(({ player, index, xy: [fx, fy] }) => {
         const pid  = E.pieceId(player, index);
@@ -3097,6 +3178,7 @@ function BoardSVG({
             isClassic={isClassic}
             isDz={isDz}
             onStepLand={onHopStepLand}
+            onDustStep={onDustStep}
           />
         );
       })}
@@ -3240,6 +3322,17 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   }, []);
   const removeHopBurst = useCallback((id: number) => {
     setHopBursts(prev => prev.filter(b => b.id !== id));
+  }, []);
+  // Classic-only per-step dust puffs — a list because a multi-cell move can
+  // have several puffs alive at once (each self-removes via onDone).
+  const [dustPuffs,     setDustPuffs]     = useState<DustPuffEvent[]>([]);
+  const dustPuffIdRef = useRef(0);
+  const spawnDustPuff = useCallback((x: number, y: number) => {
+    const id = ++dustPuffIdRef.current;
+    setDustPuffs(prev => [...prev, { x, y, id }]);
+  }, []);
+  const removeDustPuff = useCallback((id: number) => {
+    setDustPuffs(prev => prev.filter(p => p.id !== id));
   }, []);
 
   // Stable refs so triggerMove closures always see the latest values
@@ -3696,6 +3789,9 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
               hopBursts={hopBursts}
               onHopBurstDone={removeHopBurst}
               onHopStepLand={spawnHopBurst}
+              dustPuffs={dustPuffs}
+              onDustPuffDone={removeDustPuff}
+              onDustStep={spawnDustPuff}
               boardStyle={boardStyle}
             />
           </div>

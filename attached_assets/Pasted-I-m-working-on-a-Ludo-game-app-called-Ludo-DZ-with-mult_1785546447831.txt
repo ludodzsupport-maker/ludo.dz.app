@@ -1,0 +1,19 @@
+I'm working on a Ludo game app called "Ludo DZ" with multiple board visual themes (Classic, DZ, and Neon). I need you to work only on the Classic board theme this time. Do not touch the Neon or DZ boards — they were already worked on separately and must remain exactly as they are.
+What I want:
+Every time a pawn hops/moves on the Classic board only, I want it to leave behind a light dust/smoke trail effect, as if kicking up small dust or dirt clouds behind it as it moves — fitting the classic, traditional board aesthetic (not neon, not futuristic).
+Specifically:
+At each step/cell the pawn passes through during its hop, emit a small, subtle puff of dust/smoke behind the pawn's previous position — think soft, semi-transparent grayish/earthy-toned particles or a soft cloud puff, not colored like the pawn.
+Keep the effect light and natural-looking — a soft puff that quickly fades out (ease-out), lasting roughly 200–350ms, not a thick cloud or dramatic explosion.
+It should repeat at each step/cell the pawn passes through during a multi-cell move (so a pawn moving 5 cells leaves a light trail of small dust puffs along its path), not just once at the final cell.
+Keep it elegant, subtle, and tasteful — matching the classic board's traditional/wooden/warm aesthetic. No cartoonish particles, no screen shake, no bouncing.
+After implementing, actually test a pawn move in the live preview and visually confirm the dust trail renders clearly and looks good before reporting completion. Don't report success without visual confirmation.
+This applies only to the Classic board. Neon and DZ boards must remain completely untouched — do not modify their code, styles, or behavior in any way.
+Strictly forbidden / professionalism requirements:
+Do not touch any game logic (turn order, dice rules, win conditions, capturing rules, etc.) — visual only.
+Do not change gameplay speed/timing — only the visual effect during the existing movement animation.
+Do not modify any other visual element on the Classic board (colors, textures, dice, buttons, star cells, etc.) beyond this specific dust trail effect.
+Do not modify Neon or DZ board styles at all.
+Do not refactor or touch any file/component outside the exact scope of this task.
+Do not commit, push, or deploy anything — local changes only, for my review.
+If anything is unclear or out of scope, stop and ask instead of assuming.
+After implementing and visually verifying, give me a precise summary of only the files and lines changed.
