@@ -1014,7 +1014,7 @@ function buildHopPath(
 // 45% of step duration, then descends and snaps to canonical stacking position.
 function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
-  onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand, onDustStep,
+  onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand, onDustStep, onDzSparkleStep,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
@@ -1031,6 +1031,7 @@ function PawnToken({
   isDz?: boolean; // DZ Board theme only — swaps hex/neon body for an onion-dome lantern token
   onStepLand?: (x: number, y: number, neon: string) => void; // Neon-only: fires at every hop-step landing (see HopBurstEffect)
   onDustStep?: (x: number, y: number) => void; // Classic-only: fires at every hop-step's vacated cell (see DustPuffEffect)
+  onDzSparkleStep?: (x: number, y: number) => void; // DZ-only: gold glint left at every vacated hop cell
 }) {
   const baseCtrl = useAnimationControls();
   const arcCtrl  = useAnimationControls();
@@ -1044,12 +1045,14 @@ function PawnToken({
   const onDefeatRef    = useRef(onDefeatArrived);
   const onStepLandRef  = useRef(onStepLand);
   const onDustStepRef  = useRef(onDustStep);
+  const onDzSparkleStepRef = useRef(onDzSparkleStep);
   finalRef.current     = { x: finalX, y: finalY };
   springCfgRef.current = springCfg;
   onLastHopRef.current = onLastHopLand;
   onDefeatRef.current  = onDefeatArrived;
   onStepLandRef.current = onStepLand;
   onDustStepRef.current = onDustStep;
+  onDzSparkleStepRef.current = onDzSparkleStep;
 
   // ── Effect 1: hop sequence or defeat arc ────────────────────────────────────
   useEffect(() => {
@@ -1168,6 +1171,14 @@ function PawnToken({
         // callback is only ever invoked when isClassic is true.
         if (!stale() && isClassic) {
           onDustStepRef.current?.(leftX, leftY);
+        }
+
+        // ── DZ-only per-step gold sparkle trail ──────────────────────────────
+        // A restrained, board-neutral glint is left behind on every cell the
+        // pawn vacates. It is deliberately separate from the player palette and
+        // never affects the hop promise, inter-step delay, or game-state timing.
+        if (!stale() && isDz) {
+          onDzSparkleStepRef.current?.(leftX, leftY);
         }
 
         // ── Squash & stretch on landing ──────────────────────────────────────
@@ -1663,6 +1674,61 @@ function DustPuffEffect({
   );
 }
 
+// ─── DZ sparkle trail — quiet gold/ivory glint left at each hop cell ─────────
+// This is intentionally compact and neutral: it echoes the board's najma stars
+// and gilt inlay without borrowing any player's colour, expanding ring, or
+// particle flight. It sits beneath the pawn and fades within one hop interval.
+function DzSparkleTrailEffect({
+  x, y, onDone,
+}: { x: number; y: number; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 340);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  const GLINTS = [
+    { dx: 0,     dy: -0.015, r: 0.155, inner: 0.045, opacity: 0.78, delay: 0 },
+    { dx: -0.22, dy: 0.12,   r: 0.065, inner: 0.022, opacity: 0.52, delay: 0.025 },
+    { dx: 0.19,  dy: 0.09,   r: 0.050, inner: 0.017, opacity: 0.42, delay: 0.05 },
+  ] as const;
+
+  return (
+    <g pointerEvents="none">
+      {/* Diffuse gilt bloom keeps the stars seated in the ivory tile. */}
+      <motion.circle
+        cx={x} cy={y} r={0.22}
+        fill={DZ.BORDER_GOLD}
+        style={{ transformOrigin: `${x}px ${y}px` }}
+        initial={{ scale: 0.60, opacity: 0.16 }}
+        animate={{ scale: 1.75, opacity: 0 }}
+        transition={{ duration: 0.30, ease: 'easeOut' }}
+      />
+      {GLINTS.map((glint, index) => {
+        const gx = x + glint.dx;
+        const gy = y + glint.dy;
+        return (
+          <motion.polygon
+            key={index}
+            points={starPoints(gx, gy, glint.r, glint.inner, 8)}
+            fill={index === 0 ? '#FFF6D5' : DZ.BORDER_GOLD}
+            stroke={index === 0 ? DZ.BORDER_GOLD : 'none'}
+            strokeWidth={index === 0 ? 0.012 : 0}
+            style={{ transformOrigin: `${gx}px ${gy}px` }}
+            initial={{ scale: 0.45, opacity: 0 }}
+            animate={{ scale: [0.45, 1.18, 1.34], opacity: [0, glint.opacity, 0] }}
+            transition={{
+              duration: 0.31,
+              delay: glint.delay,
+              ease: 'easeOut',
+              times: [0, 0.26, 1],
+            }}
+          />
+        );
+      })}
+    </g>
+  );
+}
+
 // ─── Shared animation types (used by BoardSVG and GameBoardScreen) ────────────
 type ShockwaveEvent = { x: number; y: number; neon: string; id: number };
 type HomeImpactEvent = { player: number; index: number; id: number };
@@ -1672,6 +1738,9 @@ type HopBurstEvent = { x: number; y: number; neon: string; id: number };
 // Classic-only per-step dust puff (see DustPuffEffect) — one fires at every
 // cell a pawn vacates mid-move, not just the final destination.
 type DustPuffEvent = { x: number; y: number; id: number };
+// DZ-only per-step gilt glints (see DzSparkleTrailEffect) — one trails each
+// vacated hop cell, independent of pawn colour and game-state resolution.
+type DzSparkleEvent = { x: number; y: number; id: number };
 type PieceAnim = {
   steps: HopStep[] | 'defeat' | null;
   startX?: number;   // piece's visual X before the hop starts (for axis-diff)
@@ -1703,6 +1772,10 @@ interface BoardSVGProps {
   dustPuffs: DustPuffEvent[];
   onDustPuffDone: (id: number) => void;
   onDustStep: (x: number, y: number) => void;
+  // DZ-only per-step sparkle trail — list permits overlapping glints on long moves.
+  dzSparkles: DzSparkleEvent[];
+  onDzSparkleDone: (id: number) => void;
+  onDzSparkleStep: (x: number, y: number) => void;
   boardStyle?: BoardStyle;
 }
 
@@ -1712,6 +1785,7 @@ function BoardSVG({
   homeImpact, homeFinishVFX, onHomeFinishDone,
   hopBursts, onHopBurstDone, onHopStepLand,
   dustPuffs, onDustPuffDone, onDustStep,
+  dzSparkles, onDzSparkleDone, onDzSparkleStep,
   boardStyle,
 }: BoardSVGProps) {
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
@@ -3155,6 +3229,16 @@ function BoardSVG({
         />
       ))}
 
+      {/* ── DZ gilt sparkle trail — one quiet glint per vacated hop cell ── */}
+      {dzSparkles.map(sparkle => (
+        <DzSparkleTrailEffect
+          key={sparkle.id}
+          x={sparkle.x}
+          y={sparkle.y}
+          onDone={() => onDzSparkleDone(sparkle.id)}
+        />
+      ))}
+
       {/* ── Pieces ── each PawnToken manages its own dual-control animation ── */}
       {piecePositions.map(({ player, index, xy: [fx, fy] }) => {
         const pid  = E.pieceId(player, index);
@@ -3179,6 +3263,7 @@ function BoardSVG({
             isDz={isDz}
             onStepLand={onHopStepLand}
             onDustStep={onDustStep}
+            onDzSparkleStep={onDzSparkleStep}
           />
         );
       })}
@@ -3333,6 +3418,17 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   }, []);
   const removeDustPuff = useCallback((id: number) => {
     setDustPuffs(prev => prev.filter(p => p.id !== id));
+  }, []);
+  // DZ-only per-step sparkle trail — separate state prevents either Classic or
+  // Neon from receiving a new effect or a changed animation path.
+  const [dzSparkles, setDzSparkles] = useState<DzSparkleEvent[]>([]);
+  const dzSparkleIdRef = useRef(0);
+  const spawnDzSparkle = useCallback((x: number, y: number) => {
+    const id = ++dzSparkleIdRef.current;
+    setDzSparkles(prev => [...prev, { x, y, id }]);
+  }, []);
+  const removeDzSparkle = useCallback((id: number) => {
+    setDzSparkles(prev => prev.filter(sparkle => sparkle.id !== id));
   }, []);
 
   // Stable refs so triggerMove closures always see the latest values
@@ -3804,6 +3900,9 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
               dustPuffs={dustPuffs}
               onDustPuffDone={removeDustPuff}
               onDustStep={spawnDustPuff}
+              dzSparkles={dzSparkles}
+              onDzSparkleDone={removeDzSparkle}
+              onDzSparkleStep={spawnDzSparkle}
               boardStyle={boardStyle}
             />
           </div>
