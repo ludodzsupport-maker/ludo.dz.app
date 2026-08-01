@@ -253,38 +253,33 @@ function PassPlayIcon({ neon }: { neon: string }) {
           <stop offset="100%" stopColor="#150030"/>
         </radialGradient>
       </defs>
-      {/* Left die — rotated */}
-      <g transform="rotate(-14 20 40)">
-        <rect x="3" y="26" width="26" height="26" rx="5" fill="#120025" stroke={neon} strokeWidth="2" filter="url(#pp-f)"/>
-        <rect x="5" y="28" width="22" height="9"  rx="2" fill="white" opacity="0.08"/>
-        {/* Dots — 5 face */}
-        <circle cx="10" cy="33" r="2.5" fill={neon} filter="url(#pp-f)"/>
-        <circle cx="16" cy="33" r="2.5" fill={neon} filter="url(#pp-f)"/>
-        <circle cx="22" cy="33" r="2.5" fill={neon} filter="url(#pp-f)"/>
-        <circle cx="10" cy="43" r="2.5" fill={neon} filter="url(#pp-f)"/>
-        <circle cx="22" cy="43" r="2.5" fill={neon} filter="url(#pp-f)"/>
-        <circle cx="16" cy="38" r="2.5" fill={neon} filter="url(#pp-f)"/>
+      {/* Back die — compact and lightly offset for a clear two-player cue. */}
+      <g transform="rotate(9 42 25)">
+        <rect x="28" y="11" width="23" height="23" rx="6"
+          fill="url(#pp-g)" stroke={neon} strokeWidth="1.8" filter="url(#pp-f)"/>
+        <rect x="30.4" y="13.2" width="16.5" height="6.3" rx="3.1"
+          fill="white" opacity="0.18"/>
+        <circle cx="35" cy="18" r="2.05" fill="#F8ECFF"/>
+        <circle cx="44" cy="18" r="2.05" fill="#F8ECFF"/>
+        <circle cx="35" cy="27" r="2.05" fill="#F8ECFF"/>
+        <circle cx="44" cy="27" r="2.05" fill="#F8ECFF"/>
       </g>
-      {/* Motion lines */}
-      <line x1="30" y1="34" x2="37" y2="29" stroke={neon} strokeWidth="1.8" strokeLinecap="round" opacity="0.75" filter="url(#pp-f)"/>
-      <line x1="30" y1="39" x2="39" y2="36" stroke={neon} strokeWidth="1.4" strokeLinecap="round" opacity="0.50"/>
-      <line x1="30" y1="44" x2="38" y2="43" stroke={neon} strokeWidth="1.1" strokeLinecap="round" opacity="0.32"/>
-      {/* Right die — rotated opposite */}
-      <g transform="rotate(13 48 28)">
-        <rect x="35" y="14" width="26" height="26" rx="5" fill="#120025" stroke={neon} strokeWidth="2" filter="url(#pp-f)"/>
-        <rect x="37" y="16" width="22" height="9"  rx="2" fill="white" opacity="0.08"/>
-        {/* Dots — 6 face */}
-        <circle cx="42" cy="21" r="2.2" fill={neon} filter="url(#pp-f)"/>
-        <circle cx="48" cy="21" r="2.2" fill={neon} filter="url(#pp-f)"/>
-        <circle cx="54" cy="21" r="2.2" fill={neon} filter="url(#pp-f)"/>
-        <circle cx="42" cy="31" r="2.2" fill={neon} filter="url(#pp-f)"/>
-        <circle cx="48" cy="31" r="2.2" fill={neon} filter="url(#pp-f)"/>
-        <circle cx="54" cy="31" r="2.2" fill={neon} filter="url(#pp-f)"/>
+      {/* Foreground die — dominant but centered within the shared icon canvas. */}
+      <g transform="rotate(-9 24 39)">
+        <rect x="12" y="27" width="25" height="25" rx="6.5"
+          fill="url(#pp-g)" stroke={neon} strokeWidth="2" filter="url(#pp-f)"/>
+        <rect x="14.6" y="29.6" width="18.2" height="6.7" rx="3.3"
+          fill="white" opacity="0.20"/>
+        <circle cx="19.5" cy="34.5" r="2.15" fill="#FFF7FF"/>
+        <circle cx="29.5" cy="34.5" r="2.15" fill="#FFF7FF"/>
+        <circle cx="24.5" cy="39.5" r="2.15" fill="#FFF7FF"/>
+        <circle cx="19.5" cy="44.5" r="2.15" fill="#FFF7FF"/>
+        <circle cx="29.5" cy="44.5" r="2.15" fill="#FFF7FF"/>
       </g>
-      {/* Couch silhouette at bottom — local play cue */}
-      <rect x="8"  y="56" width="48" height="8"  rx="4"  fill={neon} opacity="0.20" filter="url(#pp-f)"/>
-      <rect x="5"  y="52" width="8"  height="12" rx="3"  fill={neon} opacity="0.45" filter="url(#pp-f)"/>
-      <rect x="51" y="52" width="8"  height="12" rx="3"  fill={neon} opacity="0.45" filter="url(#pp-f)"/>
+      {/* Fine shared glint, matching the neighboring icons' restrained detail. */}
+      <circle cx="51" cy="42" r="2.2" fill={neon} opacity="0.72" filter="url(#pp-f)"/>
+      <path d="M51 37.5V46.5M46.5 42H55.5" stroke="#F8ECFF" strokeWidth="1.15"
+        strokeLinecap="round" opacity="0.90"/>
     </svg>
   );
 }
