@@ -1,0 +1,14 @@
+On the DZ board, the four player color labels (shown next to each player's dice area) currently do not correctly match the actual color of each player's zone/dice border on the board. The app supports both Arabic and French languages, so this mislabeling likely exists in both language versions (e.g. Arabic "أحمر/أزرق/أخضر/أصفر" and French "ROUGE/BLEU/VERT/JAUNE") since they probably come from the same underlying color-to-player mapping or translation source.
+What I want:
+Find where each player's color label/name is defined or mapped in the code (likely a shared mapping used by both Arabic and French translations).
+Review each of the four player positions on the DZ board and correct the label so it accurately matches that player's real color (the color of their dice border/zone/pawns) — in both Arabic and French, consistently.
+Only fix the text/label-to-color mapping — do not change the actual colors, zones, dice, pawns, player order, or any game logic.
+Be careful and precise: verify visually which color belongs to which position before assigning the correct label in both languages, so the fix is accurate and consistent everywhere the label appears (not just on the DZ board, but anywhere else this same color-name mapping is used, if shared).
+Keep the same font, styling, size, and position of the labels — only correct the color name text/mapping itself.
+This applies only to the color name labels/mapping. Do not modify anything else — no board colors, no other UI element, no layout or styling changes beyond the text/mapping correction.
+Professionalism requirements:
+Approach this carefully — check if the mapping is shared across languages/boards before editing, so the fix is consistent everywhere it should be, without unintended side effects elsewhere.
+Do not touch any game logic, turn order, or functionality — this is a label/text mapping correction only.
+Do not refactor or touch any file/component outside the exact scope of this task.
+Do not commit, push, or deploy anything — local changes only, for my review.
+If you're unsure which label belongs to which color, use your best judgment based on the visual board and be consistent and accurate across both languages.
