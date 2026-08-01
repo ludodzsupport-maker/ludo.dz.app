@@ -214,6 +214,29 @@ export function doMove(state: GameState, pid: string): GameState {
   };
 }
 
+// ─── Auto-move: lone released pawn ─────────────────────────────────────────
+// When a player has exactly 3 pawns still at home (relPos === -1) and exactly
+// 1 pawn released onto the board, and that released pawn is the ONLY legal
+// move for the current roll (no home-release choice, no other option), the
+// move should happen automatically instead of waiting for manual selection.
+// Returns the pawn's id to auto-move, or null if the condition isn't met.
+export function getAutoMovePawn(state: GameState): string | null {
+  if (state.movable.length !== 1) return null;
+
+  const activePieces = state.pieces.filter(p => p.player === state.activePlayer);
+  const homeCount = activePieces.filter(p => p.relPos === -1).length;
+  const outCount  = activePieces.filter(p => p.relPos >= 0 && p.relPos < FINISHED_POS).length;
+  if (homeCount !== 3 || outCount !== 1) return null;
+
+  const pid = state.movable[0];
+  const [, indexStr] = pid.split(':');
+  const piece = activePieces.find(p => p.index === Number(indexStr));
+  // Safety: only ever auto-move the released pawn, never a home-release move.
+  if (!piece || piece.relPos === -1) return null;
+
+  return pid;
+}
+
 export function autoPassTurn(state: GameState): GameState {
   return {
     ...state,

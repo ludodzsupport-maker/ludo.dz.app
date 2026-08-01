@@ -3601,6 +3601,18 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     return () => clearTimeout(t);
   }, [isComputer, game.activePlayer, game.phase, game.movable.length, game.winner, isAnimating, triggerMove]);
 
+  // ── Auto-move: lone released pawn is the only legal move ─────────────────
+  // Human turns only. If the player has exactly 3 pawns home + 1 pawn out,
+  // and that released pawn is the sole legal move for the roll, skip manual
+  // tap/select and move it directly — mirrors the AI-move effect above.
+  useEffect(() => {
+    if (!isHumanTurn || game.phase !== 'selecting' || game.winner || isAnimating) return;
+    const pid = E.getAutoMovePawn(game);
+    if (!pid) return;
+    const t = setTimeout(() => triggerMove(pid), 480);
+    return () => clearTimeout(t);
+  }, [isHumanTurn, game.activePlayer, game.phase, game.movable.length, game.winner, isAnimating, triggerMove]);
+
   // ── Cleanup ───────────────────────────────────────────────────────────────
   useEffect(() => () => { rollTimers.current.forEach(clearTimeout); }, []);
 

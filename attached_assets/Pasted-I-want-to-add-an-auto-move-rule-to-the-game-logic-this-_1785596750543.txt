@@ -1,0 +1,16 @@
+I want to add an auto-move rule to the game logic (this is a gameplay logic change, not a visual one).
+The rule:
+When a player has exactly 3 pawns still in their home (not yet out) and only 1 pawn out on the board, and that single pawn out is the only valid/legal move available after rolling the dice, the game should automatically move that pawn — without requiring the player to tap/select it manually.
+Important clarifications:
+This should only trigger when that single outside pawn is truly the only legal move available (no other valid choice exists for that roll) — consistent with how auto-move already behaves elsewhere in the game when there's only one possible move.
+If there is any other valid choice available (e.g., the player rolled a 6 and could bring a new pawn out, or has another valid move), do NOT auto-move — let the player choose normally.
+The dice roll itself, turn order, and all other rules must remain exactly as they currently are — I only want the pawn selection step to be skipped in this specific single-legal-move scenario.
+This rule should apply consistently across all board themes (Classic, DZ, Neon) since it's game logic, not visual — but do not touch any visual/animation code while implementing this.
+Strictly forbidden / professionalism requirements:
+Do not modify any visual/animation code (movement effects, board styles, etc.) — this task is logic-only.
+Do not change any other game rules (dice mechanics, capturing, entering play on a 6, win conditions, turn switching, etc.) beyond this specific auto-move trigger.
+Do not refactor or touch any file/component outside the exact scope of this logic change.
+Do not commit, push, or deploy anything — local changes only, for my review.
+If the existing auto-move-on-single-option logic already covers this case, tell me clearly instead of adding redundant/duplicate logic.
+If anything about the current logic is ambiguous, stop and ask instead of assuming.
+After implementing, test this scenario (3 pawns home, 1 pawn out, roll where it's the only legal move) in the live preview and confirm it auto-moves correctly, then give me a precise summary of only the files and lines changed.
