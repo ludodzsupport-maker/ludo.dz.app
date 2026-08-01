@@ -1014,7 +1014,7 @@ function buildHopPath(
 // 45% of step duration, then descends and snaps to canonical stacking position.
 function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
-  onLastHopLand, onDefeatArrived, isClassic, isDz,
+  onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
@@ -1029,6 +1029,7 @@ function PawnToken({
   onDefeatArrived?: () => void; // fires when defeated piece reaches home → impact flash
   isClassic?: boolean; // Classic Board theme only — swaps hex/neon body for a 3D dome token
   isDz?: boolean; // DZ Board theme only — swaps hex/neon body for an onion-dome lantern token
+  onStepLand?: (x: number, y: number, neon: string) => void; // Neon-only: fires at every hop-step landing (see HopBurstEffect)
 }) {
   const baseCtrl = useAnimationControls();
   const arcCtrl  = useAnimationControls();
@@ -1040,10 +1041,12 @@ function PawnToken({
   const springCfgRef   = useRef(springCfg);
   const onLastHopRef   = useRef(onLastHopLand);
   const onDefeatRef    = useRef(onDefeatArrived);
+  const onStepLandRef  = useRef(onStepLand);
   finalRef.current     = { x: finalX, y: finalY };
   springCfgRef.current = springCfg;
   onLastHopRef.current = onLastHopLand;
   onDefeatRef.current  = onDefeatArrived;
+  onStepLandRef.current = onStepLand;
 
   // ── Effect 1: hop sequence or defeat arc ────────────────────────────────────
   useEffect(() => {
@@ -1136,6 +1139,16 @@ function PawnToken({
 
         prevX = step.x;
         prevY = step.y;
+
+        // ── Neon-only per-step light burst ───────────────────────────────────
+        // Fires the instant the pawn physically lands on THIS cell — for every
+        // step of a multi-cell move, not just the last. Purely visual: does not
+        // gate or delay game-state resolution (still handled by onLastHopRef
+        // below on the final step only). Classic/DZ boards are untouched since
+        // onStepLand is only ever wired up for this callback path.
+        if (!stale() && !isClassic && !isDz) {
+          onStepLandRef.current?.(step.x, step.y, E.PLAYER_NEONS[player]);
+        }
 
         // ── Squash & stretch on landing ──────────────────────────────────────
         // Fired but NOT awaited — plays concurrently with the inter-step pause
@@ -1521,9 +1534,79 @@ function HomeFinishVFX({
   );
 }
 
+// ─── Hop-step light burst — Neon board only ───────────────────────────────────
+// A quick radial energy flash (ring + hot core + short outward rays) fired the
+// instant a pawn physically lands on a cell mid-hop. Fires once per step of a
+// multi-cell move (see PawnToken's hop loop), not just on the final landing —
+// unlike ShockwaveEffect/HomeFinishVFX above, this is NOT tied to captures or
+// finishing; it is purely a per-step movement flourish, kept short (<=300ms)
+// so back-to-back steps on a long move don't smear together.
+function HopBurstEffect({
+  x, y, neon, onDone,
+}: { x: number; y: number; neon: string; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 4000); // TEMP-DEBUG-VERIFY was 340
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  const SPOKES     = 6;
+  const SPOKE_LEN  = 0.60;
+
+  return (
+    <g pointerEvents="none">
+      {/* Crisp expanding ring — the outer edge of the burst */}
+      <motion.circle cx={x} cy={y} r={0.15}
+        fill="none" stroke={neon} strokeWidth={0.075}
+        style={{ transformOrigin: `${x}px ${y}px` }}
+        initial={{ scale: 1, opacity: 0.85 }}
+        animate={{ scale: 5.0, opacity: 0 }}
+        transition={{ duration: 3.6, ease: 'easeOut' }} /* TEMP-DEBUG-VERIFY was 0.30 */
+      />
+      {/* Hot core flash — bright center that blooms and fades fast */}
+      <motion.circle cx={x} cy={y} r={0.13}
+        fill={neon}
+        style={{ transformOrigin: `${x}px ${y}px` }}
+        initial={{ scale: 1, opacity: 0.9 }}
+        animate={{ scale: 2.4, opacity: 0 }}
+        transition={{ duration: 2.4, ease: 'easeOut' }} /* TEMP-DEBUG-VERIFY was 0.20 */
+      />
+      {/* White-hot inner spark — sharp punch at the very center */}
+      <motion.circle cx={x} cy={y} r={0.06}
+        fill="white"
+        style={{ transformOrigin: `${x}px ${y}px` }}
+        initial={{ scale: 1, opacity: 0.85 }}
+        animate={{ scale: 1.6, opacity: 0 }}
+        transition={{ duration: 1.8, ease: 'easeOut' }} /* TEMP-DEBUG-VERIFY was 0.15 */
+      />
+      {/* Short outward light rays — grow from the core and fade; reads as a
+          beam burst rather than flying particles (no positional animation,
+          only scale-from-origin + opacity). */}
+      {Array.from({ length: SPOKES }, (_, i) => {
+        const angle = (i / SPOKES) * Math.PI * 2;
+        return (
+          <motion.line
+            key={i}
+            x1={x} y1={y}
+            x2={x + Math.cos(angle) * SPOKE_LEN}
+            y2={y + Math.sin(angle) * SPOKE_LEN}
+            stroke={neon} strokeWidth={0.045} strokeLinecap="round"
+            style={{ transformOrigin: `${x}px ${y}px` }}
+            initial={{ scale: 0.2, opacity: 0.85 }}
+            animate={{ scale: 1, opacity: 0 }}
+            transition={{ duration: 2.88, ease: 'easeOut' }} /* TEMP-DEBUG-VERIFY was 0.24 */
+          />
+        );
+      })}
+    </g>
+  );
+}
+
 // ─── Shared animation types (used by BoardSVG and GameBoardScreen) ────────────
 type ShockwaveEvent = { x: number; y: number; neon: string; id: number };
 type HomeImpactEvent = { player: number; index: number; id: number };
+// Neon-only per-step hop light burst (see HopBurstEffect) — one fires at every
+// cell a pawn lands on mid-move, not just the final destination.
+type HopBurstEvent = { x: number; y: number; neon: string; id: number };
 type PieceAnim = {
   steps: HopStep[] | 'defeat' | null;
   startX?: number;   // piece's visual X before the hop starts (for axis-diff)
@@ -1545,6 +1628,11 @@ interface BoardSVGProps {
   homeImpact: HomeImpactEvent | null;
   homeFinishVFX: ShockwaveEvent | null;
   onHomeFinishDone: () => void;
+  // Neon-only per-step hop light bursts — list (not a single slot) because a
+  // multi-cell move can have several in flight at once. Owned by GameBoardScreen.
+  hopBursts: HopBurstEvent[];
+  onHopBurstDone: (id: number) => void;
+  onHopStepLand: (x: number, y: number, neon: string) => void;
   boardStyle?: BoardStyle;
 }
 
@@ -1552,6 +1640,7 @@ function BoardSVG({
   game, onPieceClick, springCfg, hopMs,
   pieceAnims, shockwave, onShockwaveDone,
   homeImpact, homeFinishVFX, onHomeFinishDone,
+  hopBursts, onHopBurstDone, onHopStepLand,
   boardStyle,
 }: BoardSVGProps) {
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
@@ -2974,6 +3063,17 @@ function BoardSVG({
         />
       )}
 
+      {/* ── Hop-step light bursts — Neon board only, one per landed cell ── */}
+      {hopBursts.map(b => (
+        <HopBurstEffect
+          key={b.id}
+          x={b.x}
+          y={b.y}
+          neon={b.neon}
+          onDone={() => onHopBurstDone(b.id)}
+        />
+      ))}
+
       {/* ── Pieces ── each PawnToken manages its own dual-control animation ── */}
       {piecePositions.map(({ player, index, xy: [fx, fy] }) => {
         const pid  = E.pieceId(player, index);
@@ -2996,6 +3096,7 @@ function BoardSVG({
             onDefeatArrived={anim.onArrival}
             isClassic={isClassic}
             isDz={isDz}
+            onStepLand={onHopStepLand}
           />
         );
       })}
@@ -3129,6 +3230,17 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const [shockwave,     setShockwave]     = useState<ShockwaveEvent | null>(null);
   const [homeImpact,    setHomeImpact]    = useState<HomeImpactEvent | null>(null);
   const [homeFinishVFX, setHomeFinishVFX] = useState<ShockwaveEvent | null>(null);
+  // Neon-only per-step hop light bursts — a list because a multi-cell move can
+  // have several bursts alive at once (each self-removes via onDone).
+  const [hopBursts,     setHopBursts]     = useState<HopBurstEvent[]>([]);
+  const hopBurstIdRef = useRef(0);
+  const spawnHopBurst = useCallback((x: number, y: number, neon: string) => {
+    const id = ++hopBurstIdRef.current;
+    setHopBursts(prev => [...prev, { x, y, neon, id }]);
+  }, []);
+  const removeHopBurst = useCallback((id: number) => {
+    setHopBursts(prev => prev.filter(b => b.id !== id));
+  }, []);
 
   // Stable refs so triggerMove closures always see the latest values
   // without needing to be recreated on every render.
@@ -3164,6 +3276,27 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       tailGap:    Math.round(TAIL_GAP    * scale),
     };
   }, []); // computed once at mount — viewport is stable during a game session
+
+  // TEMP-DEBUG-VERIFY: auto-plays (skipping dice-roll animation, rejection-
+  // sampling E.doRoll for a movable outcome, then directly calling triggerMove
+  // with the freshly computed result — no dependency on a second render/effect
+  // cycle) so the beam VFX can be screenshotted without manual clicks.
+  // Remove this whole effect before finishing.
+  useEffect(() => {
+    if (game.phase === 'rolling' && !game.diceRolled) {
+      let next = E.doRoll(game);
+      let guard = 0;
+      while (next.movable.length === 0 && guard < 200) {
+        next = E.doRoll(game);
+        guard++;
+      }
+      setGame(next);
+      setLastDice(ld => { const n = [...ld]; n[game.activePlayer] = next.dice; return n; });
+      if (next.movable.length > 0) {
+        setTimeout(() => triggerMove(next.movable[0]), 50);
+      }
+    }
+  }, []);
 
   // ── Roll handler ──────────────────────────────────────────────────────────
   const handleRoll = useCallback(() => {
@@ -3560,6 +3693,9 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
               homeImpact={homeImpact}
               homeFinishVFX={homeFinishVFX}
               onHomeFinishDone={() => setHomeFinishVFX(null)}
+              hopBursts={hopBursts}
+              onHopBurstDone={removeHopBurst}
+              onHopStepLand={spawnHopBurst}
               boardStyle={boardStyle}
             />
           </div>

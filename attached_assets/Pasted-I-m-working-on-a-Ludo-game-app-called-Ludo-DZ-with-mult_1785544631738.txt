@@ -1,0 +1,20 @@
+I'm working on a Ludo game app called "Ludo DZ" with multiple board visual themes (Classic, DZ, and Neon). I need you to work only on the Neon board theme (the dark board with glowing neon colors — red, blue, green, yellow hexagon-shaped pawns with grid-line glow effects).
+Context: A previous attempt was made to add a pawn movement effect on the Neon board, but it turned out barely visible / almost invisible in the live preview. I need this reworked properly.
+What I want:
+Every time a pawn hops/moves on the Neon board only, I want a light beam/ray effect emanating outward from the pawn itself, colored in that pawn's own color (red pawn = red beam, blue pawn = blue beam, green pawn = green beam, yellow pawn = yellow beam).
+Specifically:
+At the moment the pawn lands on each cell during its hop, emit a short burst/ray of light in the pawn's color radiating outward from its position (like a brief energy pulse or light burst), clearly visible against the dark Neon board background.
+This must be noticeably visible — not a faint glow that disappears instantly. A quick, clean radial light burst or beam flash, lasting roughly 200–350ms, then fading out smoothly (ease-out).
+It should repeat at each step/cell the pawn passes through during a multi-cell move (so a pawn moving 5 cells shows 5 quick light bursts along its path), not just once at the final destination.
+Keep it elegant and premium-looking — sharp, clean radial glow/ray using the pawn's exact color, matching the existing Neon aesthetic. No screen shake, no bouncing, no cartoon particles.
+After implementing, actually test an actual pawn move in the live preview and visually confirm the beam effect renders clearly before reporting completion. Don't report success without visual confirmation.
+This applies only to the Neon board. Classic and DZ boards must remain completely untouched — do not modify their code, styles, or behavior in any way.
+Strictly forbidden / professionalism requirements:
+Do not touch any game logic (turn order, dice rules, win conditions, capturing rules, etc.) — visual only.
+Do not change gameplay speed/timing — only the visual effect during the existing movement animation.
+Do not modify any other visual element on the Neon board (colors, other glows, dice, buttons, star cells, etc.) beyond this specific beam effect.
+Do not modify Classic or DZ board styles at all.
+Do not refactor or touch any file/component outside the exact scope of this task.
+Do not commit, push, or deploy anything — local changes only, for my review.
+If anything is unclear or out of scope, stop and ask instead of assuming.
+After implementing and visually verifying, give me a precise summary of only the files and lines changed.
