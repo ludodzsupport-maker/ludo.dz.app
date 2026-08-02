@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { playLanguageChange } from "../lib/sound-manager";
 
 interface LanguageToggleProps {
   lang: 'fr' | 'ar';
@@ -9,7 +10,7 @@ export function LanguageToggle({ lang, setLang }: LanguageToggleProps) {
   return (
     <div className="flex bg-black/20 p-1 rounded-full backdrop-blur-sm border border-white/10 shadow-inner relative z-10 mx-auto w-fit">
       <button
-        onClick={() => setLang('ar')}
+        onClick={() => { playLanguageChange(); setLang('ar'); }}
         className={`relative px-6 py-2 rounded-full font-bold text-sm transition-colors duration-300 z-10 ${
           lang === 'ar' ? 'text-dz-green' : 'text-white/70 hover:text-white'
         }`}
@@ -27,7 +28,7 @@ export function LanguageToggle({ lang, setLang }: LanguageToggleProps) {
       </button>
       
       <button
-        onClick={() => setLang('fr')}
+        onClick={() => { playLanguageChange(); setLang('fr'); }}
         className={`relative px-6 py-2 rounded-full font-bold text-sm transition-colors duration-300 z-10 ${
           lang === 'fr' ? 'text-dz-green' : 'text-white/70 hover:text-white'
         }`}

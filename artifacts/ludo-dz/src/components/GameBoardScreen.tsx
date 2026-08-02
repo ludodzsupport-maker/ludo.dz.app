@@ -11,6 +11,7 @@ import { GamePiece } from './GamePiece';
 import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
 import type { GameConfig } from './GameConfigOverlay';
+import { playIconTap, playNavBack, playPrimaryAction, playSelection } from '../lib/sound-manager';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 import type { BoardStyle } from '../App';
@@ -448,7 +449,7 @@ function CornerDice({
         pointerEvents: 'none',
       }}/>
     <motion.div
-      onClick={canTap ? onRoll : undefined}
+      onClick={canTap ? () => { playPrimaryAction(); onRoll(); } : undefined}
       whileTap={canTap ? (isClassic ? { scale: 1.02 } : { scale: 0.91 }) : {}}
       animate={isClassic ? {
         scale: isActive ? 1.08 : 0.88,
@@ -3294,7 +3295,7 @@ function SettingsOverlay({ lang, animSpeed, onSpeed, onClose }: {
       className="absolute inset-0 z-40 flex items-end justify-center"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       style={{ backdropFilter: 'blur(18px)', background: 'rgba(3,11,22,0.85)' }}
-      onClick={onClose}>
+      onClick={() => { playNavBack(); onClose(); }}>
       <motion.div
         initial={{ y: 80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -3319,7 +3320,7 @@ function SettingsOverlay({ lang, animSpeed, onSpeed, onClose }: {
               {lang === 'ar' ? 'الإعدادات' : 'PARAMÈTRES'}
             </span>
           </div>
-          <button onClick={onClose}
+          <button onClick={() => { playIconTap(); onClose(); }}
             style={{ background: 'rgba(255,255,255,0.08)', border: 'none',
               borderRadius: '50%', width: 32, height: 32, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -3340,7 +3341,7 @@ function SettingsOverlay({ lang, animSpeed, onSpeed, onClose }: {
             const active = animSpeed === key;
             return (
               <motion.button key={key}
-                onClick={() => onSpeed(key)}
+                onClick={() => { playSelection(); onSpeed(key); }}
                 whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                 style={{
                   flex: 1, padding: '12px 6px', borderRadius: 14,
@@ -3657,6 +3658,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
 
     // Fast path: piece is already movable — move it directly.
     if (currentGame.movable.includes(pid)) {
+      playSelection();
       triggerMove(pid);
       return;
     }
@@ -3676,7 +3678,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       const mgp = E.getGridPos(mpiece.player, mpiece.relPos);
       return mgp && mgp[0] === tappedGp[0] && mgp[1] === tappedGp[1];
     });
-    if (redirect) triggerMove(redirect);
+    if (redirect) {
+      playSelection();
+      triggerMove(redirect);
+    }
   }, [isHumanTurn, triggerMove]);
 
   // ── Auto-pass when no valid moves — blocked while animation is in flight ─
@@ -3821,7 +3826,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           paddingBottom: 8,
         }}>
         {/* Back — far left */}
-        <motion.button onClick={onBack}
+        <motion.button onClick={() => { playNavBack(); onBack(); }}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
           className="flex items-center justify-center w-11 h-11 rounded-full flex-shrink-0"
           style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -3833,7 +3838,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
         <div style={{ flex: 1 }}/>
 
         {/* Settings — far right */}
-        <motion.button onClick={() => setShowSettings(true)}
+        <motion.button onClick={() => { playIconTap(); setShowSettings(true); }}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
           className="flex items-center justify-center w-11 h-11 rounded-full flex-shrink-0"
           style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -4038,7 +4043,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
               </div>
 
               <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-                <motion.button onClick={handleRestart}
+                <motion.button onClick={() => { playPrimaryAction(); handleRestart(); }}
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                   style={{
                     flex: 1, padding: '11px 0', borderRadius: 18, cursor: 'pointer',
@@ -4049,7 +4054,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
                   }}>
                   {lang === 'ar' ? 'جديد' : 'Rejouer'}
                 </motion.button>
-                <motion.button onClick={onBack}
+                <motion.button onClick={() => { playNavBack(); onBack(); }}
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                   style={{
                     flex: 1, padding: '11px 0', borderRadius: 18, cursor: 'pointer',

@@ -1,7 +1,8 @@
 // ─── UI Sound Manager ───────────────────────────────────────────────────────
 // Small, extensible trigger system for short UI click/tap sound effects.
 //
-// Phase 1 covers: Settings toggles, the Start button, and game-mode selection.
+// Every interactive control uses one of the categories below. This keeps the
+// sound language cohesive and makes asset swaps a one-line change.
 // To add a new trigger later:
 //   1. Drop a short (<150ms ideally) .mp3 into `public/sounds/`.
 //   2. Add an entry to `SOUND_FILES` below with a new `UiSoundName`.
@@ -12,13 +13,24 @@
 // gates playback on the "Sound Effects" setting, so new triggers automatically
 // respect it.
 
-export type UiSoundName = "toggle-on" | "toggle-off" | "start-press" | "mode-select";
+export type UiSoundName =
+  | "primary-action"
+  | "icon-tap"
+  | "nav-back"
+  | "selection"
+  | "language-change"
+  | "toggle-on"
+  | "toggle-off";
 
+/** Category → file mapping. All cues are intentionally brief (about 150ms). */
 const SOUND_FILES: Record<UiSoundName, string> = {
-  "toggle-on": "sounds/toggle-on.mp3",
-  "toggle-off": "sounds/toggle-off.mp3",
-  "start-press": "sounds/start-press.mp3",
-  "mode-select": "sounds/mode-select.mp3",
+  "primary-action": "sounds/primary-action.ogg",
+  "icon-tap": "sounds/icon-tap.ogg",
+  "nav-back": "sounds/nav-back.ogg",
+  "selection": "sounds/selection.ogg",
+  "language-change": "sounds/language-change.ogg",
+  "toggle-on": "sounds/toggle-on.ogg",
+  "toggle-off": "sounds/toggle-off.ogg",
 };
 
 const DEFAULT_VOLUME = 0.55;
@@ -86,10 +98,22 @@ export function playUiSound(name: UiSoundName): void {
   }
 }
 
-// ─── Convenience triggers (add more here as new interactions are wired) ───────
+// ─── Category helpers ─────────────────────────────────────────────────────────
+/** Primary/confirm actions: play and start game. */
+export const playPrimaryAction = () => playUiSound("primary-action");
+/** Secondary actions and icon-only controls: settings and close. */
+export const playIconTap = () => playUiSound("icon-tap");
+/** Back, dismiss, and exit navigation. */
+export const playNavBack = () => playUiSound("nav-back");
+/** Cards, selectors, player counts, board styles, and animation speeds. */
+export const playSelection = () => playUiSound("selection");
+/** Confirming a language choice. */
+export const playLanguageChange = () => playUiSound("language-change");
 export const playToggleOn = () => playUiSound("toggle-on");
 export const playToggleOff = () => playUiSound("toggle-off");
 /** Plays the on/off toggle click for the given resulting value. */
 export const playToggleClick = (turningOn: boolean) => playUiSound(turningOn ? "toggle-on" : "toggle-off");
-export const playStartPress = () => playUiSound("start-press");
-export const playModeSelect = () => playUiSound("mode-select");
+/** @deprecated Use playPrimaryAction for new primary actions. */
+export const playStartPress = playPrimaryAction;
+/** @deprecated Use playSelection for selectable cards and options. */
+export const playModeSelect = playSelection;

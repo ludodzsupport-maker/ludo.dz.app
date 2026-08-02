@@ -2,6 +2,7 @@ import { useId } from "react";
 import { motion } from "framer-motion";
 import { GamePiece } from "./GamePiece";
 import { Settings, Trophy, Info } from "lucide-react";
+import { playIconTap, playPrimaryAction } from "../lib/sound-manager";
 
 interface WelcomeScreenProps {
   lang: "fr" | "ar";
@@ -94,7 +95,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) 
       label:   t.settings,
       neon:    "#B44FFF",
       cardBg:  "linear-gradient(145deg,#0e0025 0%,#200048 100%)",
-      onClick: onSettings,
+      onClick: onSettings ? () => { playIconTap(); onSettings(); } : undefined,
     },
     {
       Icon:    Trophy,
@@ -445,7 +446,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) 
             variants={itemVariants}
             whileHover={{ scale: 1.018, y: -3 }}
             whileTap={{ scale: 0.975 }}
-            onClick={onPlay}
+            onClick={() => { playPrimaryAction(); onPlay?.(); }}
             className="w-full rounded-2xl overflow-hidden relative cursor-pointer text-start"
             style={{
               background:

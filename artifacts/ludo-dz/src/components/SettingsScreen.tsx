@@ -5,7 +5,14 @@ import { GamePiece } from "./GamePiece";
 
 import type { BoardStyle } from '../App';
 import * as DZ from '../lib/board-theme-dz';
-import { isSoundEnabled, setSoundEnabled, playToggleClick } from '../lib/sound-manager';
+import {
+  isSoundEnabled,
+  setSoundEnabled,
+  playLanguageChange,
+  playNavBack,
+  playSelection,
+  playToggleClick,
+} from '../lib/sound-manager';
 interface SettingsScreenProps {
   lang: 'fr' | 'ar';
   setLang: (lang: 'fr' | 'ar') => void;
@@ -245,7 +252,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
         transition={{ duration: 0.32, delay: 0.05 }}
       >
         <motion.button
-          onClick={onBack}
+          onClick={() => { playNavBack(); onBack(); }}
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
           className="flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0"
@@ -310,7 +317,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
             {/* Header row */}
             <motion.button
               className="w-full flex items-center gap-4 px-4 py-4 text-start"
-              onClick={() => setLangOpen(o => !o)}
+              onClick={() => { playSelection(); setLangOpen(o => !o); }}
               whileTap={{ scale: 0.98 }}
             >
               <div
@@ -359,7 +366,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                       return (
                         <motion.button
                           key={code}
-                          onClick={() => { setLang(code); setLangOpen(false); }}
+                          onClick={() => { playLanguageChange(); setLang(code); setLangOpen(false); }}
                           whileHover={{ scale: 1.04 }}
                           whileTap={{ scale: 0.96 }}
                           className="flex-1 flex items-center justify-between px-4 py-3 rounded-xl relative overflow-hidden"
@@ -497,7 +504,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
             {/* Header row */}
             <motion.button
               className="w-full flex items-center gap-4 px-4 py-4 text-start"
-              onClick={() => setBoardOpen(o => !o)}
+              onClick={() => { playSelection(); setBoardOpen(o => !o); }}
               whileTap={{ scale: 0.98 }}
             >
               <div
@@ -560,7 +567,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                 >
                   <div className="px-4 pb-4">
                     <motion.button
-                      onClick={() => { setBoardStyle("neon"); setBoardOpen(false); }}
+                      onClick={() => { playSelection(); setBoardStyle("neon"); setBoardOpen(false); }}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.97 }}
                       className="w-full flex items-center justify-between px-4 py-3 rounded-xl relative overflow-hidden"
@@ -638,7 +645,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
 
                     {/* ── Classic Board option ── */}
                     <motion.button
-                      onClick={() => { setBoardStyle("classic"); setBoardOpen(false); }}
+                      onClick={() => { playSelection(); setBoardStyle("classic"); setBoardOpen(false); }}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.97 }}
                       className="w-full flex items-center justify-between px-4 py-3 rounded-xl relative overflow-hidden mt-2"
@@ -724,7 +731,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
 
                     {/* ── DZ Board option ── */}
                     <motion.button
-                      onClick={() => { setBoardStyle("dz"); setBoardOpen(false); }}
+                      onClick={() => { playSelection(); setBoardStyle("dz"); setBoardOpen(false); }}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.97 }}
                       className="w-full flex items-center justify-between px-4 py-3 rounded-xl relative overflow-hidden mt-2"

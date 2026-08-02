@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, X } from "lucide-react";
 import { GamePiece } from "./GamePiece";
 import { GameConfigOverlay, type SelectedMode, type GameConfig } from "./GameConfigOverlay";
-import { playModeSelect } from "../lib/sound-manager";
+import { playIconTap, playModeSelect, playNavBack } from "../lib/sound-manager";
 
 interface GameModeScreenProps {
   lang: 'fr' | 'ar';
@@ -648,7 +648,7 @@ function ComingSoonPopup({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.18 }}
-      onClick={onClose}
+        onClick={() => { playIconTap(); onClose(); }}
     >
       {/* Backdrop */}
       <div
@@ -683,7 +683,7 @@ function ComingSoonPopup({
 
         {/* Close button */}
         <button
-          onClick={onClose}
+          onClick={() => { playIconTap(); onClose(); }}
           className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center"
           style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}
           aria-label="close"
@@ -767,7 +767,7 @@ function ComingSoonPopup({
           <motion.button
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
-            onClick={onClose}
+            onClick={() => { playIconTap(); onClose(); }}
             className="w-full rounded-xl py-3 font-heading font-bold mt-1"
             style={{
               background: `linear-gradient(135deg, ${mode.neon}28, ${mode.neon}14)`,
@@ -857,7 +857,7 @@ export function GameModeScreen({ lang, onBack, onStart }: GameModeScreenProps) {
         transition={{ duration: 0.32, delay: 0.05 }}
       >
         <motion.button
-          onClick={onBack}
+          onClick={() => { playNavBack(); onBack(); }}
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
           className="flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0"

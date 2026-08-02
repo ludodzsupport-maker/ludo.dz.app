@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
-import { playStartPress } from "../lib/sound-manager";
+import { playIconTap, playNavBack, playSelection, playStartPress, playToggleClick } from "../lib/sound-manager";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 export interface SelectedMode {
@@ -237,7 +237,7 @@ function ConfigToggle({
 }) {
   return (
     <motion.button
-      onClick={(e) => { e.stopPropagation(); onChange(!value); }}
+      onClick={(e) => { e.stopPropagation(); const next = !value; playToggleClick(next); onChange(next); }}
       className="relative flex-shrink-0"
       style={{
         width: 46,
@@ -332,7 +332,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.26 }}
-        onClick={onClose}
+        onClick={() => { playNavBack(); onClose(); }}
       />
 
       {/* ── Sheet ── */}
@@ -397,7 +397,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
 
           {/* Close */}
           <motion.button
-            onClick={onClose}
+            onClick={() => { playIconTap(); onClose(); }}
             whileHover={{ scale: 1.10 }}
             whileTap={{ scale: 0.90 }}
             className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
@@ -427,7 +427,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
               return (
                 <motion.button
                   key={r.id}
-                  onClick={() => { setRule(r.id); if (r.id === "teamup") setShowSettings(true); }}
+                  onClick={() => { playSelection(); setRule(r.id); if (r.id === "teamup") setShowSettings(true); }}
                   whileHover={{ scale: 1.04, y: -3 }}
                   whileTap={{ scale: 0.96 }}
                   className="flex-1 relative rounded-2xl overflow-hidden flex flex-col items-center pt-4 pb-3 px-2 gap-0"
@@ -568,7 +568,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
                 return (
                   <motion.button
                     key={n}
-                    onClick={() => setPlayers(n)}
+                    onClick={() => { playSelection(); setPlayers(n); }}
                     whileHover={{ scale: 1.06, y: -3 }}
                     whileTap={{ scale: 0.93 }}
                     className="relative flex flex-col items-center justify-center gap-1.5 rounded-2xl flex-1"
@@ -680,7 +680,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.20 }}
-              onClick={() => setShowSettings(false)}
+              onClick={() => { playNavBack(); setShowSettings(false); }}
             >
               <motion.div
                 className="w-full rounded-3xl overflow-hidden"
@@ -703,7 +703,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
                     {t.settingsTitle}
                   </span>
                   <motion.button
-                    onClick={() => setShowSettings(false)}
+                    onClick={() => { playIconTap(); setShowSettings(false); }}
                     whileTap={{ scale: 0.90 }}
                     className="w-7 h-7 rounded-full flex items-center justify-center"
                     style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.14)" }}
@@ -728,7 +728,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
                       transition: "border-color 0.22s, box-shadow 0.22s",
                     }}
                     whileTap={{ scale: 0.987 }}
-                    onClick={() => setTeamAttack(v => !v)}
+                    onClick={() => setTeamAttack(v => { const next = !v; playToggleClick(next); return next; })}
                   >
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -757,7 +757,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
                       transition: "border-color 0.22s, box-shadow 0.22s",
                     }}
                     whileTap={{ scale: 0.987 }}
-                    onClick={() => setTurnPass(v => !v)}
+                    onClick={() => setTurnPass(v => { const next = !v; playToggleClick(next); return next; })}
                   >
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"

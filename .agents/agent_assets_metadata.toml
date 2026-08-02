@@ -63,3 +63,45 @@ uri = "file://attached_assets/generated_audio/sound_effect_language_select_chime
 type = "audio"
 title = "language select chime"
 description = "Generated sound effect: Subtle warm confirmation chime for a language selection in a premium mobile app. Soft short bell-like tone, single clean note, gentle and pleasant, no metallic harshness, mini…"
+
+[[outputs]]
+id = "O9DmSNOup1LdGDzQ1uslB"
+uri = "file://attached_assets/generated_audio/ludo_primary_action.mp3"
+type = "audio"
+title = "ludo primary action tap"
+description = "Generated sound effect: Original premium mobile UI primary-action confirmation. A confident warm ivory-and-gold soft tap with a tiny glassy chime tail, elegant Algerian game aesthetic, no music, no s…"
+
+[[outputs]]
+id = "5OktqnWjyyet60NvMzcQM"
+uri = "file://attached_assets/generated_audio/ludo_language_confirmation.mp3"
+type = "audio"
+title = "ludo language confirmation"
+description = "Generated sound effect: Original premium mobile UI language-change confirmation. A subtle refined two-note porcelain chime, very quiet and brief, warm ivory tone, no music, no speech, no harshness."
+
+[[outputs]]
+id = "EBpLyhRg9OiKDnbl6iYdL"
+uri = "file://attached_assets/generated_audio/ludo_back_navigation.mp3"
+type = "audio"
+title = "ludo back navigation"
+description = "Generated sound effect: Original premium mobile UI back-navigation sound. A gentle reversed airy whoosh resolving into a soft low tap, calm and refined, no music, no speech, one short event, not dram…"
+
+[[outputs]]
+id = "LqhyiwvqI3r4cxBZG8NjT"
+uri = "file://attached_assets/generated_audio/ludo_icon_tap.mp3"
+type = "audio"
+title = "ludo icon tap"
+description = "Generated sound effect: Original premium mobile UI subtle icon-button tap. A light soft wooden-and-glass tick, warm and polished, elegant, no music, no speech, one quiet short event, no harshness."
+
+[[outputs]]
+id = "oBRoCXEdgoLmS_ys8-3jJ"
+uri = "file://attached_assets/generated_audio/ludo_toggle_on.mp3"
+type = "audio"
+title = "ludo toggle on"
+description = "Generated sound effect: Original premium mobile UI toggle ON sound. A compact warm glass click with a tiny positive upward lift, elegant and polished, no music, no speech, no harshness."
+
+[[outputs]]
+id = "1WCP29KXCspX4XGt1LZkD"
+uri = "file://attached_assets/generated_audio/ludo_toggle_off.mp3"
+type = "audio"
+title = "ludo toggle off"
+description = "Generated sound effect: Original premium mobile UI toggle OFF sound. A compact soft muted glass click with a gentle downward resolution, elegant and polished, no music, no speech, no harshness."
