@@ -11,7 +11,14 @@ import { GamePiece } from './GamePiece';
 import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
 import type { GameConfig } from './GameConfigOverlay';
-import { playIconTap, playNavBack, playPrimaryAction, playSelection } from '../lib/sound-manager';
+import {
+  playIconTap,
+  playNavBack,
+  playNeonDiceRoll,
+  playNeonPawnMove,
+  playPrimaryAction,
+  playSelection,
+} from '../lib/sound-manager';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 import type { BoardStyle } from '../App';
@@ -3449,6 +3456,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const isComputer  = config.modeId === 'computer';
   const isClassic   = boardStyle === 'classic';
   const isDz        = boardStyle === 'dz';
+  const isNeon      = boardStyle === 'neon';
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   const isHumanTurn = !isComputer || game.activePlayer === 0;
@@ -3499,6 +3507,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const handleRoll = useCallback(() => {
     if (rolling || game.phase !== 'rolling' || game.winner) return;
     const rollingPlayer = game.activePlayer; // capture now — must not close over future state
+    if (isNeon) playNeonDiceRoll();
     setRolling(true);
     setJustLanded(false);
 
@@ -3532,7 +3541,15 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       }
     };
     cycle();
-  }, [rolling, game.phase, game.winner, game.activePlayer, animSpeed]);
+  }, [rolling, game.phase, game.winner, game.activePlayer, animSpeed, isNeon]);
+
+  // This runs at the same landing callback that already creates Neon’s visual
+  // hop burst. It does not alter the hop sequence, move resolution, or VFX;
+  // its explicit board-style guard keeps Classic and DZ entirely unchanged.
+  const handleNeonHopLand = useCallback((x: number, y: number, neon: string) => {
+    spawnHopBurst(x, y, neon);
+    if (isNeon) playNeonPawnMove();
+  }, [isNeon, spawnHopBurst]);
 
   // ── triggerMove — async-safe, decoupled animation from state resolution ──
   // Uses refs for game/isAnimating so it is stable (no deps) and never stale.
@@ -3908,7 +3925,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
               onHomeFinishDone={() => setHomeFinishVFX(null)}
               hopBursts={hopBursts}
               onHopBurstDone={removeHopBurst}
-              onHopStepLand={spawnHopBurst}
+              onHopStepLand={handleNeonHopLand}
               dustPuffs={dustPuffs}
               onDustPuffDone={removeDustPuff}
               onDustStep={spawnDustPuff}
