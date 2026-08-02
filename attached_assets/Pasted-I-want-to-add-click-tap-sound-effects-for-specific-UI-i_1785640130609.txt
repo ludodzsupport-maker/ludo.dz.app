@@ -1,0 +1,22 @@
+I want to add click/tap sound effects for specific UI interactions in the app — this is the first phase of a larger sound system I'll build on later, so please implement it in a clean, extensible way (an audio manager/utility that can easily have more sounds added later).
+Where I want sound effects added (for now, only these):
+Toggling switches in Settings (like "مؤثرات صوتية", "موسيقى الخلفية", "الاهتزاز" toggles) — a short, satisfying click sound when turned ON, and a slightly different subtle click when turned OFF.
+Pressing the main "ابدأ" (Start) button.
+Selecting a game mode on the "Mode de Jeu" screen (En Ligne, Équipe, Amis, Ordinateur, Tour par Tour, etc.).
+Sound quality requirements:
+The sounds must feel professional and premium — crisp, clean, modern UI click/tap sounds (think high-end mobile app or game UI sounds), not cheap, generic, or robotic-sounding.
+They must match the current visual identity of the app (elegant, ornate DZ gold/ivory aesthetic, but also works across the other board themes) — subtle and tasteful, not flashy or arcade-like.
+Keep sounds short (under ~150ms ideally) so they feel responsive and don't delay interaction.
+Use royalty-free / properly licensed sound assets only — do not use anything copyrighted without rights. If you need to source sound files, use free/open-license sound resources (e.g., public domain or Creative Commons UI sound packs) and tell me exactly what you used and its license.
+Functional requirements:
+These sounds must respect the existing "مؤثرات صوتية" (Sound Effects) toggle in Settings — if it's OFF, none of these click sounds should play.
+Keep volume reasonable and consistent — not jarringly loud.
+Build this as a reusable sound-trigger system so I can easily ask you to add more triggers (like pawn moves, captures, etc.) later without restructuring everything.
+Strictly forbidden:
+Do not touch any game logic, navigation, or functionality — this is purely adding audio feedback to existing interactions.
+Do not modify any visual styling, layout, or UI elements.
+Do not add sounds to anything I didn't list — only the three interactions above for now.
+Do not refactor or touch any file/component outside the exact scope of this task.
+Do not commit, push, or deploy anything — local changes only, for my review.
+If you're unsure about licensing for a sound asset, don't use it — ask me first or pick a clearly licensed alternative.
+After implementing, test each of the three interactions in the live preview and confirm the sounds play correctly and respect the mute toggle, then give me a precise summary of the files changed and which sound assets were used (with their source/license).

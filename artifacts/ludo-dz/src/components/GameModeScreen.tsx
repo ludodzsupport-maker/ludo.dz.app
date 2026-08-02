@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, X } from "lucide-react";
 import { GamePiece } from "./GamePiece";
 import { GameConfigOverlay, type SelectedMode, type GameConfig } from "./GameConfigOverlay";
+import { playModeSelect } from "../lib/sound-manager";
 
 interface GameModeScreenProps {
   lang: 'fr' | 'ar';
@@ -797,6 +798,7 @@ export function GameModeScreen({ lang, onBack, onStart }: GameModeScreenProps) {
   const [wipMode,      setWipMode]      = useState<string | null>(null);
 
   const handleModeSelect = (modeId: string) => {
+    playModeSelect();
     const mode = MODES.find(m => m.id === modeId);
     if (!mode) return;
     if (mode.wip) {

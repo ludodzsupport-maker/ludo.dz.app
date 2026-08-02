@@ -5,6 +5,7 @@ import { GamePiece } from "./GamePiece";
 
 import type { BoardStyle } from '../App';
 import * as DZ from '../lib/board-theme-dz';
+import { isSoundEnabled, setSoundEnabled, playToggleClick } from '../lib/sound-manager';
 interface SettingsScreenProps {
   lang: 'fr' | 'ar';
   setLang: (lang: 'fr' | 'ar') => void;
@@ -162,11 +163,28 @@ const containerVariants = {
 export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBack }: SettingsScreenProps) {
   const t   = T[lang];
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
-  const [sound,      setSound]      = useState(true);
+  const [sound,      setSound]      = useState(isSoundEnabled());
   const [music,      setMusic]      = useState(true);
   const [vibration,  setVibration]  = useState(true);
   const [langOpen,   setLangOpen]   = useState(false);
   const [boardOpen,  setBoardOpen]  = useState(false);
+
+  // Toggle click sounds are gated on the *current* Sound Effects setting
+  // (checked before it changes), so flipping Sound Effects off is the last
+  // thing you hear, and everything stays silent while it's off.
+  const handleSoundToggle = (next: boolean) => {
+    playToggleClick(next);
+    setSoundEnabled(next);
+    setSound(next);
+  };
+  const handleMusicToggle = (next: boolean) => {
+    playToggleClick(next);
+    setMusic(next);
+  };
+  const handleVibrationToggle = (next: boolean) => {
+    playToggleClick(next);
+    setVibration(next);
+  };
 
   return (
     <motion.div
@@ -407,7 +425,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
               <p className="font-heading font-bold text-white" style={{ fontSize: "14px", letterSpacing: "0.05em" }}>{t.sound}</p>
               <p className="text-white/40 font-sans" style={{ fontSize: "10px" }}>{t.soundSub}</p>
             </div>
-            <NeonToggle value={sound} onChange={setSound} neon="#B44FFF" />
+            <NeonToggle value={sound} onChange={handleSoundToggle} neon="#B44FFF" />
           </motion.div>
 
           {/* Music */}
@@ -435,7 +453,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
               <p className="font-heading font-bold text-white" style={{ fontSize: "14px", letterSpacing: "0.05em" }}>{t.music}</p>
               <p className="text-white/40 font-sans" style={{ fontSize: "10px" }}>{t.musicSub}</p>
             </div>
-            <NeonToggle value={music} onChange={setMusic} neon="#B44FFF" />
+            <NeonToggle value={music} onChange={handleMusicToggle} neon="#B44FFF" />
           </motion.div>
 
           {/* Vibration */}
@@ -458,7 +476,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
               <p className="font-heading font-bold text-white" style={{ fontSize: "14px", letterSpacing: "0.05em" }}>{t.vibration}</p>
               <p className="text-white/40 font-sans" style={{ fontSize: "10px" }}>{t.vibrationSub}</p>
             </div>
-            <NeonToggle value={vibration} onChange={setVibration} neon="#B44FFF" />
+            <NeonToggle value={vibration} onChange={handleVibrationToggle} neon="#B44FFF" />
           </motion.div>
 
           {/* ── Board Style Section ── */}

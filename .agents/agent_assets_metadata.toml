@@ -1,0 +1,44 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "LYv56HRQix-XjBNsJnEkR"
+uri = "file://artifacts/ludo-dz/public/sounds/raw_start-press.mp3"
+type = "audio"
+title = "start button press"
+description = "Generated sound effect: Premium UI primary-button confirmation tap: a crisp, warm, satisfying click with a soft golden shimmer overtone, slightly richer and more confident than a small toggle click, …"
+
+[[outputs]]
+id = "FYDtWJEhHPwPgy5MGL1v9"
+uri = "file://artifacts/ludo-dz/public/sounds/raw_toggle-off.mp3"
+type = "audio"
+title = "toggle off click"
+description = "Generated sound effect: Premium minimal UI toggle-switch turning OFF: a single soft, muted click with a subtle downward micro-tone, slightly darker and quieter than an ON click, like a high-end smart…"
+
+[[outputs]]
+id = "bKvTl5A3qw7nSex3ruEgy"
+uri = "file://artifacts/ludo-dz/public/sounds/raw_toggle-on.mp3"
+type = "audio"
+title = "toggle on click"
+description = "Generated sound effect: Premium minimal UI toggle-switch turning ON: a single soft, crisp click with a subtle warm upward micro-tone, like a high-end smartphone settings toggle engaging. Clean, moder…"
+
+[[outputs]]
+id = "MMZLzY-dbyImEt9Bf06gX"
+uri = "file://artifacts/ludo-dz/public/sounds/raw_mode-select.mp3"
+type = "audio"
+title = "mode select click"
+description = "Generated sound effect: Premium UI selection tap for choosing a card option: a clean, crisp, bright short click with a subtle tactile pop, elegant and modern, like selecting an option card in a high-…"
+
+[[outputs]]
+id = "ITT_5xn3tsVSfCYf7PGVQ"
+uri = "file://artifacts/ludo-dz/public/sounds/raw_mode-select_2.mp3"
+type = "audio"
+title = "mode select click v2"
+description = "Generated sound effect: Premium UI selection tap for choosing a card option: a clean, crisp, clearly audible bright click with a confident tactile pop, moderately loud and present in the mix (not fai…"
+
+[[outputs]]
+id = "HIx-M0sSa1KK-qTxWr3AR"
+uri = "file://artifacts/ludo-dz/public/sounds/raw_mode-select_3.mp3"
+type = "audio"
+title = "mode select click v3"
+description = "Generated sound effect: Premium minimal UI selection click: a single soft, crisp click with a subtle bright upward accent, like selecting an option card in a high-end mobile app. Clean, modern, elega…"

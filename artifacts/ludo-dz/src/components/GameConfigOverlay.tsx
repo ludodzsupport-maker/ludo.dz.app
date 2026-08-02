@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import { playStartPress } from "../lib/sound-manager";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 export interface SelectedMode {
@@ -611,11 +612,14 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
           <motion.button
             whileHover={{ scale: 1.018, y: -2 }}
             whileTap={{ scale: 0.978 }}
-            onClick={() => onStart({
-              rule:    mode.id === "teamup" ? "teamup" : rule,
-              players: mode.id === "teamup" ? 4       : players,
-              modeId:  mode.id,
-            })}
+            onClick={() => {
+              playStartPress();
+              onStart({
+                rule:    mode.id === "teamup" ? "teamup" : rule,
+                players: mode.id === "teamup" ? 4       : players,
+                modeId:  mode.id,
+              });
+            }}
             className="w-full relative rounded-2xl overflow-hidden"
             style={{
               background: `linear-gradient(135deg, ${mode.neon}28 0%, ${mode.neon}12 100%)`,
