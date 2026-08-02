@@ -12,6 +12,9 @@ import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
 import type { GameConfig } from './GameConfigOverlay';
 import {
+  playClassicClick,
+  playClassicDiceRoll,
+  playClassicPawnMove,
   playIconTap,
   playNeonClick,
   playNavBack,
@@ -459,9 +462,10 @@ function CornerDice({
       }}/>
     <motion.div
       onClick={canTap ? () => {
-        // handleRoll supplies Neon’s dedicated dice cue. Classic and DZ retain
-        // their pre-existing primary-action cue without any behavior change.
-        if (!isNeon) playPrimaryAction();
+        // handleRoll supplies Neon's and Classic's dedicated dice cues. DZ
+        // retains its pre-existing primary-action cue without any behavior
+        // change.
+        if (!isNeon && !isClassic) playPrimaryAction();
         onRoll();
       } : undefined}
       whileTap={canTap ? (isClassic ? { scale: 1.02 } : { scale: 0.91 }) : {}}
@@ -3294,9 +3298,10 @@ function BoardSVG({
 }
 
 // ─── Settings overlay ─────────────────────────────────────────────────────────
-function SettingsOverlay({ lang, animSpeed, isNeon, onSpeed, onClose }: {
+function SettingsOverlay({ lang, animSpeed, isNeon, isClassic, onSpeed, onClose }: {
   lang: 'fr'|'ar'; animSpeed: AnimSpeed;
   isNeon: boolean;
+  isClassic: boolean;
   onSpeed: (s: AnimSpeed) => void; onClose: () => void;
 }) {
   const speeds: { key: AnimSpeed; fr: string; ar: string; icon: string }[] = [
@@ -3310,7 +3315,7 @@ function SettingsOverlay({ lang, animSpeed, isNeon, onSpeed, onClose }: {
       className="absolute inset-0 z-40 flex items-end justify-center"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       style={{ backdropFilter: 'blur(18px)', background: 'rgba(3,11,22,0.85)' }}
-      onClick={() => { isNeon ? playNeonClick() : playNavBack(); onClose(); }}>
+      onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : playNavBack(); onClose(); }}>
       <motion.div
         initial={{ y: 80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -3335,7 +3340,7 @@ function SettingsOverlay({ lang, animSpeed, isNeon, onSpeed, onClose }: {
               {lang === 'ar' ? 'الإعدادات' : 'PARAMÈTRES'}
             </span>
           </div>
-          <button onClick={() => { isNeon ? playNeonClick() : playIconTap(); onClose(); }}
+          <button onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : playIconTap(); onClose(); }}
             style={{ background: 'rgba(255,255,255,0.08)', border: 'none',
               borderRadius: '50%', width: 32, height: 32, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -3356,7 +3361,7 @@ function SettingsOverlay({ lang, animSpeed, isNeon, onSpeed, onClose }: {
             const active = animSpeed === key;
             return (
               <motion.button key={key}
-                onClick={() => { isNeon ? playNeonClick() : playSelection(); onSpeed(key); }}
+                onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : playSelection(); onSpeed(key); }}
                 whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                 style={{
                   flex: 1, padding: '12px 6px', borderRadius: 14,
@@ -3516,6 +3521,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     if (rolling || game.phase !== 'rolling' || game.winner) return;
     const rollingPlayer = game.activePlayer; // capture now — must not close over future state
     if (isNeon) playNeonDiceRoll();
+    else if (isClassic) playClassicDiceRoll();
     setRolling(true);
     setJustLanded(false);
 
@@ -3549,7 +3555,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       }
     };
     cycle();
-  }, [rolling, game.phase, game.winner, game.activePlayer, animSpeed, isNeon]);
+  }, [rolling, game.phase, game.winner, game.activePlayer, animSpeed, isNeon, isClassic]);
 
   // This runs at the same landing callback that already creates Neon’s visual
   // hop burst. It does not alter the hop sequence, move resolution, or VFX;
@@ -3558,6 +3564,15 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     spawnHopBurst(x, y, neon);
     if (isNeon) playNeonPawnMove();
   }, [isNeon, spawnHopBurst]);
+
+  // Mirrors handleNeonHopLand above, but hooks the existing Classic-only dust
+  // puff callback instead. It does not alter the hop sequence, move
+  // resolution, or VFX; the callback is only ever invoked when isClassic is
+  // true (see PawnToken's per-step guard), so Neon/DZ are unaffected.
+  const handleClassicDustStep = useCallback((x: number, y: number) => {
+    spawnDustPuff(x, y);
+    if (isClassic) playClassicPawnMove();
+  }, [isClassic, spawnDustPuff]);
 
   // ── triggerMove — async-safe, decoupled animation from state resolution ──
   // Uses refs for game/isAnimating so it is stable (no deps) and never stale.
@@ -3683,7 +3698,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
 
     // Fast path: piece is already movable — move it directly.
     if (currentGame.movable.includes(pid)) {
-      isNeon ? playNeonClick() : playSelection();
+      isNeon ? playNeonClick() : isClassic ? playClassicClick() : playSelection();
       triggerMove(pid);
       return;
     }
@@ -3704,10 +3719,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       return mgp && mgp[0] === tappedGp[0] && mgp[1] === tappedGp[1];
     });
     if (redirect) {
-      isNeon ? playNeonClick() : playSelection();
+      isNeon ? playNeonClick() : isClassic ? playClassicClick() : playSelection();
       triggerMove(redirect);
     }
-  }, [isHumanTurn, isNeon, triggerMove]);
+  }, [isHumanTurn, isNeon, isClassic, triggerMove]);
 
   // ── Auto-pass when no valid moves — blocked while animation is in flight ─
   useEffect(() => {
@@ -3851,7 +3866,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           paddingBottom: 8,
         }}>
         {/* Back — far left */}
-        <motion.button onClick={() => { isNeon ? playNeonClick() : playNavBack(); onBack(); }}
+        <motion.button onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : playNavBack(); onBack(); }}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
           className="flex items-center justify-center w-11 h-11 rounded-full flex-shrink-0"
           style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -3863,7 +3878,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
         <div style={{ flex: 1 }}/>
 
         {/* Settings — far right */}
-        <motion.button onClick={() => { isNeon ? playNeonClick() : playIconTap(); setShowSettings(true); }}
+        <motion.button onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : playIconTap(); setShowSettings(true); }}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
           className="flex items-center justify-center w-11 h-11 rounded-full flex-shrink-0"
           style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -3936,7 +3951,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
               onHopStepLand={handleNeonHopLand}
               dustPuffs={dustPuffs}
               onDustPuffDone={removeDustPuff}
-              onDustStep={spawnDustPuff}
+              onDustStep={handleClassicDustStep}
               dzSparkles={dzSparkles}
               onDzSparkleDone={removeDzSparkle}
               onDzSparkleStep={spawnDzSparkle}
@@ -3992,7 +4007,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       {/* ── Settings overlay ── */}
       <AnimatePresence>
         {showSettings && (
-          <SettingsOverlay lang={lang} animSpeed={animSpeed} isNeon={isNeon}
+          <SettingsOverlay lang={lang} animSpeed={animSpeed} isNeon={isNeon} isClassic={isClassic}
             onSpeed={s => { setAnimSpeed(s); }}
             onClose={() => setShowSettings(false)}/>
         )}
@@ -4068,7 +4083,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
               </div>
 
               <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-                <motion.button onClick={() => { isNeon ? playNeonClick() : playPrimaryAction(); handleRestart(); }}
+                <motion.button onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : playPrimaryAction(); handleRestart(); }}
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                   style={{
                     flex: 1, padding: '11px 0', borderRadius: 18, cursor: 'pointer',
@@ -4079,7 +4094,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
                   }}>
                   {lang === 'ar' ? 'جديد' : 'Rejouer'}
                 </motion.button>
-                <motion.button onClick={() => { isNeon ? playNeonClick() : playNavBack(); onBack(); }}
+                <motion.button onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : playNavBack(); onBack(); }}
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                   style={{
                     flex: 1, padding: '11px 0', borderRadius: 18, cursor: 'pointer',

@@ -36,14 +36,19 @@ const SOUND_FILES: Record<UiSoundName, string> = {
 const DEFAULT_VOLUME = 0.55;
 const STORAGE_KEY = "ludo-dz:sound-effects-enabled";
 const NEON_PAWN_MIN_INTERVAL_MS = 38;
+const CLASSIC_PAWN_MIN_INTERVAL_MS = 46;
 
-// Neon board cues are intentionally synthesized rather than fetched audio:
-// they start instantly, add no asset/licensing overhead, and stay crisp at any
-// display scale. Their master levels are lower than UI button sounds because
-// both can repeat several times during a long pawn move.
-let neonAudioContext: AudioContext | null = null;
+// Neon and Classic board cues are intentionally synthesized rather than
+// fetched audio: they start instantly, add no asset/licensing overhead, and
+// stay crisp at any display scale. Their master levels are lower than UI
+// button sounds because both can repeat several times during a long pawn
+// move. Both themes share one AudioContext and scheduler (below); each keeps
+// its own noise buffer so their timbres never bleed into one another.
+let synthAudioContext: AudioContext | null = null;
 let neonNoiseBuffer: AudioBuffer | null = null;
+let woodNoiseBuffer: AudioBuffer | null = null;
 let lastNeonPawnAt = 0;
+let lastClassicPawnAt = 0;
 
 function readStoredPreference(): boolean {
   if (typeof window === "undefined") return true;
@@ -79,33 +84,35 @@ export function setSoundEnabled(enabled: boolean): void {
 
 type AudioContextConstructor = new () => AudioContext;
 
-function getNeonAudioContext(): AudioContext | null {
+function getSynthAudioContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
   try {
     // Safari exposes the constructor under its prefixed name. Supporting both
-    // prevents a no-op Neon soundtrack on otherwise capable mobile browsers.
+    // prevents a no-op synthesized soundtrack on otherwise capable mobile
+    // browsers.
     const AudioContextClass = (
       window.AudioContext
       ?? (window as Window & { webkitAudioContext?: AudioContextConstructor }).webkitAudioContext
     ) as AudioContextConstructor | undefined;
     if (!AudioContextClass) return null;
-    neonAudioContext ??= new AudioContextClass();
-    return neonAudioContext;
+    synthAudioContext ??= new AudioContextClass();
+    return synthAudioContext;
   } catch {
     return null;
   }
 }
 
 /**
- * Schedule a Neon cue only after the Web Audio context is actually running.
- * `resume()` is invoked synchronously from the original gesture handler, which
- * satisfies autoplay policies; rendering waits for its resolution so sources
- * are never started against a suspended context and silently lost.
+ * Schedule a synthesized cue (Neon or Classic) only after the Web Audio
+ * context is actually running. `resume()` is invoked synchronously from the
+ * original gesture handler, which satisfies autoplay policies; rendering
+ * waits for its resolution so sources are never started against a suspended
+ * context and silently lost.
  */
-function playNeonCue(render: (context: AudioContext, now: number) => void): void {
+function playSynthCue(render: (context: AudioContext, now: number) => void): void {
   if (!soundEnabled) return;
 
-  const context = getNeonAudioContext();
+  const context = getSynthAudioContext();
   if (!context) return;
 
   const start = () => {
@@ -148,7 +155,7 @@ function getNeonNoiseBuffer(context: AudioContext): AudioBuffer {
  * Classic and DZ never select or load it.
  */
 export function playNeonDiceRoll(): void {
-  playNeonCue((context, now) => {
+  playSynthCue((context, now) => {
     const master = context.createGain();
     master.gain.setValueAtTime(0.0001, now);
     master.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
@@ -195,7 +202,7 @@ export function playNeonDiceRoll(): void {
  * without becoming harsh or competing with the dice and pawn cues.
  */
 export function playNeonClick(): void {
-  playNeonCue((context, now) => {
+  playSynthCue((context, now) => {
     const master = context.createGain();
     master.gain.setValueAtTime(0.0001, now);
     master.gain.exponentialRampToValueAtTime(0.12, now + 0.003);
@@ -244,7 +251,7 @@ export function playNeonPawnMove(): void {
   if (nowMs - lastNeonPawnAt < NEON_PAWN_MIN_INTERVAL_MS) return;
   lastNeonPawnAt = nowMs;
 
-  playNeonCue((context, now) => {
+  playSynthCue((context, now) => {
     const oscillator = context.createOscillator();
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(720, now);
@@ -257,6 +264,114 @@ export function playNeonPawnMove(): void {
     oscillator.connect(gain).connect(context.destination);
     oscillator.start(now);
     oscillator.stop(now + 0.085);
+  });
+}
+
+function getWoodNoiseBuffer(context: AudioContext): AudioBuffer {
+  if (woodNoiseBuffer?.sampleRate === context.sampleRate) return woodNoiseBuffer;
+  const duration = 0.22;
+  const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+  const samples = buffer.getChannelData(0);
+  for (let i = 0; i < samples.length; i++) {
+    // Heavier smoothing than Neon's noise buffer rounds off the high end, so
+    // this reads as a duller, more organic "wood" texture rather than a
+    // digital rattle.
+    const previous = i === 0 ? 0 : samples[i - 1] * 0.62;
+    samples[i] = previous + (Math.random() * 2 - 1) * 0.5;
+  }
+  woodNoiseBuffer = buffer;
+  return buffer;
+}
+
+/**
+ * Shared building block for every Classic board cue: a short filtered-noise
+ * "chk" contact transient plus a brief decaying triangle tone (the wooden
+ * body's resonance). Reused with different parameters for the dice roll,
+ * pawn step, and UI click so all three share one coherent "wood family"
+ * timbre, distinct from Neon's oscillator-sweep/digital-noise character.
+ */
+function scheduleWoodKnock(
+  context: AudioContext,
+  bus: AudioNode,
+  startTime: number,
+  { amp, freq, decay, noiseMix = 0.5 }: { amp: number; freq: number; decay: number; noiseMix?: number },
+): void {
+  // Filtered-noise contact transient — the "chk" of impact.
+  const noise = context.createBufferSource();
+  noise.buffer = getWoodNoiseBuffer(context);
+  const noiseFilter = context.createBiquadFilter();
+  noiseFilter.type = "bandpass";
+  noiseFilter.frequency.setValueAtTime(freq * 2.1, startTime);
+  noiseFilter.Q.value = 0.9;
+  const noiseGain = context.createGain();
+  noiseGain.gain.setValueAtTime(0.0001, startTime);
+  noiseGain.gain.linearRampToValueAtTime(amp * noiseMix, startTime + 0.004);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay * 0.5);
+  noise.connect(noiseFilter).connect(noiseGain).connect(bus);
+  noise.start(startTime);
+  noise.stop(startTime + decay * 0.5 + 0.02);
+
+  // Decaying triangle "thock" gives the knock a solid wooden body.
+  const tone = context.createOscillator();
+  tone.type = "triangle";
+  tone.frequency.setValueAtTime(freq, startTime);
+  tone.frequency.exponentialRampToValueAtTime(freq * 0.72, startTime + decay);
+  const toneGain = context.createGain();
+  toneGain.gain.setValueAtTime(0.0001, startTime);
+  toneGain.gain.linearRampToValueAtTime(amp * (1 - noiseMix * 0.6), startTime + 0.006);
+  toneGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
+  tone.connect(toneGain).connect(bus);
+  tone.start(startTime);
+  tone.stop(startTime + decay + 0.02);
+}
+
+/**
+ * Classic board dice: a small cluster of jittered wooden knocks — the cup
+ * rattle — resolving into one louder, lower "landing" knock. It is separate
+ * from the generic UI asset system so Neon and DZ never select or load it.
+ */
+export function playClassicDiceRoll(): void {
+  playSynthCue((context, now) => {
+    const rattleCount = 4;
+    let t = now;
+    for (let i = 0; i < rattleCount; i++) {
+      scheduleWoodKnock(context, context.destination, t, {
+        amp: 0.30 + Math.random() * 0.08,
+        freq: 620 + Math.random() * 260,
+        decay: 0.05 + Math.random() * 0.02,
+        noiseMix: 0.62,
+      });
+      t += 0.052 + Math.random() * 0.02;
+    }
+    // Louder, lower landing knock closes out the roll.
+    scheduleWoodKnock(context, context.destination, t, { amp: 0.5, freq: 300, decay: 0.16, noiseMix: 0.42 });
+  });
+}
+
+/**
+ * Classic board control press: a single soft, lower knock with a longer
+ * decay than the pawn step, so it reads as a deliberate tap rather than a
+ * moving piece.
+ */
+export function playClassicClick(): void {
+  playSynthCue((context, now) => {
+    scheduleWoodKnock(context, context.destination, now, { amp: 0.34, freq: 340, decay: 0.14, noiseMix: 0.46 });
+  });
+}
+
+/**
+ * Classic board pawn step: a quiet, short knock — a pawn settling onto the
+ * next tile. The interval guard avoids stacked transients if animation
+ * events ever arrive closer together than the normal hop cadence.
+ */
+export function playClassicPawnMove(): void {
+  if (!soundEnabled) return;
+  const nowMs = typeof performance === "undefined" ? Date.now() : performance.now();
+  if (nowMs - lastClassicPawnAt < CLASSIC_PAWN_MIN_INTERVAL_MS) return;
+  lastClassicPawnAt = nowMs;
+
+  playSynthCue((context, now) => {
+    scheduleWoodKnock(context, context.destination, now, { amp: 0.2, freq: 540, decay: 0.055, noiseMix: 0.56 });
   });
 }
 
