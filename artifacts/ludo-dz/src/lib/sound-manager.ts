@@ -325,106 +325,93 @@ function scheduleWoodKnock(
   tone.stop(startTime + decay + 0.02);
 }
 
-/**
- * A dice-specific wooden impact. It deliberately does not reuse
- * `scheduleWoodKnock`: pawn steps and button presses need a clean, consistent
- * single contact, while a rolling die needs short, noisy, irregular collisions
- * with a distinctly heavier settling hit.
- */
-function scheduleClassicDiceImpact(
-  context: AudioContext,
-  bus: AudioNode,
-  startTime: number,
-  {
-    amp,
-    bodyFreq,
-    decay,
-    brightness,
-    noiseMix,
-  }: {
-    amp: number;
-    bodyFreq: number;
-    decay: number;
-    brightness: number;
-    noiseMix: number;
-  },
-): void {
-  // The noisy leading edge makes every event read as a physical collision, not
-  // a musical note. A band-pass range keeps the material character solid and
-  // woody rather than papery or metallic.
-  const contact = context.createBufferSource();
-  contact.buffer = getWoodNoiseBuffer(context);
-  contact.playbackRate.setValueAtTime(0.9 + Math.random() * 0.22, startTime);
-  const contactFilter = context.createBiquadFilter();
-  contactFilter.type = "bandpass";
-  contactFilter.frequency.setValueAtTime(brightness, startTime);
-  contactFilter.Q.value = 1.18;
-  const contactGain = context.createGain();
-  contactGain.gain.setValueAtTime(0.0001, startTime);
-  contactGain.gain.linearRampToValueAtTime(amp * noiseMix, startTime + 0.0025);
-  contactGain.gain.exponentialRampToValueAtTime(0.0001, startTime + Math.min(0.034, decay * 0.62));
-  contact.connect(contactFilter).connect(contactGain).connect(bus);
-  contact.start(startTime);
-  contact.stop(startTime + Math.min(0.06, decay * 0.72));
+// ─── Classic dice roll: real recorded sample ─────────────────────────────────
+// Sourced from a user-provided recording instead of synthesis, for maximum
+// authenticity. Decoded once into an AudioBuffer so playback can start with
+// zero latency and be trimmed sample-accurately to the roll animation's real
+// duration — never stretched, looped, or lengthened past its own length.
+const CLASSIC_DICE_ROLL_URL = "sounds/dice-roll-classic.wav";
+let classicDiceRollBuffer: AudioBuffer | null = null;
+let classicDiceRollLoadPromise: Promise<AudioBuffer | null> | null = null;
 
-  // A very short, falling triangle supplies the wood-table body beneath the
-  // noise. It is intentionally brief enough that the roll is heard as many
-  // knocks, never as a smooth tonal sweep.
-  const body = context.createOscillator();
-  body.type = "triangle";
-  body.frequency.setValueAtTime(bodyFreq, startTime);
-  body.frequency.exponentialRampToValueAtTime(Math.max(115, bodyFreq * 0.62), startTime + decay);
-  const bodyGain = context.createGain();
-  bodyGain.gain.setValueAtTime(0.0001, startTime);
-  bodyGain.gain.linearRampToValueAtTime(amp * (1 - noiseMix * 0.46), startTime + 0.0035);
-  bodyGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
-  body.connect(bodyGain).connect(bus);
-  body.start(startTime);
-  body.stop(startTime + decay + 0.015);
+function loadClassicDiceRollBuffer(context: AudioContext): Promise<AudioBuffer | null> {
+  if (classicDiceRollBuffer) return Promise.resolve(classicDiceRollBuffer);
+  if (classicDiceRollLoadPromise) return classicDiceRollLoadPromise;
+
+  const base = typeof import.meta !== "undefined" && import.meta.env?.BASE_URL ? import.meta.env.BASE_URL : "/";
+  classicDiceRollLoadPromise = fetch(`${base}${CLASSIC_DICE_ROLL_URL}`)
+    .then((response) => {
+      if (!response.ok) throw new Error(`dice roll sample fetch failed: ${response.status}`);
+      return response.arrayBuffer();
+    })
+    .then((data) => context.decodeAudioData(data))
+    .then((buffer) => {
+      classicDiceRollBuffer = buffer;
+      return buffer;
+    })
+    .catch(() => {
+      // A failed fetch/decode must never crash the game. Clear the promise so
+      // a later roll can retry instead of being permanently stuck on failure.
+      classicDiceRollLoadPromise = null;
+      return null;
+    });
+
+  return classicDiceRollLoadPromise;
+}
+
+// Kick off the fetch/decode the moment this module is first imported — i.e.
+// on initial app load, well before the player reaches the game board — so
+// the very first roll never waits on the network or the decoder.
+if (typeof window !== "undefined") {
+  const warmContext = getSynthAudioContext();
+  if (warmContext) void loadClassicDiceRollBuffer(warmContext);
 }
 
 /**
- * Classic board dice: seven quick, uneven wooden table contacts followed by
- * one lower, heavier settling thud. Timing, contact brightness, and level all
- * vary per roll so the cue reads as a die tumbling rather than an electronic
- * rhythm or a repeated button click. It is separate from both Neon/DZ cues and
- * the Classic pawn/click helpers.
+ * Classic board dice: plays the real recorded dice-tumble sample, starting
+ * instantly (no delay) when the roll animation begins. `rollDurationMs` is
+ * the caller's own roll-animation length (computed from its existing timing,
+ * unchanged here). If the sample would outlast it, playback is trimmed to
+ * end exactly at that moment with a short fade so the cut is a clean tail-off
+ * rather than an abrupt pop. If the sample is already shorter, it plays
+ * through untouched — never stretched or looped to fill the remaining time.
+ * It is separate from both Neon/DZ cues and the Classic pawn/click helpers.
  */
-export function playClassicDiceRoll(): void {
+export function playClassicDiceRoll(rollDurationMs: number): void {
   playSynthCue((context, now) => {
-    const master = context.createGain();
-    master.gain.setValueAtTime(0.88, now);
-    master.connect(context.destination);
-
-    let t = now;
-    const tumbleIntervals = [0.034, 0.041, 0.047, 0.055, 0.064, 0.072];
-
-    for (let i = 0; i < 7; i++) {
-      scheduleClassicDiceImpact(context, master, t, {
-        amp: 0.24 + i * 0.014 + Math.random() * 0.075,
-        bodyFreq: 420 + Math.random() * 290,
-        decay: 0.042 + Math.random() * 0.018,
-        brightness: 1040 + Math.random() * 920,
-        noiseMix: 0.68 + Math.random() * 0.1,
-      });
-
-      if (i < tumbleIntervals.length) {
-        // The gradually widening but jittered gaps mimic a die losing energy
-        // as it bounces and tumbles across a wooden table.
-        t += tumbleIntervals[i] + (Math.random() - 0.5) * 0.022;
-      }
+    const buffer = classicDiceRollBuffer;
+    if (!buffer) {
+      // Not decoded yet (e.g. a roll fired before the eager load above
+      // finished) — retry the load for next time rather than substituting a
+      // different cue or blocking this roll.
+      void loadClassicDiceRollBuffer(context);
+      return;
     }
 
-    // Give the final collision a small, uneven pause so it lands after the
-    // rattle instead of functioning as another metronomic click.
-    t += 0.066 + Math.random() * 0.026;
-    scheduleClassicDiceImpact(context, master, t, {
-      amp: 0.64,
-      bodyFreq: 205 + Math.random() * 42,
-      decay: 0.145,
-      brightness: 730 + Math.random() * 150,
-      noiseMix: 0.45,
-    });
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    const gain = context.createGain();
+    source.connect(gain).connect(context.destination);
+
+    const rollDurationSec = Math.max(0.05, rollDurationMs / 1000);
+    if (buffer.duration <= rollDurationSec) {
+      // Sample is already no longer than the roll animation — play it
+      // through as-is, at its natural length.
+      gain.gain.setValueAtTime(1, now);
+      source.start(now);
+      source.stop(now + buffer.duration + 0.02);
+      return;
+    }
+
+    // Sample outlasts the roll animation: trim playback to match it exactly,
+    // easing out over a short window so the stop reads as a natural
+    // tail-off rather than a hard, clicky cut.
+    const stopAt = now + rollDurationSec;
+    const fadeStart = Math.max(now, stopAt - Math.min(0.09, rollDurationSec * 0.25));
+    gain.gain.setValueAtTime(1, fadeStart);
+    gain.gain.linearRampToValueAtTime(0, stopAt);
+    source.start(now);
+    source.stop(stopAt + 0.02);
   });
 }
 

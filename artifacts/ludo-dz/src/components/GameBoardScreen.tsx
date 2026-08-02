@@ -36,6 +36,20 @@ const ANIM = {
   slow:   { cycles: 16, baseMs: 80, stepMs: 42, stiffness: 180, damping: 22, mass: 1.20, hopMs: 240 },
 } as const;
 
+// Mirrors the cycle() scheduling math in handleRoll below to compute the
+// exact total time (ms) from the first tick to the roll resolving, for a
+// given speed preset. Purely a read of ANIM's existing values — it does not
+// change ANIM or the cycle() timer logic in any way. Used only so the
+// Classic dice audio sample can be trimmed to the animation's real length.
+function getRollDurationMs({ cycles, baseMs, stepMs }: { cycles: number; baseMs: number; stepMs: number }): number {
+  const threshold = Math.floor(cycles * 0.4);
+  let total = 0;
+  for (let count = 1; count <= cycles; count++) {
+    total += count < threshold ? baseMs : baseMs + (count - threshold) * stepMs;
+  }
+  return total;
+}
+
 // ─── Dice dot positions (SVG viewBox −3…3) ───────────────────────────────────
 const DOTS: Record<number, [number,number][]> = {
   1: [[0,0]],
@@ -3520,12 +3534,15 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const handleRoll = useCallback(() => {
     if (rolling || game.phase !== 'rolling' || game.winner) return;
     const rollingPlayer = game.activePlayer; // capture now — must not close over future state
+    // Read timing before triggering audio so the Classic sample can be
+    // trimmed to this roll's exact animation length below. This only reads
+    // ANIM[animSpeed]; the values and the cycle() logic itself are untouched.
+    const { cycles, baseMs, stepMs } = ANIM[animSpeed];
     if (isNeon) playNeonDiceRoll();
-    else if (isClassic) playClassicDiceRoll();
+    else if (isClassic) playClassicDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
     setRolling(true);
     setJustLanded(false);
 
-    const { cycles, baseMs, stepMs } = ANIM[animSpeed];
     let count = 0;
     const cycle = () => {
       setAnimDice(Math.floor(Math.random() * 6) + 1);
