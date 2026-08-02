@@ -13,6 +13,7 @@ import * as DZ from '../lib/board-theme-dz';
 import type { GameConfig } from './GameConfigOverlay';
 import {
   playIconTap,
+  playNeonClick,
   playNavBack,
   playNeonDiceRoll,
   playNeonPawnMove,
@@ -391,6 +392,7 @@ function CornerDice({
   const isTop       = anchor === 'tl' || anchor === 'tr';
   const isClassic   = boardStyle === 'classic';
   const isDz        = boardStyle === 'dz';
+  const isNeon      = boardStyle === 'neon';
   const clSolid     = CL_SOLID[player as 0|1|2|3];
   const clLight     = CL_LIGHT[player as 0|1|2|3];
   const clBorder    = CL_BORDER[player as 0|1|2|3];
@@ -456,7 +458,12 @@ function CornerDice({
         pointerEvents: 'none',
       }}/>
     <motion.div
-      onClick={canTap ? () => { playPrimaryAction(); onRoll(); } : undefined}
+      onClick={canTap ? () => {
+        // handleRoll supplies Neon’s dedicated dice cue. Classic and DZ retain
+        // their pre-existing primary-action cue without any behavior change.
+        if (!isNeon) playPrimaryAction();
+        onRoll();
+      } : undefined}
       whileTap={canTap ? (isClassic ? { scale: 1.02 } : { scale: 0.91 }) : {}}
       animate={isClassic ? {
         scale: isActive ? 1.08 : 0.88,
@@ -3287,8 +3294,9 @@ function BoardSVG({
 }
 
 // ─── Settings overlay ─────────────────────────────────────────────────────────
-function SettingsOverlay({ lang, animSpeed, onSpeed, onClose }: {
+function SettingsOverlay({ lang, animSpeed, isNeon, onSpeed, onClose }: {
   lang: 'fr'|'ar'; animSpeed: AnimSpeed;
+  isNeon: boolean;
   onSpeed: (s: AnimSpeed) => void; onClose: () => void;
 }) {
   const speeds: { key: AnimSpeed; fr: string; ar: string; icon: string }[] = [
@@ -3302,7 +3310,7 @@ function SettingsOverlay({ lang, animSpeed, onSpeed, onClose }: {
       className="absolute inset-0 z-40 flex items-end justify-center"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       style={{ backdropFilter: 'blur(18px)', background: 'rgba(3,11,22,0.85)' }}
-      onClick={() => { playNavBack(); onClose(); }}>
+      onClick={() => { isNeon ? playNeonClick() : playNavBack(); onClose(); }}>
       <motion.div
         initial={{ y: 80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -3327,7 +3335,7 @@ function SettingsOverlay({ lang, animSpeed, onSpeed, onClose }: {
               {lang === 'ar' ? 'الإعدادات' : 'PARAMÈTRES'}
             </span>
           </div>
-          <button onClick={() => { playIconTap(); onClose(); }}
+          <button onClick={() => { isNeon ? playNeonClick() : playIconTap(); onClose(); }}
             style={{ background: 'rgba(255,255,255,0.08)', border: 'none',
               borderRadius: '50%', width: 32, height: 32, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -3348,7 +3356,7 @@ function SettingsOverlay({ lang, animSpeed, onSpeed, onClose }: {
             const active = animSpeed === key;
             return (
               <motion.button key={key}
-                onClick={() => { playSelection(); onSpeed(key); }}
+                onClick={() => { isNeon ? playNeonClick() : playSelection(); onSpeed(key); }}
                 whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                 style={{
                   flex: 1, padding: '12px 6px', borderRadius: 14,
@@ -3675,7 +3683,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
 
     // Fast path: piece is already movable — move it directly.
     if (currentGame.movable.includes(pid)) {
-      playSelection();
+      isNeon ? playNeonClick() : playSelection();
       triggerMove(pid);
       return;
     }
@@ -3696,10 +3704,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       return mgp && mgp[0] === tappedGp[0] && mgp[1] === tappedGp[1];
     });
     if (redirect) {
-      playSelection();
+      isNeon ? playNeonClick() : playSelection();
       triggerMove(redirect);
     }
-  }, [isHumanTurn, triggerMove]);
+  }, [isHumanTurn, isNeon, triggerMove]);
 
   // ── Auto-pass when no valid moves — blocked while animation is in flight ─
   useEffect(() => {
@@ -3843,7 +3851,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           paddingBottom: 8,
         }}>
         {/* Back — far left */}
-        <motion.button onClick={() => { playNavBack(); onBack(); }}
+        <motion.button onClick={() => { isNeon ? playNeonClick() : playNavBack(); onBack(); }}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
           className="flex items-center justify-center w-11 h-11 rounded-full flex-shrink-0"
           style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -3855,7 +3863,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
         <div style={{ flex: 1 }}/>
 
         {/* Settings — far right */}
-        <motion.button onClick={() => { playIconTap(); setShowSettings(true); }}
+        <motion.button onClick={() => { isNeon ? playNeonClick() : playIconTap(); setShowSettings(true); }}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
           className="flex items-center justify-center w-11 h-11 rounded-full flex-shrink-0"
           style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -3984,7 +3992,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       {/* ── Settings overlay ── */}
       <AnimatePresence>
         {showSettings && (
-          <SettingsOverlay lang={lang} animSpeed={animSpeed}
+          <SettingsOverlay lang={lang} animSpeed={animSpeed} isNeon={isNeon}
             onSpeed={s => { setAnimSpeed(s); }}
             onClose={() => setShowSettings(false)}/>
         )}
@@ -4060,7 +4068,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
               </div>
 
               <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-                <motion.button onClick={() => { playPrimaryAction(); handleRestart(); }}
+                <motion.button onClick={() => { isNeon ? playNeonClick() : playPrimaryAction(); handleRestart(); }}
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                   style={{
                     flex: 1, padding: '11px 0', borderRadius: 18, cursor: 'pointer',
@@ -4071,7 +4079,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
                   }}>
                   {lang === 'ar' ? 'جديد' : 'Rejouer'}
                 </motion.button>
-                <motion.button onClick={() => { playNavBack(); onBack(); }}
+                <motion.button onClick={() => { isNeon ? playNeonClick() : playNavBack(); onBack(); }}
                   whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
                   style={{
                     flex: 1, padding: '11px 0', borderRadius: 18, cursor: 'pointer',

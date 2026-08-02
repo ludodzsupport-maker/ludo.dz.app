@@ -77,20 +77,54 @@ export function setSoundEnabled(enabled: boolean): void {
   }
 }
 
+type AudioContextConstructor = new () => AudioContext;
+
 function getNeonAudioContext(): AudioContext | null {
-  if (typeof window === "undefined" || typeof AudioContext === "undefined") return null;
+  if (typeof window === "undefined") return null;
   try {
-    neonAudioContext ??= new AudioContext();
-    // A context created before an interaction can be suspended by the browser.
-    // Resume is deliberately non-blocking so the cue stays aligned to the roll
-    // or landing event whenever the browser permits playback.
-    if (neonAudioContext.state === "suspended") {
-      void neonAudioContext.resume().catch(() => {});
-    }
+    // Safari exposes the constructor under its prefixed name. Supporting both
+    // prevents a no-op Neon soundtrack on otherwise capable mobile browsers.
+    const AudioContextClass = (
+      window.AudioContext
+      ?? (window as Window & { webkitAudioContext?: AudioContextConstructor }).webkitAudioContext
+    ) as AudioContextConstructor | undefined;
+    if (!AudioContextClass) return null;
+    neonAudioContext ??= new AudioContextClass();
     return neonAudioContext;
   } catch {
     return null;
   }
+}
+
+/**
+ * Schedule a Neon cue only after the Web Audio context is actually running.
+ * `resume()` is invoked synchronously from the original gesture handler, which
+ * satisfies autoplay policies; rendering waits for its resolution so sources
+ * are never started against a suspended context and silently lost.
+ */
+function playNeonCue(render: (context: AudioContext, now: number) => void): void {
+  if (!soundEnabled) return;
+
+  const context = getNeonAudioContext();
+  if (!context) return;
+
+  const start = () => {
+    if (context.state !== "running") return;
+    try {
+      render(context, context.currentTime);
+    } catch {
+      // A failed cue must never disrupt a game interaction.
+    }
+  };
+
+  if (context.state === "running") {
+    start();
+    return;
+  }
+
+  // Important: call resume immediately, while the pointer/click event is still
+  // active. Only its completion is deferred.
+  void context.resume().then(start).catch(() => {});
 }
 
 function getNeonNoiseBuffer(context: AudioContext): AudioBuffer {
@@ -114,16 +148,11 @@ function getNeonNoiseBuffer(context: AudioContext): AudioBuffer {
  * Classic and DZ never select or load it.
  */
 export function playNeonDiceRoll(): void {
-  if (!soundEnabled) return;
-  const context = getNeonAudioContext();
-  if (!context) return;
-
-  try {
-    const now = context.currentTime;
+  playNeonCue((context, now) => {
     const master = context.createGain();
     master.gain.setValueAtTime(0.0001, now);
-    master.gain.exponentialRampToValueAtTime(0.115, now + 0.012);
-    master.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    master.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
+    master.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
     master.connect(context.destination);
 
     // Filtered noise gives the roll a tactile-but-digital rattle. Three small
@@ -157,9 +186,51 @@ export function playNeonDiceRoll(): void {
     tone.connect(toneGain).connect(master);
     tone.start(now);
     tone.stop(now + 0.21);
-  } catch {
-    // Audio should never interfere with gameplay if a browser declines a cue.
-  }
+  });
+}
+
+/**
+ * Neon board control press: a tight digital transient with a warm electrical
+ * resonance. It lasts 120ms, so it remains satisfying across rapid UI taps
+ * without becoming harsh or competing with the dice and pawn cues.
+ */
+export function playNeonClick(): void {
+  playNeonCue((context, now) => {
+    const master = context.createGain();
+    master.gain.setValueAtTime(0.0001, now);
+    master.gain.exponentialRampToValueAtTime(0.12, now + 0.003);
+    master.gain.exponentialRampToValueAtTime(0.036, now + 0.021);
+    master.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    master.connect(context.destination);
+
+    // Quick, glassy attack: provides definition without the brittle hiss of
+    // an all-noise click.
+    const attack = context.createOscillator();
+    attack.type = "triangle";
+    attack.frequency.setValueAtTime(1580, now);
+    attack.frequency.exponentialRampToValueAtTime(760, now + 0.042);
+    const attackGain = context.createGain();
+    attackGain.gain.setValueAtTime(0.0001, now);
+    attackGain.gain.exponentialRampToValueAtTime(0.72, now + 0.002);
+    attackGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
+    attack.connect(attackGain).connect(master);
+    attack.start(now);
+    attack.stop(now + 0.06);
+
+    // A lower sine tail gives the press a subtle electric body rather than a
+    // thin, tinny UI tick.
+    const resonance = context.createOscillator();
+    resonance.type = "sine";
+    resonance.frequency.setValueAtTime(520, now);
+    resonance.frequency.exponentialRampToValueAtTime(380, now + 0.115);
+    const resonanceGain = context.createGain();
+    resonanceGain.gain.setValueAtTime(0.0001, now);
+    resonanceGain.gain.exponentialRampToValueAtTime(0.42, now + 0.011);
+    resonanceGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    resonance.connect(resonanceGain).connect(master);
+    resonance.start(now);
+    resonance.stop(now + 0.125);
+  });
 }
 
 /**
@@ -173,11 +244,7 @@ export function playNeonPawnMove(): void {
   if (nowMs - lastNeonPawnAt < NEON_PAWN_MIN_INTERVAL_MS) return;
   lastNeonPawnAt = nowMs;
 
-  const context = getNeonAudioContext();
-  if (!context) return;
-
-  try {
-    const now = context.currentTime;
+  playNeonCue((context, now) => {
     const oscillator = context.createOscillator();
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(720, now);
@@ -190,9 +257,7 @@ export function playNeonPawnMove(): void {
     oscillator.connect(gain).connect(context.destination);
     oscillator.start(now);
     oscillator.stop(now + 0.085);
-  } catch {
-    // Audio should never interfere with gameplay if a browser declines a cue.
-  }
+  });
 }
 
 function getAudio(name: UiSoundName): HTMLAudioElement | null {
