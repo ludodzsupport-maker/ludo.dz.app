@@ -42,3 +42,24 @@ uri = "file://artifacts/ludo-dz/public/sounds/raw_mode-select_3.mp3"
 type = "audio"
 title = "mode select click v3"
 description = "Generated sound effect: Premium minimal UI selection click: a single soft, crisp click with a subtle bright upward accent, like selecting an option card in a high-end mobile app. Clean, modern, elega…"
+
+[[outputs]]
+id = "PIl1eLKqaJc-Lpr3rnMB5"
+uri = "file://attached_assets/generated_audio/sound_effect_nav_back_swoosh.mp3"
+type = "audio"
+title = "nav back swoosh"
+description = "Generated sound effect: Short soft reverse swoosh for a 'back' navigation action in a premium mobile app. Smooth quick downward whoosh with a gentle low-pitched tail, airy and clean, no harsh noise, …"
+
+[[outputs]]
+id = "f7l14NJaknRdfOsLxZG8c"
+uri = "file://attached_assets/generated_audio/sound_effect_icon_tap.mp3"
+type = "audio"
+title = "icon tap"
+description = "Generated sound effect: Ultra-short, soft premium UI tap sound for a mobile app icon button. Light plastic-glass micro-click, minimal and delicate, clean single transient with no ring or reverb, subt…"
+
+[[outputs]]
+id = "SavkdmVnlAYd-HoCdOmSO"
+uri = "file://attached_assets/generated_audio/sound_effect_language_select_chime.mp3"
+type = "audio"
+title = "language select chime"
+description = "Generated sound effect: Subtle warm confirmation chime for a language selection in a premium mobile app. Soft short bell-like tone, single clean note, gentle and pleasant, no metallic harshness, mini…"

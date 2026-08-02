@@ -1,0 +1,29 @@
+I want to expand the click/sound-feedback system across the entire app — right now only a few buttons have sound, but most interactive elements are silent. I want you to comprehensively identify every interactive UI element and add appropriate, categorized sound effects, so the whole app feels cohesive and polished like a professional/premium app.
+What I want:
+Go through the app and identify all interactive elements that currently have no sound feedback, including but not limited to:
+Icon buttons (settings gear, back arrows, close buttons, etc.)
+Navigation actions (going back, going forward/next)
+Language switcher
+Board style/theme selector (choosing DZ, Classic, Neon, etc.)
+Game mode selection cards (already partially covered — extend consistently)
+Any toggles/switches not yet covered
+Any other tappable UI element in menus, settings, and screens
+Categorize interactions into logical sound groups, each with its own consistent, appropriately distinct sound — for example:
+Primary action buttons (Start, Confirm) → confident, slightly stronger tap
+Secondary/icon buttons (settings icon, small icons) → light, subtle tap
+Back/navigation → a distinct "back" swoosh or soft tap, different from "forward"
+Toggles/switches → on/off click pair (already implemented — keep consistent style)
+Selection cards (mode, board theme) → a satisfying "select" sound, slightly richer than a plain tap
+Language change → a subtle confirmation sound
+All sounds within these categories should feel like they belong to the same sound family/design language — same tonal character, just varying slightly in weight/pitch/duration based on the importance of the action (similar to how iOS/Android system sounds or premium apps like Duolingo, Notion, or banking apps handle this).
+Keep everything short, crisp, and non-intrusive (under ~150ms per sound), and respect the existing "مؤثرات صوتية" (Sound Effects) toggle — if OFF, none of these play.
+Use royalty-free/properly licensed sound assets only. Tell me exactly what you used and their license/source.
+Technical requirement:
+Reuse and extend the existing sound-trigger system you already built (from the previous task) rather than creating a separate, redundant one.
+Keep the implementation organized so each interaction category is clearly mapped to its sound (e.g., a config/mapping file), so I can easily review or swap sounds later.
+Strictly forbidden:
+Do not touch any game logic, navigation behavior, or functionality — purely adding audio feedback.
+Do not modify any visual styling, layout, or UI elements.
+Do not refactor unrelated code — only touch what's needed to wire up sound triggers.
+Do not commit, push, or deploy anything — local changes only, for my review.
+After implementing, go through the app yourself in the live preview, test as many of these interactions as you can, and confirm the sounds play appropriately and consistently, then give me a full list of what elements now have sound, grouped by category, along with the sound assets used and their sources/licenses.
