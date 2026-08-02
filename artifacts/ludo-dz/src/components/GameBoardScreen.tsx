@@ -369,12 +369,14 @@ function CornerDice({
   const isActive    = game.activePlayer === player && game.phase !== 'done';
   const exists      = game.playerSlots.includes(player);
   const pieces      = game.pieces.filter(p => p.player === player);
-  // DZ board only: Arabic corner-panel labels use the requested position-based
-  // copy. All shared player names (Classic, Neon, French, winner UI) remain intact.
+  // DZ board only: Arabic AND French corner-panel labels use the requested
+  // position-based copy. Classic, Neon, and the shared/global name constants
+  // (used elsewhere, e.g. the winner UI) remain intact.
   const dzArabicNames = ['أصفر', 'أزرق', 'بني', 'أبيض'] as const;
+  const dzFrenchNames = ['JAUNE', 'BLEU', 'MARRON', 'BLANC'] as const;
   const name = lang === 'ar'
     ? (boardStyle === 'dz' ? dzArabicNames[player] : E.PLAYER_NAMES_AR[player])
-    : E.PLAYER_NAMES_FR[player];
+    : (boardStyle === 'dz' ? dzFrenchNames[player] : E.PLAYER_NAMES_FR[player]);
   const isRollingMe = rolling && isActive;
   const diceVal     = isActive ? animDice : (lastDice[player] || 1);
   const canTap      = canRoll && isActive;
@@ -669,7 +671,7 @@ function CornerDice({
           lineHeight: 1,
           textShadow: 'none',
         }}>
-          {name.slice(0, 4)}
+          {isDz && lang === 'fr' ? name : name.slice(0, 4)}
         </span>
         {isAI && <Bot size={8} color={isClassic ? 'rgba(80,50,10,0.42)' : isDz ? 'rgba(201,162,39,0.60)' : 'rgba(255,255,255,0.30)'} style={{ flexShrink: 0 }}/>}
       </div>
