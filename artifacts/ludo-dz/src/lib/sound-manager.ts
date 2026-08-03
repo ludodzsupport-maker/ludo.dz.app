@@ -433,9 +433,14 @@ export function playClassicClick(): void {
 }
 
 /**
- * Classic board pawn step: a quiet, short knock — a pawn settling onto the
- * next tile. The interval guard avoids stacked transients if animation
- * events ever arrive closer together than the normal hop cadence.
+ * Classic board pawn step: a polished marble "tak". It uses a very short,
+ * bright contact transient and two restrained, inharmonic sine partials:
+ * enough hard-surface ring to read as dense stone on marble, but with a
+ * compact tail that stays pleasant through a rapid multi-hop move.
+ *
+ * This intentionally does not use scheduleWoodKnock: Classic controls retain
+ * their softer wooden family character, while the moving pawn has its own
+ * premium, reflective surface signature.
  */
 export function playClassicPawnMove(): void {
   if (!soundEnabled) return;
@@ -444,7 +449,52 @@ export function playClassicPawnMove(): void {
   lastClassicPawnAt = nowMs;
 
   playSynthCue((context, now) => {
-    scheduleWoodKnock(context, context.destination, now, { amp: 0.2, freq: 540, decay: 0.055, noiseMix: 0.56 });
+    const master = context.createGain();
+    master.gain.setValueAtTime(0.52, now);
+    master.connect(context.destination);
+
+    // The hard "tak": a compact high-passed noise contact, with no low,
+    // rounded wood body. Its 22 ms envelope makes each landing crisp rather
+    // than clicky or fatiguing in a chain of hops.
+    const contact = context.createBufferSource();
+    contact.buffer = getNeonNoiseBuffer(context);
+    const highPass = context.createBiquadFilter();
+    highPass.type = "highpass";
+    highPass.frequency.setValueAtTime(1650, now);
+    highPass.Q.setValueAtTime(0.7, now);
+    const presence = context.createBiquadFilter();
+    presence.type = "peaking";
+    presence.frequency.setValueAtTime(3150, now);
+    presence.Q.setValueAtTime(1.1, now);
+    presence.gain.setValueAtTime(5.5, now);
+    const contactGain = context.createGain();
+    contactGain.gain.setValueAtTime(0.0001, now);
+    contactGain.gain.exponentialRampToValueAtTime(0.13, now + 0.0015);
+    contactGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.022);
+    contact.connect(highPass).connect(presence).connect(contactGain).connect(master);
+    contact.start(now);
+    contact.stop(now + 0.03);
+
+    // Slightly inharmonic partials give the contact a polished-stone ring
+    // rather than the warm, octave-related body of wood. Both are deliberately
+    // quiet and under 70 ms so sequential hops stay clean.
+    const partials = [
+      { frequency: 1320, peak: 0.060, decay: 0.047 },
+      { frequency: 2175, peak: 0.025, decay: 0.066 },
+    ];
+    for (const { frequency, peak, decay } of partials) {
+      const ring = context.createOscillator();
+      ring.type = "sine";
+      ring.frequency.setValueAtTime(frequency, now);
+      ring.frequency.exponentialRampToValueAtTime(frequency * 0.985, now + decay);
+      const ringGain = context.createGain();
+      ringGain.gain.setValueAtTime(0.0001, now);
+      ringGain.gain.exponentialRampToValueAtTime(peak, now + 0.0018);
+      ringGain.gain.exponentialRampToValueAtTime(0.0001, now + decay);
+      ring.connect(ringGain).connect(master);
+      ring.start(now);
+      ring.stop(now + decay + 0.012);
+    }
   });
 }
 
