@@ -12,6 +12,7 @@ import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
 import type { GameConfig } from './GameConfigOverlay';
 import {
+  playClassicCapture,
   playClassicClick,
   playClassicDiceRoll,
   playClassicPawnMove,
@@ -3645,6 +3646,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     if (steps.length === 0) {
       if (capturedPid && lastStep) {
         setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() });
+        if (isClassic) playClassicCapture();
       }
       if (isHomeFinish) {
         setHomeFinishVFX({ x: 7.5, y: 7.5, neon: captorNeon, id: Date.now() });
@@ -3663,6 +3665,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       // Trigger shockwave / home-finish VFX at the landing tile
       if (capturedPid && lastStep) {
         setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() });
+        if (isClassic) playClassicCapture();
       }
       if (isHomeFinish) {
         setHomeFinishVFX({ x: 7.5, y: 7.5, neon: captorNeon, id: Date.now() });

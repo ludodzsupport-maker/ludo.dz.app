@@ -4,3 +4,4 @@
 - [Artifact preview fallback](artifact-preview-fallback.md) — unregistered artifact breaks Screenshot(appPreview); verify via tsc/HMR logs/ImageMagick SVG render instead.
 - [Ludo DZ "DZ" theme rollout](ludo-dz-theme.md) — 3 independent wiring points (colors/rendering/selector) can each be at different completion stages; Phase 1 scope + corner-label gotcha.
 - [Ludo board-theme timing isolation](ludo-theme-timing-isolation.md) — board speed presets are shared; scope theme-only timing overrides locally.
+- [Ludo DZ board-theme sound architecture](ludo-sound-architecture.md) — cues need a sound-manager.ts function AND a GameBoardScreen.tsx call site; capture had none for any theme pre-2026-08; DZ still has none.
