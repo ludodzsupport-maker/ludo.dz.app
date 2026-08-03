@@ -3,3 +3,4 @@
 - [Ludo DZ animation architecture](ludo-anim-architecture.md) — doMove deferred until captor's last hop lands; pieceAnims owned by GameBoardScreen; axis-diff hop loop prevents corner drift.
 - [Artifact preview fallback](artifact-preview-fallback.md) — unregistered artifact breaks Screenshot(appPreview); verify via tsc/HMR logs/ImageMagick SVG render instead.
 - [Ludo DZ "DZ" theme rollout](ludo-dz-theme.md) — 3 independent wiring points (colors/rendering/selector) can each be at different completion stages; Phase 1 scope + corner-label gotcha.
+- [Ludo board-theme timing isolation](ludo-theme-timing-isolation.md) — board speed presets are shared; scope theme-only timing overrides locally.

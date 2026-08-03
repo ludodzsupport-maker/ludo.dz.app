@@ -36,6 +36,12 @@ const ANIM = {
   slow:   { cycles: 16, baseMs: 80, stepMs: 42, stiffness: 180, damping: 22, mass: 1.20, hopMs: 240 },
 } as const;
 
+// The shared ANIM presets serve all three board themes. Classic's slow dice
+// tumble uses this local timing only so its real recorded cue can remain
+// recognizably natural while still filling the whole roll animation window.
+// Pawn-hop physics and the Neon/DZ dice timing continue to use ANIM.slow.
+const CLASSIC_SLOW_DICE_TIMING = { cycles: 16, baseMs: 38, stepMs: 20 } as const;
+
 // Mirrors the cycle() scheduling math in handleRoll below to compute the
 // exact total time (ms) from the first tick to the roll resolving, for a
 // given speed preset. Purely a read of ANIM's existing values — it does not
@@ -3534,10 +3540,11 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const handleRoll = useCallback(() => {
     if (rolling || game.phase !== 'rolling' || game.winner) return;
     const rollingPlayer = game.activePlayer; // capture now — must not close over future state
-    // Read timing before triggering audio so the Classic sample can be
-    // trimmed to this roll's exact animation length below. This only reads
-    // ANIM[animSpeed]; the values and the cycle() logic itself are untouched.
-    const { cycles, baseMs, stepMs } = ANIM[animSpeed];
+    // Read timing before triggering audio so the Classic sample and this
+    // cycle() share an exact duration. The local slow override is deliberately
+    // Classic-only; all shared ANIM values remain untouched for Neon and DZ.
+    const { cycles, baseMs, stepMs } =
+      isClassic && animSpeed === 'slow' ? CLASSIC_SLOW_DICE_TIMING : ANIM[animSpeed];
     if (isNeon) playNeonDiceRoll();
     else if (isClassic) playClassicDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
     setRolling(true);

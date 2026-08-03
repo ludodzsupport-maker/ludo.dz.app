@@ -328,8 +328,8 @@ function scheduleWoodKnock(
 // ─── Classic dice roll: real recorded sample ─────────────────────────────────
 // Sourced from a user-provided recording instead of synthesis, for maximum
 // authenticity. Decoded once into an AudioBuffer so playback can start with
-// zero latency and be trimmed sample-accurately to the roll animation's real
-// duration — never stretched, looped, or lengthened past its own length.
+// zero latency and align sample-accurately to the roll animation's real
+// duration.
 const CLASSIC_DICE_ROLL_URL = "sounds/dice-roll-classic.wav";
 let classicDiceRollBuffer: AudioBuffer | null = null;
 let classicDiceRollLoadPromise: Promise<AudioBuffer | null> | null = null;
@@ -373,8 +373,9 @@ if (typeof window !== "undefined") {
  * the caller's own roll-animation length (computed from its existing timing,
  * unchanged here). If the sample would outlast it, playback is trimmed to
  * end exactly at that moment with a short fade so the cut is a clean tail-off
- * rather than an abrupt pop. If the sample is already shorter, it plays
- * through untouched — never stretched or looped to fill the remaining time.
+ * rather than an abrupt pop. If the sample is shorter, it is played once at
+ * the modest rate needed to fill the exact roll window, preserving one
+ * continuous recording without an audible splice or a silent gap.
  * It is separate from both Neon/DZ cues and the Classic pawn/click helpers.
  */
 export function playClassicDiceRoll(rollDurationMs: number): void {
@@ -395,11 +396,16 @@ export function playClassicDiceRoll(rollDurationMs: number): void {
 
     const rollDurationSec = Math.max(0.05, rollDurationMs / 1000);
     if (buffer.duration <= rollDurationSec) {
-      // Sample is already no longer than the roll animation — play it
-      // through as-is, at its natural length.
+      // Slow the complete recording just enough to end with the animation.
+      // The Classic timing presets cap this at a deliberate, bounded 0.649x
+      // for the slow setting; no loop or synthetic filler is introduced.
+      const playbackRate = buffer.duration / rollDurationSec;
+      source.playbackRate.setValueAtTime(playbackRate, now);
       gain.gain.setValueAtTime(1, now);
       source.start(now);
-      source.stop(now + buffer.duration + 0.02);
+      // The buffer naturally exhausts at exactly `rollDurationSec`; this is
+      // only a post-end cleanup guard and does not extend audible playback.
+      source.stop(now + rollDurationSec + 0.02);
       return;
     }
 
