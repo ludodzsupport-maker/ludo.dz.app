@@ -38,6 +38,25 @@ const STORAGE_KEY = "ludo-dz:sound-effects-enabled";
 const NEON_PAWN_MIN_INTERVAL_MS = 38;
 const CLASSIC_PAWN_MIN_INTERVAL_MS = 46;
 
+// Both pawn-step cues (Neon and Classic) were originally hand-tuned against
+// the "normal" animation speed's hop duration. `hopMs` — the caller's own
+// per-hop animation length, unchanged here — lets each cue's envelope scale
+// proportionally instead of staying fixed-length while the visual hop speeds
+// up or slows down. The scale is bounded so it only ever lightly shrinks
+// (Fast/Rapid) or lightly extends (Slow) the cue: enough to track the
+// animation, never enough to lose the "quick footstep" character or drift
+// into a different-sounding cue. At the 150ms reference (the "normal"
+// preset), the scale is exactly 1 — today's tuned sound is unchanged.
+const PAWN_STEP_REFERENCE_HOP_MS = 150;
+const PAWN_STEP_MIN_SCALE = 0.75;
+const PAWN_STEP_MAX_SCALE = 1.35;
+
+function pawnStepTimeScale(hopMs: number | undefined): number {
+  if (!hopMs || !Number.isFinite(hopMs) || hopMs <= 0) return 1;
+  const raw = hopMs / PAWN_STEP_REFERENCE_HOP_MS;
+  return Math.min(PAWN_STEP_MAX_SCALE, Math.max(PAWN_STEP_MIN_SCALE, raw));
+}
+
 // Neon and Classic board cues are intentionally synthesized rather than
 // fetched audio: they start instantly, add no asset/licensing overhead, and
 // stay crisp at any display scale. Their master levels are lower than UI
@@ -243,27 +262,31 @@ export function playNeonClick(): void {
 /**
  * Neon board pawn step: a quiet, high-tech blip with a tiny upward charge.
  * The interval guard avoids stacked transients if animation events ever arrive
- * closer together than the normal hop cadence.
+ * closer together than the normal hop cadence. `hopMs` — the caller's own
+ * per-hop animation length for the active speed setting, unchanged here —
+ * scales the whole envelope (bounded, see `pawnStepTimeScale`) so the blip
+ * tracks Fast/Rapid and Slow hop timing instead of staying fixed-length.
  */
-export function playNeonPawnMove(): void {
+export function playNeonPawnMove(hopMs?: number): void {
   if (!soundEnabled) return;
   const nowMs = typeof performance === "undefined" ? Date.now() : performance.now();
   if (nowMs - lastNeonPawnAt < NEON_PAWN_MIN_INTERVAL_MS) return;
   lastNeonPawnAt = nowMs;
 
+  const scale = pawnStepTimeScale(hopMs);
   playSynthCue((context, now) => {
     const oscillator = context.createOscillator();
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(720, now);
-    oscillator.frequency.exponentialRampToValueAtTime(1080, now + 0.052);
+    oscillator.frequency.exponentialRampToValueAtTime(1080, now + 0.052 * scale);
 
     const gain = context.createGain();
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.052, now + 0.006);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.078);
+    gain.gain.exponentialRampToValueAtTime(0.052, now + 0.006 * scale);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.078 * scale);
     oscillator.connect(gain).connect(context.destination);
     oscillator.start(now);
-    oscillator.stop(now + 0.085);
+    oscillator.stop(now + 0.085 * scale);
   });
 }
 
@@ -368,15 +391,35 @@ if (typeof window !== "undefined") {
   if (warmContext) void loadClassicDiceRollBuffer(warmContext);
 }
 
+// Sample outlasts the roll animation (Fast/Rapid speeds): rather than always
+// starting at the recording's beginning and fading its tail early — which
+// cuts the take off before it resolves — speed it up just enough (capped) to
+// let the *whole* take fit naturally. 1.35x keeps the tumble recognizable
+// instead of chipmunking it. If even that capped rate can't fit the whole
+// take in time, skip into the recording so its own natural ending — not a
+// fade — lands exactly when the roll animation does, matching the resolve
+// tone to the visual landing at any speed.
+const CLASSIC_DICE_MAX_TRIM_RATE = 1.35;
+
 /**
  * Classic board dice: plays the real recorded dice-tumble sample, starting
  * instantly (no delay) when the roll animation begins. `rollDurationMs` is
  * the caller's own roll-animation length (computed from its existing timing,
- * unchanged here). If the sample would outlast it, playback is trimmed to
- * end exactly at that moment with a short fade so the cut is a clean tail-off
- * rather than an abrupt pop. If the sample is shorter, it is played once at
- * the modest rate needed to fill the exact roll window, preserving one
- * continuous recording without an audible splice or a silent gap.
+ * unchanged here).
+ *
+ * If the sample is shorter than the roll, it is played once at the modest
+ * rate needed to fill the exact roll window, preserving one continuous
+ * recording without an audible splice or a silent gap (Normal/Slow — the
+ * Classic timing presets cap this at a deliberate, bounded 0.649x for the
+ * slow setting).
+ *
+ * If the sample would outlast the roll (Fast/Rapid), playback speeds up
+ * (bounded — see `CLASSIC_DICE_MAX_TRIM_RATE`) so the complete take, start to
+ * resolve, fits inside the shorter window instead of being faded off
+ * mid-rattle. If the capped speed-up still isn't enough to fit the whole
+ * take, playback starts partway into the recording instead of fading its
+ * tail, so what plays is always the take's own natural ending rather than an
+ * abrupt or faded cut.
  * It is separate from both Neon/DZ cues and the Classic pawn/click helpers.
  */
 export function playClassicDiceRoll(rollDurationMs: number): void {
@@ -394,6 +437,7 @@ export function playClassicDiceRoll(rollDurationMs: number): void {
     source.buffer = buffer;
     const gain = context.createGain();
     source.connect(gain).connect(context.destination);
+    gain.gain.setValueAtTime(1, now);
 
     const rollDurationSec = Math.max(0.05, rollDurationMs / 1000);
     if (buffer.duration <= rollDurationSec) {
@@ -402,7 +446,6 @@ export function playClassicDiceRoll(rollDurationMs: number): void {
       // for the slow setting; no loop or synthetic filler is introduced.
       const playbackRate = buffer.duration / rollDurationSec;
       source.playbackRate.setValueAtTime(playbackRate, now);
-      gain.gain.setValueAtTime(1, now);
       source.start(now);
       // The buffer naturally exhausts at exactly `rollDurationSec`; this is
       // only a post-end cleanup guard and does not extend audible playback.
@@ -410,15 +453,17 @@ export function playClassicDiceRoll(rollDurationMs: number): void {
       return;
     }
 
-    // Sample outlasts the roll animation: trim playback to match it exactly,
-    // easing out over a short window so the stop reads as a natural
-    // tail-off rather than a hard, clicky cut.
-    const stopAt = now + rollDurationSec;
-    const fadeStart = Math.max(now, stopAt - Math.min(0.09, rollDurationSec * 0.25));
-    gain.gain.setValueAtTime(1, fadeStart);
-    gain.gain.linearRampToValueAtTime(0, stopAt);
-    source.start(now);
-    source.stop(stopAt + 0.02);
+    // Sample outlasts the roll animation: speed it up (capped) so the whole
+    // take fits; skip into the buffer if even the cap isn't enough, so
+    // playback always ends on the recording's real finish.
+    const idealRate = buffer.duration / rollDurationSec;
+    const rate = Math.min(CLASSIC_DICE_MAX_TRIM_RATE, idealRate);
+    source.playbackRate.setValueAtTime(rate, now);
+
+    const bufferSpanPlayed = rollDurationSec * rate; // seconds of buffer consumed at this rate
+    const offset = Math.max(0, buffer.duration - bufferSpanPlayed);
+    source.start(now, offset);
+    source.stop(now + rollDurationSec + 0.02);
   });
 }
 
@@ -438,16 +483,20 @@ export function playClassicClick(): void {
  * set down quickly on a wooden board. Uses the shared wood-knock family
  * (higher-pitched and much shorter than the UI click's deliberate press) so
  * it stays crisp and pleasant through a rapid multi-hop move instead of
- * blurring into the next landing.
+ * blurring into the next landing. `hopMs` — the caller's own per-hop
+ * animation length for the active speed setting, unchanged here — scales the
+ * knock's decay (bounded, see `pawnStepTimeScale`) so it tracks Fast/Rapid
+ * and Slow hop timing instead of staying fixed-length.
  */
-export function playClassicPawnMove(): void {
+export function playClassicPawnMove(hopMs?: number): void {
   if (!soundEnabled) return;
   const nowMs = typeof performance === "undefined" ? Date.now() : performance.now();
   if (nowMs - lastClassicPawnAt < CLASSIC_PAWN_MIN_INTERVAL_MS) return;
   lastClassicPawnAt = nowMs;
 
+  const scale = pawnStepTimeScale(hopMs);
   playSynthCue((context, now) => {
-    scheduleWoodKnock(context, context.destination, now, { amp: 0.30, freq: 500, decay: 0.065, noiseMix: 0.56 });
+    scheduleWoodKnock(context, context.destination, now, { amp: 0.30, freq: 500, decay: 0.065 * scale, noiseMix: 0.56 });
   });
 }
 
