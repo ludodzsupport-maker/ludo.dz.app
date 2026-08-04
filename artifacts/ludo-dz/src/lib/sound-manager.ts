@@ -546,13 +546,13 @@ function scheduleClassicPawnBody(
   noise.start(startTime);
   noise.stop(startTime + noiseDecay + 0.01);
 
-  // Tone — a quick upward pitch-flick into the target pitch (the light
-  // cartoon "pop" attack), then an immediate, fully dry decay. No downward
-  // glide and no sustain: it ends the instant it lands, never lingering into
-  // anything that could read as reverb.
+  // Tone — a very slight upward onset flick into the target pitch, then an
+  // immediate, fully dry decay. Sine wave (not triangle) so there are no odd
+  // harmonics: the result is a clean, smooth polished-stone body rather than
+  // a hollow or boxy one. No downward glide and no sustain.
   const body = context.createOscillator();
-  body.type = "triangle";
-  body.frequency.setValueAtTime(freq * 0.72, startTime);
+  body.type = "sine";
+  body.frequency.setValueAtTime(freq * 0.88, startTime);
   body.frequency.exponentialRampToValueAtTime(freq, startTime + 0.008);
   body.frequency.exponentialRampToValueAtTime(freq * 0.92, startTime + decay);
   const bodyGain = context.createGain();
@@ -599,8 +599,11 @@ export function playClassicPawnMove(hopMs?: number): void {
   const scale = pawnStepTimeScale(hopMs);
   const jitter = 0.97 + Math.random() * 0.06;
   playSynthCue((context, now) => {
+    // Tuned for maximum snap and dryness: lighter amp, higher/brighter pitch,
+    // very short decay (≤40ms even at Slow), and a higher noise mix so the
+    // cue reads as a crisp click-and-clean-tone rather than a tonal body.
     scheduleClassicPawnBody(context, context.destination, now, {
-      amp: 0.44, freq: 560 * jitter, decay: 0.05 * scale, noiseMix: 0.46,
+      amp: 0.36, freq: 640 * jitter, decay: 0.030 * scale, noiseMix: 0.62,
     });
   });
 }
