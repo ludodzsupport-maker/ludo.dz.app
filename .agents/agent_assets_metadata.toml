@@ -112,3 +112,10 @@ uri = "file://attached_assets/generated_audio/bgm_universal_ambient_loop.mp3"
 type = "audio"
 title = "universal ambient loop"
 description = "Generated music: Warm, minimalist, elegant ambient background loop for a casual mobile board game (Ludo). Sustained soft analog synth pads with gentle, slow harmonic movement, a few sparse warm kalim…"
+
+[[outputs]]
+id = "9rwKMVx3ixZZIGAgGsrEi"
+uri = "file://attached_assets/generated_audio/bgm_upbeat_cartoon_loop.mp3"
+type = "audio"
+title = "upbeat cartoon casual loop"
+description = "Generated music: Upbeat, cheerful, playful instrumental loop for a casual mobile board game app — polished, professional, family-friendly production quality. Bouncy, lighthearted mood with a steady, …"

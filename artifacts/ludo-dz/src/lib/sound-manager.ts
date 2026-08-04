@@ -1117,7 +1117,7 @@ export const playModeSelect = playSelection;
 
 const BGM_STORAGE_KEY = "ludo-dz:bgm-enabled";
 const BGM_URL = "sounds/bgm-ambient-loop.mp3";
-const BGM_TARGET_VOLUME = 0.22;      // comfortable ambient bed level (spec range 0.20–0.25)
+const BGM_TARGET_VOLUME = 0.20;      // balanced, non-distracting bed level per spec (~0.20)
 const BGM_FADE_IN_SEC = 1.2;
 const BGM_FADE_OUT_SEC = 1.0;
 const BGM_LOOP_CROSSFADE_SEC = 1.6;  // overlap window that hides any seam at the loop boundary
