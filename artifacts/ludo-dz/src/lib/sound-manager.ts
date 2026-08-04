@@ -172,49 +172,118 @@ function getNeonNoiseBuffer(context: AudioContext): AudioBuffer {
 }
 
 /**
- * Neon board dice: a compact, filtered electronic rattle that resolves into
- * a descending synth tick. It is separate from the generic UI asset system so
- * Classic and DZ never select or load it.
+ * Neon board dice: shares the exact same recorded dice-tumble sample and
+ * duration-sync logic as Classic/DZ (same recognisable rhythm and tactile
+ * impact), then adds three layers of synthesized neon colour on top.
+ *
+ * `rollDurationMs` is the caller's own roll-animation length — identical to
+ * what Classic/DZ already receive so all three themes land in perfect sync.
+ *
+ *   Layer 1 — High-passed sample (digital tumble):
+ *     The Classic recording is routed through a highpass at 900 Hz.  Stripping
+ *     the low-end warmth leaves only the bright, airy upper portion of the
+ *     tumble — recognisably a dice roll, but thin and digital rather than
+ *     acoustic.  Rate/offset logic is identical to Classic so the take always
+ *     lands exactly when the animation does.
+ *
+ *   Layer 2 — Neon glints (three digital sparks):
+ *     Three brief bandpass-filtered bursts from `neonNoiseBuffer` (the same
+ *     lightly-correlated digital noise used by Neon's pawn and click cues)
+ *     fire at 15 %, 45 %, and 72 % of the roll duration.  Each is ~50 ms,
+ *     tuned to a different centre frequency (1 800 / 2 300 / 1 500 Hz) so
+ *     they read as distinct digital "glints" rather than a single repeating
+ *     event.  Quiet (peak 0.15) so they accent rather than compete with the
+ *     sample underneath.
+ *
+ *   Layer 3 — Sci-fi lock-in tone (descending sine resolve):
+ *     A sine oscillator enters during the final portion of the roll and sweeps
+ *     from 1 050 Hz down to 310 Hz, ending exactly as the animation lands.
+ *     This is the defining Neon-board audio signature — the "number confirmed"
+ *     resolve.  Duration is proportional to the roll (capped at 200 ms) so it
+ *     scales gracefully from Fast to Slow without starting before the glints.
+ *
+ * Classic and DZ dice rolls are completely untouched.
  */
-export function playNeonDiceRoll(): void {
+export function playNeonDiceRoll(rollDurationMs: number): void {
   playSynthCue((context, now) => {
-    const master = context.createGain();
-    master.gain.setValueAtTime(0.0001, now);
-    master.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
-    master.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
-    master.connect(context.destination);
+    const rollSec = Math.max(0.05, rollDurationMs / 1000);
 
-    // Filtered noise gives the roll a tactile-but-digital rattle. Three small
-    // gain pulses make the cue satisfying without imitating wooden dice.
-    const noise = context.createBufferSource();
-    noise.buffer = getNeonNoiseBuffer(context);
-    const noiseFilter = context.createBiquadFilter();
-    noiseFilter.type = "bandpass";
-    noiseFilter.frequency.setValueAtTime(1550, now);
-    noiseFilter.frequency.exponentialRampToValueAtTime(780, now + 0.2);
-    noiseFilter.Q.value = 1.6;
-    const noiseGain = context.createGain();
-    noiseGain.gain.setValueAtTime(0.0001, now);
-    noiseGain.gain.linearRampToValueAtTime(0.76, now + 0.018);
-    noiseGain.gain.linearRampToValueAtTime(0.26, now + 0.06);
-    noiseGain.gain.linearRampToValueAtTime(0.58, now + 0.1);
-    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.215);
-    noise.connect(noiseFilter).connect(noiseGain).connect(master);
-    noise.start(now);
-    noise.stop(now + 0.225);
+    // ── Layer 1: recorded sample, high-passed ───────────────────────────────
+    const buffer = classicDiceRollBuffer;
+    if (buffer) {
+      const source = context.createBufferSource();
+      source.buffer = buffer;
 
-    // The triangle tone supplies a clean sci-fi "lock-in" as the rattle ends.
+      // Identical rate/offset logic to playClassicDiceRoll so the take always
+      // ends exactly when the roll animation does at every speed preset.
+      let offset = 0;
+      if (buffer.duration <= rollSec) {
+        source.playbackRate.setValueAtTime(buffer.duration / rollSec, now);
+      } else {
+        const rate = Math.min(CLASSIC_DICE_MAX_TRIM_RATE, buffer.duration / rollSec);
+        source.playbackRate.setValueAtTime(rate, now);
+        offset = Math.max(0, buffer.duration - rollSec * rate);
+      }
+
+      // Highpass strips acoustic warmth → bright digital tumble character.
+      const hp = context.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.setValueAtTime(900, now);
+      hp.Q.value = 0.7;
+
+      const sampleGain = context.createGain();
+      sampleGain.gain.setValueAtTime(0.70, now);
+
+      source.connect(hp).connect(sampleGain).connect(context.destination);
+      source.start(now, offset);
+      source.stop(now + rollSec + 0.02);
+    } else {
+      // Not decoded yet — queue a retry for the next roll, never block.
+      void loadClassicDiceRollBuffer(context);
+    }
+
+    // ── Layer 2: neon glints ────────────────────────────────────────────────
+    // Three digital sparks spread across the roll.  Each uses a fresh
+    // BufferSource so start() can be called at a future scheduled time.
+    const glintDefs: Array<{ tRel: number; freq: number }> = [
+      { tRel: 0.15, freq: 1800 },
+      { tRel: 0.45, freq: 2300 },
+      { tRel: 0.72, freq: 1500 },
+    ];
+    for (const { tRel, freq } of glintDefs) {
+      const t = now + rollSec * tRel;
+      const glint = context.createBufferSource();
+      glint.buffer = getNeonNoiseBuffer(context);
+      const glintFilter = context.createBiquadFilter();
+      glintFilter.type = "bandpass";
+      glintFilter.frequency.setValueAtTime(freq, t);
+      glintFilter.Q.value = 2.2;
+      const glintGain = context.createGain();
+      glintGain.gain.setValueAtTime(0.0001, t);
+      glintGain.gain.linearRampToValueAtTime(0.15, t + 0.008);
+      glintGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.050);
+      glint.connect(glintFilter).connect(glintGain).connect(context.destination);
+      glint.start(t);
+      glint.stop(t + 0.060);
+    }
+
+    // ── Layer 3: sci-fi lock-in tone ────────────────────────────────────────
+    // Descending sine that sweeps in during the roll's final portion and ends
+    // exactly at the animation landing point.  Duration is proportional to
+    // the roll (capped at 200 ms) so it always starts after the last glint.
+    const resolveDur = Math.min(0.200, rollSec * 0.38);
+    const resolveAt  = now + rollSec - resolveDur;
     const tone = context.createOscillator();
-    tone.type = "triangle";
-    tone.frequency.setValueAtTime(1180, now);
-    tone.frequency.exponentialRampToValueAtTime(330, now + 0.19);
+    tone.type = "sine";
+    tone.frequency.setValueAtTime(1050, resolveAt);
+    tone.frequency.exponentialRampToValueAtTime(310, resolveAt + resolveDur);
     const toneGain = context.createGain();
-    toneGain.gain.setValueAtTime(0.0001, now);
-    toneGain.gain.exponentialRampToValueAtTime(0.5, now + 0.018);
-    toneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
-    tone.connect(toneGain).connect(master);
-    tone.start(now);
-    tone.stop(now + 0.21);
+    toneGain.gain.setValueAtTime(0.0001, resolveAt);
+    toneGain.gain.exponentialRampToValueAtTime(0.13, resolveAt + 0.012);
+    toneGain.gain.exponentialRampToValueAtTime(0.0001, resolveAt + resolveDur);
+    tone.connect(toneGain).connect(context.destination);
+    tone.start(resolveAt);
+    tone.stop(resolveAt + resolveDur + 0.010);
   });
 }
 

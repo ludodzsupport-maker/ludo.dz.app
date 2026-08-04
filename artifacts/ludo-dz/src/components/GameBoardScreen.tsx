@@ -3550,7 +3550,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     // dice-roll-only; all shared ANIM values and Neon timing stay untouched.
     const { cycles, baseMs, stepMs } =
       (isClassic || isDz) && animSpeed === 'slow' ? CLASSIC_SLOW_DICE_TIMING : ANIM[animSpeed];
-    if (isNeon) playNeonDiceRoll();
+    if (isNeon) playNeonDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
     else if (isClassic) playClassicDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
     else if (isDz) playDzDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
     setRolling(true);
