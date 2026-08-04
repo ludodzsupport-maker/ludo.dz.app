@@ -669,15 +669,129 @@ export function playDzClick(): void {
   });
 }
 
+let dzPlopNoiseBuffer: AudioBuffer | null = null;
+
 /**
- * DZ board pawn step: a short, clean resonant tap — brighter and more
- * "polished" than Classic's dry wooden tok, with a faint gold-shimmer glint
- * standing in for a gold-inlay accent, so it stays pleasant and distinct
- * through a rapid multi-hop move instead of blurring together. `hopMs` — the
- * caller's own per-hop animation length for the active speed setting,
- * unchanged here — scales the knock's decay (bounded, see
- * `pawnStepTimeScale`) exactly as Neon's and Classic's pawn cues do, so all
- * three themes track Fast/Rapide and Lent consistently.
+ * Dedicated noise texture for the DZ pawn-step "plop" only — distinct from
+ * `getDzNoiseBuffer` (shared by DZ's click) and from the dice roll's own
+ * buffer, so retuning this cue's tactile contact can never bleed into either.
+ * Lightly correlated (between Neon's crisp 0.28 and the shared DZ knock's
+ * 0.48) so a lowpass still rounds it into a soft "tok" rather than a hiss.
+ */
+function getDzPlopNoiseBuffer(context: AudioContext): AudioBuffer {
+  if (dzPlopNoiseBuffer?.sampleRate === context.sampleRate) return dzPlopNoiseBuffer;
+  const duration = 0.05;
+  const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+  const samples = buffer.getChannelData(0);
+  for (let i = 0; i < samples.length; i++) {
+    const previous = i === 0 ? 0 : samples[i - 1] * 0.4;
+    samples[i] = previous + (Math.random() * 2 - 1) * 0.6;
+  }
+  dzPlopNoiseBuffer = buffer;
+  return buffer;
+}
+
+/**
+ * One "juicy" cartoon-plop contact for the DZ pawn step. Deliberately built
+ * differently from `scheduleDzKnock` (DZ's click/dice-adjacent resonant
+ * family, untouched): no bandpass-resonant noise and no bright triangle
+ * overtone — instead a dual sine oscillator pitch-bend (the classic
+ * cartoon "plop" technique: a fast downward glide reads as playful/organic
+ * in a way a fixed pitch never does) plus a soft low-pass-filtered contact
+ * thump for tactile touch. `freq` is the plop's starting pitch; the sub
+ * layer and noise cutoff are derived from it so one knob tunes the whole
+ * voice. Shimmer is the same gold-glint motif as the rest of the DZ family,
+ * kept much quieter here so it reads as a light premium polish rather than
+ * competing with the plop itself.
+ */
+function scheduleDzPlop(
+  context: AudioContext,
+  bus: AudioNode,
+  startTime: number,
+  { amp, freq, decay, shimmerAmp, shimmerFreq, shimmerDecay }: {
+    amp: number; freq: number; decay: number;
+    shimmerAmp: number; shimmerFreq: number; shimmerDecay: number;
+  },
+): void {
+  // Tactile contact — soft low-pass filtered noise (no resonant peak, no
+  // high-frequency hiss) standing in for the wood-bounce touch of contact.
+  const noise = context.createBufferSource();
+  noise.buffer = getDzPlopNoiseBuffer(context);
+  const noiseFilter = context.createBiquadFilter();
+  noiseFilter.type = "lowpass";
+  noiseFilter.frequency.setValueAtTime(freq * 1.7, startTime);
+  noiseFilter.Q.value = 0.7;
+  const noiseGain = context.createGain();
+  const noiseDecay = decay * 0.3;
+  noiseGain.gain.setValueAtTime(0.0001, startTime);
+  noiseGain.gain.linearRampToValueAtTime(amp * 0.3, startTime + 0.004);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + noiseDecay);
+  noise.connect(noiseFilter).connect(noiseGain).connect(bus);
+  noise.start(startTime);
+  noise.stop(startTime + noiseDecay + 0.02);
+
+  // Main plop body — a bare sine gliding fast from mid pitch down toward its
+  // low end. That downward bend, not the tone itself, is what makes it read
+  // as a bouncy cartoon "plop" instead of a flat beep; a sine keeps it warm
+  // and round instead of tinny.
+  const body = context.createOscillator();
+  body.type = "sine";
+  body.frequency.setValueAtTime(freq, startTime);
+  body.frequency.exponentialRampToValueAtTime(freq * 0.42, startTime + decay);
+  const bodyGain = context.createGain();
+  bodyGain.gain.setValueAtTime(0.0001, startTime);
+  bodyGain.gain.linearRampToValueAtTime(amp, startTime + 0.003);
+  bodyGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
+  body.connect(bodyGain).connect(bus);
+  body.start(startTime);
+  body.stop(startTime + decay + 0.02);
+
+  // Sub layer — a second, lower sine gliding even further down and lingering
+  // a touch longer, for the "deep, premium" low-mid weight underneath the
+  // plop without doubling its exact pitch (avoids a phasey/beating clash).
+  const subDecay = decay * 1.25;
+  const sub = context.createOscillator();
+  sub.type = "sine";
+  sub.frequency.setValueAtTime(freq * 0.46, startTime);
+  sub.frequency.exponentialRampToValueAtTime(freq * 0.46 * 0.55, startTime + subDecay);
+  const subGain = context.createGain();
+  subGain.gain.setValueAtTime(0.0001, startTime);
+  subGain.gain.linearRampToValueAtTime(amp * 0.56, startTime + 0.005);
+  subGain.gain.exponentialRampToValueAtTime(0.0001, startTime + subDecay);
+  sub.connect(subGain).connect(bus);
+  sub.start(startTime);
+  sub.stop(startTime + subDecay + 0.02);
+
+  // Faint gold-glint accent — the DZ family's shared premium signature, kept
+  // very quiet here so it polishes the plop without turning it "resonant."
+  if (shimmerAmp > 0) {
+    const shimmer = context.createOscillator();
+    shimmer.type = "sine";
+    shimmer.frequency.setValueAtTime(shimmerFreq, startTime);
+    const shimmerGain = context.createGain();
+    shimmerGain.gain.setValueAtTime(0.0001, startTime);
+    shimmerGain.gain.linearRampToValueAtTime(shimmerAmp, startTime + 0.003);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.0001, startTime + shimmerDecay);
+    shimmer.connect(shimmerGain).connect(bus);
+    shimmer.start(startTime);
+    shimmer.stop(startTime + shimmerDecay + 0.02);
+  }
+}
+
+/**
+ * DZ board pawn step: a deep, premium tactile thud blended with a fun, juicy
+ * cartoon pop/plop — a dual-oscillator pitch-bend body (see `scheduleDzPlop`)
+ * plus a tiny, quieter echo of the same plop ~30ms later standing in for a
+ * soft second bounce, which is most of what makes it feel "juicy" rather
+ * than a single flat hit. Deliberately not built on `scheduleDzKnock` (DZ's
+ * click, untouched) — that family is a resonant knock; this one is a round,
+ * bouncy plop, so the two stay clearly distinct even though both carry the
+ * same DZ gold-glint accent. `hopMs` — the caller's own per-hop animation
+ * length for the active speed setting, unchanged here — scales the plop's
+ * envelope (bounded, see `pawnStepTimeScale`) exactly as Neon's and
+ * Classic's pawn cues do, so all three themes track Fast/Rapide and Lent
+ * consistently; a small per-hop pitch jitter keeps a rapid multi-hop dash
+ * from sounding mechanically identical.
  */
 export function playDzPawnMove(hopMs?: number): void {
   if (!soundEnabled) return;
@@ -686,11 +800,18 @@ export function playDzPawnMove(hopMs?: number): void {
   lastDzPawnAt = nowMs;
 
   const scale = pawnStepTimeScale(hopMs);
+  const jitter = 0.97 + Math.random() * 0.06;
   playSynthCue((context, now) => {
-    scheduleDzKnock(context, context.destination, now, {
-      amp: 0.27, freq: 640, decay: 0.058 * scale,
-      shimmerAmp: 0.045, shimmerFreq: 2600, shimmerDecay: 0.035 * scale,
-      noiseMix: 0.18,
+    scheduleDzPlop(context, context.destination, now, {
+      amp: 0.34, freq: 355 * jitter, decay: 0.05 * scale,
+      shimmerAmp: 0.026, shimmerFreq: 2200, shimmerDecay: 0.016 * scale,
+    });
+    // Tiny secondary bounce — a quieter, higher echo of the same plop, the
+    // "extra juice" layer that reads as a satisfying little settle rather
+    // than one clean hit stopping cold.
+    scheduleDzPlop(context, context.destination, now + 0.03 * scale, {
+      amp: 0.11, freq: 300 * jitter, decay: 0.022 * scale,
+      shimmerAmp: 0, shimmerFreq: 2200, shimmerDecay: 0.01,
     });
   });
 }
