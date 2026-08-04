@@ -12,20 +12,25 @@ import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
 import type { GameConfig } from './GameConfigOverlay';
 import {
+  pauseBgmForGameplay,
   playClassicCapture,
   playClassicClick,
   playClassicDiceRoll,
   playClassicPawnMove,
+  playClassicWelcomeJingle,
   playDzClick,
   playDzDiceRoll,
   playDzPawnMove,
+  playDzWelcomeJingle,
   playIconTap,
   playNeonClick,
   playNavBack,
   playNeonDiceRoll,
   playNeonPawnMove,
+  playNeonWelcomeJingle,
   playPrimaryAction,
   playSelection,
+  resumeBgmForMenu,
 } from '../lib/sound-manager';
 import { vibrateDiceRoll, vibratePawnStep, vibrateCaptureOrWin } from '../lib/haptics-manager';
 
@@ -3768,6 +3773,20 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       triggerMove(redirect);
     }
   }, [isHumanTurn, isNeon, isClassic, isDz, triggerMove]);
+
+  // ── Screen-entry audio — pause menu BGM the instant gameplay starts, play
+  // the active theme's welcome jingle once, and resume BGM (if still enabled
+  // in Settings) the moment this screen unmounts back to a menu. Empty deps:
+  // this must fire exactly once per real board entry/exit. "Play Again"
+  // (handleRestart) resets game state in place without unmounting this
+  // component, so it correctly does not replay the jingle or re-cycle BGM.
+  useEffect(() => {
+    pauseBgmForGameplay();
+    if (isNeon) playNeonWelcomeJingle();
+    else if (isClassic) playClassicWelcomeJingle();
+    else if (isDz) playDzWelcomeJingle();
+    return () => { resumeBgmForMenu(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Win haptic — fires exactly once, the moment game.winner is first set ─
   useEffect(() => {

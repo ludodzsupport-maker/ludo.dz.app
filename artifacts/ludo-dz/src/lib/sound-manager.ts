@@ -362,6 +362,126 @@ export function playNeonPawnMove(hopMs?: number): void {
   });
 }
 
+/**
+ * Shared building block for `playNeonWelcomeJingle`'s arpeggio notes: a
+ * bright triangle tone (the same waveform as Neon's click attack, for family
+ * consistency) with a quick, clean decay — a melodic sibling to the noise/
+ * sweep layers used elsewhere in this cue. Not reused by any other cue, so
+ * tuning it can never affect the click, pawn, or dice sounds above.
+ */
+function scheduleNeonChimeNote(
+  context: AudioContext,
+  bus: AudioNode,
+  startTime: number,
+  { amp, freq, decay }: { amp: number; freq: number; decay: number },
+): void {
+  const tone = context.createOscillator();
+  tone.type = "triangle";
+  tone.frequency.setValueAtTime(freq, startTime);
+  const gain = context.createGain();
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.linearRampToValueAtTime(amp, startTime + 0.004);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
+  tone.connect(gain).connect(bus);
+  tone.start(startTime);
+  tone.stop(startTime + decay + 0.02);
+}
+
+/**
+ * Neon board welcome jingle: an energetic cyber "boot-up" chime — a rising
+ * filtered-sawtooth power-up sweep, a bright ascending four-note arpeggio
+ * (stacked perfect fourths, for an angular, futuristic interval rather than
+ * a conventional major scale), digital glint bursts (the exact
+ * `getNeonNoiseBuffer` bandpass-burst technique used by the dice roll's
+ * Layer 2), and a final bright two-note "system ready" ping.
+ *
+ * Total length ≈ 1.55s, comfortably inside the 1.5–2.5s brief and dry enough
+ * to never bleed into the first dice roll — which always waits for the human
+ * player's own tap (player 0 always starts and the "AI roll" effect below
+ * explicitly skips activePlayer 0), so there is no automatic roll timer to
+ * race against.
+ *
+ * Plays once when the Game Board screen mounts; gated on the Sound Effects
+ * setting via `playSynthCue`, completely independent of the Background Music
+ * toggle (see `pauseBgmForGameplay`/`resumeBgmForMenu` below).
+ */
+export function playNeonWelcomeJingle(): void {
+  playSynthCue((context, now) => {
+    // ── Power-up sweep — rising sawtooth through a rising bandpass filter ──
+    const sweepDur = 0.28;
+    const sweep = context.createOscillator();
+    sweep.type = "sawtooth";
+    sweep.frequency.setValueAtTime(160, now);
+    sweep.frequency.exponentialRampToValueAtTime(1100, now + sweepDur);
+    const sweepFilter = context.createBiquadFilter();
+    sweepFilter.type = "bandpass";
+    sweepFilter.Q.value = 0.9;
+    sweepFilter.frequency.setValueAtTime(400, now);
+    sweepFilter.frequency.exponentialRampToValueAtTime(3200, now + sweepDur);
+    const sweepGain = context.createGain();
+    sweepGain.gain.setValueAtTime(0.0001, now);
+    sweepGain.gain.linearRampToValueAtTime(0.10, now + 0.03);
+    sweepGain.gain.exponentialRampToValueAtTime(0.0001, now + sweepDur);
+    sweep.connect(sweepFilter).connect(sweepGain).connect(context.destination);
+    sweep.start(now);
+    sweep.stop(now + sweepDur + 0.02);
+
+    // ── Ascending arpeggio — perfect fourths for an angular, sci-fi shape ──
+    const A4 = 440.00, D5 = 587.33, A5 = 880.00, D6 = 1174.66;
+    scheduleNeonChimeNote(context, context.destination, now + 0.30, { amp: 0.17, freq: A4, decay: 0.14 });
+    scheduleNeonChimeNote(context, context.destination, now + 0.44, { amp: 0.19, freq: D5, decay: 0.14 });
+    scheduleNeonChimeNote(context, context.destination, now + 0.58, { amp: 0.21, freq: A5, decay: 0.16 });
+    scheduleNeonChimeNote(context, context.destination, now + 0.74, { amp: 0.23, freq: D6, decay: 0.18 });
+
+    // ── Digital glints — same technique as playNeonDiceRoll's Layer 2 ──────
+    const glintDefs: Array<{ t: number; freq: number }> = [
+      { t: 0.10, freq: 1900 },
+      { t: 0.50, freq: 2300 },
+      { t: 0.80, freq: 2700 },
+    ];
+    for (const { t, freq } of glintDefs) {
+      const at = now + t;
+      const glint = context.createBufferSource();
+      glint.buffer = getNeonNoiseBuffer(context);
+      const glintFilter = context.createBiquadFilter();
+      glintFilter.type = "bandpass";
+      glintFilter.frequency.setValueAtTime(freq, at);
+      glintFilter.Q.value = 2.2;
+      const glintGain = context.createGain();
+      glintGain.gain.setValueAtTime(0.0001, at);
+      glintGain.gain.linearRampToValueAtTime(0.13, at + 0.008);
+      glintGain.gain.exponentialRampToValueAtTime(0.0001, at + 0.050);
+      glint.connect(glintFilter).connect(glintGain).connect(context.destination);
+      glint.start(at);
+      glint.stop(at + 0.06);
+    }
+
+    // ── Final "system ready" ping — bright ascending dyad ──────────────────
+    const pingAt = now + 0.94;
+    const ping1 = context.createOscillator();
+    ping1.type = "sine";
+    ping1.frequency.setValueAtTime(D6, pingAt);
+    const ping1Gain = context.createGain();
+    ping1Gain.gain.setValueAtTime(0.0001, pingAt);
+    ping1Gain.gain.linearRampToValueAtTime(0.26, pingAt + 0.006);
+    ping1Gain.gain.exponentialRampToValueAtTime(0.0001, pingAt + 0.6);
+    ping1.connect(ping1Gain).connect(context.destination);
+    ping1.start(pingAt);
+    ping1.stop(pingAt + 0.62);
+
+    const ping2 = context.createOscillator();
+    ping2.type = "sine";
+    ping2.frequency.setValueAtTime(1760.00, pingAt);
+    const ping2Gain = context.createGain();
+    ping2Gain.gain.setValueAtTime(0.0001, pingAt);
+    ping2Gain.gain.linearRampToValueAtTime(0.13, pingAt + 0.006);
+    ping2Gain.gain.exponentialRampToValueAtTime(0.0001, pingAt + 0.5);
+    ping2.connect(ping2Gain).connect(context.destination);
+    ping2.start(pingAt);
+    ping2.stop(pingAt + 0.52);
+  });
+}
+
 function getWoodNoiseBuffer(context: AudioContext): AudioBuffer {
   if (woodNoiseBuffer?.sampleRate === context.sampleRate) return woodNoiseBuffer;
   const duration = 0.22;
@@ -745,6 +865,101 @@ export function playClassicCapture(): void {
   });
 }
 
+/**
+ * Shared building block for `playClassicWelcomeJingle`'s marimba-style
+ * notes: a sine fundamental (the mallet bar's main pitch) plus a quiet,
+ * fast-decaying overtone near 4x the fundamental (a mallet instrument's
+ * bright upper partial, which always fades far quicker than the main
+ * pitch), with a hairline high-passed noise "chiff" on the attack standing
+ * in for the mallet strike. Kept fully separate from `scheduleWoodKnock`/
+ * `scheduleClassicPawnBody` (both untouched) — this is a melodic mallet
+ * voice, not a contact knock, so tuning it cannot affect the click,
+ * capture, or pawn cues built on those helpers.
+ */
+function scheduleMarimbaNote(
+  context: AudioContext,
+  bus: AudioNode,
+  startTime: number,
+  { amp, freq, decay }: { amp: number; freq: number; decay: number },
+): void {
+  // Mallet attack chiff — a hairline, near-instant noise tick, much shorter
+  // and quieter than the wood family's own contact transient.
+  const chiff = context.createBufferSource();
+  chiff.buffer = getWoodNoiseBuffer(context);
+  const chiffFilter = context.createBiquadFilter();
+  chiffFilter.type = "bandpass";
+  chiffFilter.frequency.setValueAtTime(freq * 3.2, startTime);
+  chiffFilter.Q.value = 1.2;
+  const chiffGain = context.createGain();
+  chiffGain.gain.setValueAtTime(0.0001, startTime);
+  chiffGain.gain.linearRampToValueAtTime(amp * 0.28, startTime + 0.002);
+  chiffGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.014);
+  chiff.connect(chiffFilter).connect(chiffGain).connect(bus);
+  chiff.start(startTime);
+  chiff.stop(startTime + 0.02);
+
+  // Fundamental — the mallet bar's main pitch.
+  const body = context.createOscillator();
+  body.type = "sine";
+  body.frequency.setValueAtTime(freq, startTime);
+  const bodyGain = context.createGain();
+  bodyGain.gain.setValueAtTime(0.0001, startTime);
+  bodyGain.gain.linearRampToValueAtTime(amp, startTime + 0.006);
+  bodyGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
+  body.connect(bodyGain).connect(bus);
+  body.start(startTime);
+  body.stop(startTime + decay + 0.02);
+
+  // Bright, fast-decaying upper partial — marimba bars ring a quiet high
+  // overtone that fades far quicker than the fundamental, giving the
+  // "wooden mallet" identity rather than a flute-like pure tone.
+  const overtone = context.createOscillator();
+  overtone.type = "sine";
+  overtone.frequency.setValueAtTime(freq * 3.93, startTime);
+  const overtoneGain = context.createGain();
+  const overtoneDecay = Math.min(decay * 0.4, 0.09);
+  overtoneGain.gain.setValueAtTime(0.0001, startTime);
+  overtoneGain.gain.linearRampToValueAtTime(amp * 0.22, startTime + 0.004);
+  overtoneGain.gain.exponentialRampToValueAtTime(0.0001, startTime + overtoneDecay);
+  overtone.connect(overtoneGain).connect(bus);
+  overtone.start(startTime);
+  overtone.stop(startTime + overtoneDecay + 0.02);
+}
+
+/**
+ * Classic board welcome jingle: a clean, upbeat marimba fanfare that greets
+ * the player the instant a match begins — a "do-mi-sol" bugle-call shape
+ * with a short turn and a held, harmonized landing note (fifth below the
+ * top note, filling it into a small chord). Entirely dry, with no reverb or
+ * delay of any kind — matching the Classic family's established "no echo"
+ * direction (see `scheduleClassicPawnBody`).
+ *
+ * Total length ≈ 1.8s, comfortably inside the 1.5–2.5s brief and dry enough
+ * to never bleed into the first dice roll — which always waits for the human
+ * player's own tap (player 0 always starts and the "AI roll" effect below
+ * explicitly skips activePlayer 0), so there is no automatic roll timer to
+ * race against.
+ *
+ * Plays once when the Game Board screen mounts; gated on the Sound Effects
+ * setting via `playSynthCue`, completely independent of the Background Music
+ * toggle (see `pauseBgmForGameplay`/`resumeBgmForMenu` below).
+ */
+export function playClassicWelcomeJingle(): void {
+  playSynthCue((context, now) => {
+    const PICKUP_G4 = 392.00;
+    const C5 = 523.25, E5 = 659.25, G5 = 783.99, C6 = 1046.50;
+
+    scheduleMarimbaNote(context, context.destination, now, { amp: 0.11, freq: PICKUP_G4, decay: 0.09 });
+    scheduleMarimbaNote(context, context.destination, now + 0.11, { amp: 0.22, freq: C5, decay: 0.18 });
+    scheduleMarimbaNote(context, context.destination, now + 0.27, { amp: 0.24, freq: E5, decay: 0.18 });
+    scheduleMarimbaNote(context, context.destination, now + 0.43, { amp: 0.26, freq: G5, decay: 0.20 });
+    scheduleMarimbaNote(context, context.destination, now + 0.63, { amp: 0.20, freq: E5, decay: 0.16 });
+    // Held landing chord — the fanfare's resolution.
+    scheduleMarimbaNote(context, context.destination, now + 0.81, { amp: 0.30, freq: C6, decay: 1.0 });
+    scheduleMarimbaNote(context, context.destination, now + 0.81, { amp: 0.15, freq: G5, decay: 0.85 });
+  });
+}
+
 // ─── DZ (Algerian) board cues ───────────────────────────────────────────────
 // A third synthesized family, distinct from both Neon's digital sweep and
 // Classic's plain wood: a warm resonant body (suggesting polished stone or a
@@ -1046,6 +1261,120 @@ export function playDzPawnSelect(): void {
     scheduleDzPlop(context, context.destination, now, {
       amp: 0.40, freq: 400 * jitter, decay: 0.065,
       shimmerAmp: 0.05, shimmerFreq: 2600, shimmerDecay: 0.055,
+    });
+  });
+}
+
+/**
+ * Shared building block for `playDzWelcomeJingle`'s notes: the same warm
+ * two-partial body (fundamental + a fifth above) as `scheduleDzKnock`, tuned
+ * with a longer, ringing decay plus a bright inharmonic "ting" so each note
+ * reads as a small struck-metal chime (finger-cymbal/sagat family) rather
+ * than a resonant knock. Deliberately its own helper — not `scheduleDzKnock`
+ * or `scheduleDzPlop` (both untouched) — since a melodic run needs a longer
+ * ring than either of those contact envelopes was tuned for.
+ */
+function scheduleDzChimeNote(
+  context: AudioContext,
+  bus: AudioNode,
+  startTime: number,
+  {
+    amp, freq, decay, shimmer,
+  }: { amp: number; freq: number; decay: number; shimmer?: { amp: number; freq: number; decay: number } },
+): void {
+  // Fundamental — a struck, bell-like body.
+  const body = context.createOscillator();
+  body.type = "triangle";
+  body.frequency.setValueAtTime(freq, startTime);
+  const bodyGain = context.createGain();
+  bodyGain.gain.setValueAtTime(0.0001, startTime);
+  bodyGain.gain.linearRampToValueAtTime(amp, startTime + 0.005);
+  bodyGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
+  body.connect(bodyGain).connect(bus);
+  body.start(startTime);
+  body.stop(startTime + decay + 0.02);
+
+  // A fifth above, quieter and shorter — the same resonant-body ratio as
+  // scheduleDzKnock, giving the note a struck-metal shimmer instead of a
+  // flat single pitch.
+  const overtone = context.createOscillator();
+  overtone.type = "triangle";
+  overtone.frequency.setValueAtTime(freq * 1.5, startTime);
+  const overtoneGain = context.createGain();
+  const overtoneDecay = decay * 0.6;
+  overtoneGain.gain.setValueAtTime(0.0001, startTime);
+  overtoneGain.gain.linearRampToValueAtTime(amp * 0.30, startTime + 0.004);
+  overtoneGain.gain.exponentialRampToValueAtTime(0.0001, startTime + overtoneDecay);
+  overtone.connect(overtoneGain).connect(bus);
+  overtone.start(startTime);
+  overtone.stop(startTime + overtoneDecay + 0.02);
+
+  // Bright inharmonic "ting" — a small metallic bell/finger-cymbal accent on
+  // every note, so the whole run reads as one coherent struck-metal chime.
+  const ting = context.createOscillator();
+  ting.type = "sine";
+  ting.frequency.setValueAtTime(freq * 3.0, startTime);
+  const tingGain = context.createGain();
+  const tingDecay = Math.min(decay * 0.35, 0.08);
+  tingGain.gain.setValueAtTime(0.0001, startTime);
+  tingGain.gain.linearRampToValueAtTime(amp * 0.20, startTime + 0.003);
+  tingGain.gain.exponentialRampToValueAtTime(0.0001, startTime + tingDecay);
+  ting.connect(tingGain).connect(bus);
+  ting.start(startTime);
+  ting.stop(startTime + tingDecay + 0.02);
+
+  // Gold-glint shimmer — only on notes that request it (the landing note),
+  // the same closely-detuned high-sine-pair motif used by every other DZ cue.
+  if (shimmer) {
+    for (const [index, f] of [shimmer.freq, shimmer.freq * 1.025].entries()) {
+      const glint = context.createOscillator();
+      glint.type = "sine";
+      glint.frequency.setValueAtTime(f, startTime);
+      const glintGain = context.createGain();
+      const gain = shimmer.amp * (index === 0 ? 1 : 0.7);
+      glintGain.gain.setValueAtTime(0.0001, startTime);
+      glintGain.gain.linearRampToValueAtTime(gain, startTime + 0.004);
+      glintGain.gain.exponentialRampToValueAtTime(0.0001, startTime + shimmer.decay);
+      glint.connect(glintGain).connect(bus);
+      glint.start(startTime);
+      glint.stop(startTime + shimmer.decay + 0.02);
+    }
+  }
+}
+
+/**
+ * DZ board welcome jingle: a cheerful, rhythmic chime with a subtle
+ * Algerian/oriental melodic accent — a Hijaz-flavored tetrachord (root, flat
+ * second, augmented second, perfect fourth: the half-step / augmented-second
+ * / half-step pattern behind Middle Eastern melody's signature color),
+ * opened with a rhythmic tonic pulse and closed on the octave with the DZ
+ * family's own gold-glint shimmer.
+ *
+ * Total length ≈ 1.8s, comfortably inside the 1.5–2.5s brief and dry enough
+ * to never bleed into the first dice roll — which always waits for the human
+ * player's own tap (player 0 always starts and the "AI roll" effect below
+ * explicitly skips activePlayer 0), so there is no automatic roll timer to
+ * race against.
+ *
+ * Plays once when the Game Board screen mounts; gated on the Sound Effects
+ * setting via `playSynthCue`, completely independent of the Background Music
+ * toggle (see `pauseBgmForGameplay`/`resumeBgmForMenu` below).
+ */
+export function playDzWelcomeJingle(): void {
+  playSynthCue((context, now) => {
+    const D4 = 293.66, Eb4 = 311.13, FSharp4 = 369.99, G4 = 392.00, D5 = 587.33;
+
+    // Rhythmic pulse on the tonic — the "rhythmic chime" character.
+    scheduleDzChimeNote(context, context.destination, now, { amp: 0.24, freq: D4, decay: 0.15 });
+    scheduleDzChimeNote(context, context.destination, now + 0.15, { amp: 0.19, freq: D4, decay: 0.13 });
+    // Hijaz tetrachord run: half-step, augmented second, half-step.
+    scheduleDzChimeNote(context, context.destination, now + 0.31, { amp: 0.22, freq: Eb4, decay: 0.15 });
+    scheduleDzChimeNote(context, context.destination, now + 0.48, { amp: 0.25, freq: FSharp4, decay: 0.17 });
+    scheduleDzChimeNote(context, context.destination, now + 0.67, { amp: 0.24, freq: G4, decay: 0.17 });
+    // Landing on the octave, held, with the family's gold-glint signature.
+    scheduleDzChimeNote(context, context.destination, now + 0.87, {
+      amp: 0.30, freq: D5, decay: 0.90,
+      shimmer: { amp: 0.09, freq: 2600, decay: 0.7 },
     });
   });
 }
@@ -1398,4 +1727,36 @@ export function setBgmEnabled(enabled: boolean): void {
   } else {
     stopBgm(context);
   }
+}
+
+/**
+ * Suspend Background Music for active gameplay, without touching the user's
+ * persisted "Background Music" preference at all — a purely transient,
+ * screen-scoped pause. Call this once when the Game Board screen mounts.
+ * Reuses `stopBgm`'s existing fade-out (see `BGM_FADE_OUT_SEC`), so the menu
+ * loop ducks out smoothly rather than cutting off mid-note, and is a no-op
+ * if BGM isn't currently playing (e.g. the setting is already off).
+ */
+export function pauseBgmForGameplay(): void {
+  const context = getSynthAudioContext();
+  if (!context) return;
+  stopBgm(context);
+}
+
+/**
+ * Resume Background Music when leaving gameplay back to Home/Menu screens —
+ * but only if the user's "Background Music" setting is still on; otherwise
+ * this is a no-op, so a player who muted BGM mid-session never has it
+ * reappear on its own. Call this once when the Game Board screen unmounts
+ * (header back button or the victory modal's "Menu" button — both leave
+ * `screen: 'game'`; "Play Again" restarts in place and never unmounts this
+ * screen, so it correctly never triggers this). Mirrors the same
+ * `resume()` + `startBgm` sequence `setBgmEnabled(true)` already uses, so it
+ * shares the identical fade-in behavior as toggling BGM on from Settings.
+ */
+export function resumeBgmForMenu(): void {
+  if (!bgmEnabled) return;
+  const context = getSynthAudioContext();
+  if (!context) return;
+  void context.resume().then(() => startBgm(context)).catch(() => {});
 }
