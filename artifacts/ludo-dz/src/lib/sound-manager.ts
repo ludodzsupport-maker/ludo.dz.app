@@ -641,21 +641,119 @@ function scheduleDzKnock(
   }
 }
 
-const DZ_DICE_ATTACK_MS = 45;
-const DZ_DICE_RESOLVE_MS = 270;
-const DZ_DICE_IDEAL_SPACING_MS = 125;
-const DZ_DICE_MAX_REPEATS = 14;
+const DZ_CARPET_ATTACK_MS = 70;
+const DZ_CARPET_RESOLVE_MS = 340;
+const DZ_CARPET_IDEAL_SPACING_MS = 120;
+const DZ_CARPET_MAX_REPEATS = 14;
+
+let dzCarpetNoiseBuffer: AudioBuffer | null = null;
 
 /**
- * DZ board dice: a warm, premium tumble built from a repeating resonant
- * "knock + gold shimmer" unit rather than a fixed-length recording, so it
- * naturally spans any roll duration instead of needing to be trimmed or
- * stretched — a short flurry at Rapide, a slower and more deliberate cadence
- * at Lent — and always closes with a dedicated "resolve" flourish timed to
- * land exactly when `rollDurationMs` (the caller's own roll-animation
- * length, unchanged here) elapses, so it is never cut off mid-tumble at any
- * speed. It is separate from the Neon/Classic dice cues and the DZ pawn/
- * click helpers below.
+ * Dedicated noise texture for the DZ dice roll only — more correlated
+ * (duller, less "hissy") than `getDzNoiseBuffer` (shared by DZ's click and
+ * pawn-step knocks), so it reads as fabric/pile grain rather than a hard
+ * contact transient even before the low-pass filtering below is applied.
+ * Kept separate so retuning the dice roll's texture can never bleed into
+ * the click/pawn cues.
+ */
+function getDzCarpetNoiseBuffer(context: AudioContext): AudioBuffer {
+  if (dzCarpetNoiseBuffer?.sampleRate === context.sampleRate) return dzCarpetNoiseBuffer;
+  const duration = 0.24;
+  const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+  const samples = buffer.getChannelData(0);
+  for (let i = 0; i < samples.length; i++) {
+    const previous = i === 0 ? 0 : samples[i - 1] * 0.5;
+    samples[i] = previous + (Math.random() * 2 - 1) * 0.5;
+  }
+  dzCarpetNoiseBuffer = buffer;
+  return buffer;
+}
+
+/**
+ * One muffled carpet-tumble contact for the DZ dice roll. Deliberately built
+ * differently from `scheduleDzKnock` (used by DZ's click/pawn cues): no
+ * bandpass-resonant noise transient and no bright triangle-wave overtone —
+ * both of those are what make `scheduleDzKnock` read as a strike against a
+ * firm, resonant surface. Instead: a heavily low-pass filtered noise thud
+ * (the dampened sound a pile carpet gives back, with no sharp attack), a
+ * soft low sine body for weight (a plain sine has no harmonics to ring),
+ * and — mixed in very quietly and left completely unfiltered so it stays
+ * bright against the muffled body under it — a pair of closely-detuned high
+ * sine partials reading as a faint glint of light off a golden die.
+ */
+function scheduleDzCarpetTumble(
+  context: AudioContext,
+  bus: AudioNode,
+  startTime: number,
+  { amp, freq, decay, shimmerAmp, shimmerFreq, shimmerDecay, lowpassHz }: {
+    amp: number; freq: number; decay: number;
+    shimmerAmp: number; shimmerFreq: number; shimmerDecay: number;
+    lowpassHz: number;
+  },
+): void {
+  // Muffled contact — low-pass filtered noise with a soft (not instant)
+  // attack, so even the transient itself is rounded off the way a thick rug
+  // would absorb it. A low Q keeps the filter from ringing at its cutoff,
+  // which would reintroduce the "struck object" character we're avoiding.
+  const noise = context.createBufferSource();
+  noise.buffer = getDzCarpetNoiseBuffer(context);
+  const noiseFilter = context.createBiquadFilter();
+  noiseFilter.type = "lowpass";
+  noiseFilter.frequency.setValueAtTime(lowpassHz, startTime);
+  noiseFilter.Q.value = 0.5;
+  const noiseGain = context.createGain();
+  noiseGain.gain.setValueAtTime(0.0001, startTime);
+  noiseGain.gain.linearRampToValueAtTime(amp, startTime + 0.014);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
+  noise.connect(noiseFilter).connect(noiseGain).connect(bus);
+  noise.start(startTime);
+  noise.stop(startTime + decay + 0.02);
+
+  // Soft low body — a bare sine, not a triangle, so nothing rings; gives the
+  // tumble weight without turning it into a resonant "knock."
+  const body = context.createOscillator();
+  body.type = "sine";
+  body.frequency.setValueAtTime(freq, startTime);
+  body.frequency.exponentialRampToValueAtTime(freq * 0.85, startTime + decay);
+  const bodyGain = context.createGain();
+  bodyGain.gain.setValueAtTime(0.0001, startTime);
+  bodyGain.gain.linearRampToValueAtTime(amp * 0.6, startTime + 0.016);
+  bodyGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay * 0.92);
+  body.connect(bodyGain).connect(bus);
+  body.start(startTime);
+  body.stop(startTime + decay * 0.92 + 0.02);
+
+  // Faint golden shimmer — quiet and brief so it reads as a glint, not a
+  // clang; intentionally NOT low-pass filtered so it stays bright and
+  // distinct against the muffled body underneath it.
+  for (const [index, f] of [shimmerFreq, shimmerFreq * 1.02].entries()) {
+    const shimmer = context.createOscillator();
+    shimmer.type = "sine";
+    shimmer.frequency.setValueAtTime(f, startTime);
+    const shimmerGain = context.createGain();
+    const gain = shimmerAmp * (index === 0 ? 1 : 0.65);
+    shimmerGain.gain.setValueAtTime(0.0001, startTime);
+    shimmerGain.gain.linearRampToValueAtTime(gain, startTime + 0.006);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.0001, startTime + shimmerDecay);
+    shimmer.connect(shimmerGain).connect(bus);
+    shimmer.start(startTime);
+    shimmer.stop(startTime + shimmerDecay + 0.02);
+  }
+}
+
+/**
+ * DZ board dice: a golden die tumbling on a thick carpet — soft, muffled
+ * knocks (no crisp table-top transient) with only a very faint metallic
+ * shimmer riding underneath each one, closing in a gentle settle rather
+ * than a hard thud. Built from a repeating `scheduleDzCarpetTumble` unit
+ * rather than a fixed-length recording, so it naturally spans any roll
+ * duration — a short flurry at Rapide, a slower and more deliberate cadence
+ * at Lent — and always finishes exactly when `rollDurationMs` (the caller's
+ * own roll-animation length, unchanged here) elapses, so it is never cut
+ * off mid-tumble at any speed. Uses its own noise buffer and knock unit, so
+ * it shares nothing with `scheduleDzKnock` (DZ's click/pawn cues, untouched)
+ * and reads as clearly distinct from both Classic's wood-on-table dice and
+ * Neon's electric-digital dice.
  */
 export function playDzDiceRoll(rollDurationMs: number): void {
   playSynthCue((context, now) => {
@@ -664,57 +762,66 @@ export function playDzDiceRoll(rollDurationMs: number): void {
     master.connect(context.destination);
 
     const totalSec = Math.max(0.12, rollDurationMs / 1000);
-    const attackSec = Math.min(DZ_DICE_ATTACK_MS / 1000, totalSec * 0.25);
-    const resolveSec = Math.min(DZ_DICE_RESOLVE_MS / 1000, totalSec * 0.55);
+    const attackSec = Math.min(DZ_CARPET_ATTACK_MS / 1000, totalSec * 0.25);
+    const resolveSec = Math.min(DZ_CARPET_RESOLVE_MS / 1000, totalSec * 0.55);
     const tumbleWindowSec = Math.max(0, totalSec - attackSec - resolveSec);
-    const idealRepeats = Math.round((tumbleWindowSec * 1000) / DZ_DICE_IDEAL_SPACING_MS);
-    const repeatCount = Math.min(DZ_DICE_MAX_REPEATS, Math.max(0, idealRepeats));
+    const idealRepeats = Math.round((tumbleWindowSec * 1000) / DZ_CARPET_IDEAL_SPACING_MS);
+    const repeatCount = Math.min(DZ_CARPET_MAX_REPEATS, Math.max(0, idealRepeats));
     const spacingSec = repeatCount > 0 ? tumbleWindowSec / repeatCount : 0;
 
-    // Attack — a soft rising swell: picking up the dice to begin the shake.
-    const swell = context.createOscillator();
-    swell.type = "sine";
-    swell.frequency.setValueAtTime(220, now);
-    swell.frequency.exponentialRampToValueAtTime(300, now + attackSec);
-    const swellGain = context.createGain();
-    swellGain.gain.setValueAtTime(0.0001, now);
-    swellGain.gain.exponentialRampToValueAtTime(0.16, now + attackSec * 0.7);
-    swellGain.gain.exponentialRampToValueAtTime(0.0001, now + attackSec + 0.03);
-    swell.connect(swellGain).connect(master);
-    swell.start(now);
-    swell.stop(now + attackSec + 0.05);
+    // Attack — lifting the die off the rug: a very soft, low-pass filtered
+    // noise swell (no tone) since even the pickup is dampened by the pile.
+    const liftNoise = context.createBufferSource();
+    liftNoise.buffer = getDzCarpetNoiseBuffer(context);
+    const liftFilter = context.createBiquadFilter();
+    liftFilter.type = "lowpass";
+    liftFilter.frequency.setValueAtTime(480, now);
+    liftFilter.Q.value = 0.4;
+    const liftGain = context.createGain();
+    liftGain.gain.setValueAtTime(0.0001, now);
+    liftGain.gain.exponentialRampToValueAtTime(0.05, now + Math.max(0.001, attackSec * 0.75));
+    liftGain.gain.exponentialRampToValueAtTime(0.0001, now + attackSec + 0.04);
+    liftNoise.connect(liftFilter).connect(liftGain).connect(master);
+    liftNoise.start(now);
+    liftNoise.stop(now + attackSec + 0.06);
 
-    // Tumble phase — evenly spaced resonant knocks with a gold-shimmer
-    // accent on each contact, always fitted exactly inside the window
-    // between the attack and the resolve regardless of how long that window
-    // is. A small per-hit jitter keeps a long run of repeats (Lent) from
-    // sounding mechanically identical without affecting overall timing.
+    // Tumble phase — muffled carpet contacts with a faint gold-shimmer
+    // glint on each one, fitted exactly inside the window between the
+    // attack and the resolve regardless of how long that window is.
+    // Amplitude and low-pass cutoff both taper down across the run so the
+    // tumble audibly loses energy into the resolve — real dice settling
+    // into a rug — instead of stopping abruptly. Per-hit jitter keeps a
+    // long run (Lent) from sounding mechanically identical.
     for (let i = 0; i < repeatCount; i++) {
       const t = now + attackSec + i * spacingSec;
-      const jitter = 0.94 + Math.random() * 0.12;
-      scheduleDzKnock(context, master, t, {
-        amp: 0.30 * jitter,
-        freq: 270 * jitter,
-        decay: 0.085,
-        shimmerAmp: 0.05,
-        shimmerFreq: 2200,
+      const settleProgress = repeatCount > 1 ? i / (repeatCount - 1) : 0;
+      const jitter = 0.93 + Math.random() * 0.14;
+      scheduleDzCarpetTumble(context, master, t, {
+        amp: 0.20 * jitter * (1 - settleProgress * 0.32),
+        freq: 165 * jitter,
+        decay: 0.10 + settleProgress * 0.02,
+        shimmerAmp: 0.028 * jitter,
+        shimmerFreq: 2300,
         shimmerDecay: 0.05,
-        noiseMix: 0.30,
+        lowpassHz: 620 - settleProgress * 180,
       });
     }
 
-    // Resolve — the dice's final settle: a richer, lower knock plus a longer
-    // brass-shimmer decay, anchored to the end so it always lands exactly
-    // when the roll animation does, at any speed.
+    // Resolve — the die coming to rest in the pile: softer, lower, and more
+    // heavily muffled than any tumble contact, with a longer (but still
+    // faint) shimmer tail standing in for a last glint of gold as it stops.
+    // Deliberately quieter than a tumble hit rather than a bigger accent —
+    // a gentle stop, not a thud — while still anchored to land exactly when
+    // the roll animation does, at any speed.
     const resolveStart = now + totalSec - resolveSec;
-    scheduleDzKnock(context, master, resolveStart, {
-      amp: 0.46,
-      freq: 210,
-      decay: Math.max(0.12, resolveSec * 0.62),
-      shimmerAmp: 0.11,
-      shimmerFreq: 2000,
-      shimmerDecay: Math.max(0.12, resolveSec * 0.72),
-      noiseMix: 0.26,
+    scheduleDzCarpetTumble(context, master, resolveStart, {
+      amp: 0.15,
+      freq: 148,
+      decay: Math.max(0.16, resolveSec * 0.68),
+      shimmerAmp: 0.034,
+      shimmerFreq: 2100,
+      shimmerDecay: Math.max(0.14, resolveSec * 0.5),
+      lowpassHz: 400,
     });
   });
 }
