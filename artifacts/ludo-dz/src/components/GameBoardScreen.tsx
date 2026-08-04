@@ -16,6 +16,7 @@ import {
   playClassicClick,
   playClassicDiceRoll,
   playClassicPawnMove,
+  playClassicPawnSelect,
   playDzClick,
   playDzDiceRoll,
   playDzPawnMove,
@@ -3745,7 +3746,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
 
     // Fast path: piece is already movable — move it directly.
     if (currentGame.movable.includes(pid)) {
-      isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzPawnSelect() : playSelection();
+      isNeon ? playNeonClick() : isClassic ? playClassicPawnSelect() : isDz ? playDzPawnSelect() : playSelection();
       triggerMove(pid);
       return;
     }
@@ -3766,7 +3767,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       return mgp && mgp[0] === tappedGp[0] && mgp[1] === tappedGp[1];
     });
     if (redirect) {
-      isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzPawnSelect() : playSelection();
+      isNeon ? playNeonClick() : isClassic ? playClassicPawnSelect() : isDz ? playDzPawnSelect() : playSelection();
       triggerMove(redirect);
     }
   }, [isHumanTurn, isNeon, isClassic, isDz, triggerMove]);
