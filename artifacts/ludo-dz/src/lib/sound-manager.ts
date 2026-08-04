@@ -505,22 +505,31 @@ function getClassicPawnNoiseBuffer(context: AudioContext): AudioBuffer {
 }
 
 /**
- * Shared building block for Classic's marble/stone pawn family — the pawn
- * tap-to-select and the pawn jump/step landing. Replaces an earlier
- * wood/resin design (dual detuned oscillators plus a sub-bass layer and a
- * delayed second hit) that read as reverby and hollow; this version is
- * deliberately a single hit with a very short exponential decay and no
- * sub-bass at all, so nothing here can sustain, ring, or repeat — a real
- * marble "clack" is over in well under a tenth of a second. A
- * bandpass-filtered noise burst (bright and hard, tuned high — not the warm
- * lowpass "thump" used for wood) supplies the mineral contact transient; a
- * short triangle tone with a quick upward pitch-flick at the very onset
- * supplies the light cartoon "pop" rather than a flat static beep; a quiet,
- * even shorter octave-up sine shimmer adds the crisp, high-definition edge
- * that reads as polished stone. Kept entirely separate from
- * `scheduleWoodKnock` (untouched; still powers the generic Classic UI click
- * and capture), so this redesign can't affect either. Every cue built on
- * this shares the exact recipe; only freq/amp/decay/mix differ.
+ * Shared building block for Classic's ceramic pawn family — three-layer
+ * synthesis targeting the "Crisp Ceramic + Subtle Cartoon Touch" profile:
+ *
+ *   Layer 1 — Ceramic clack: tight high-bandpass noise burst (≤12 ms).
+ *     A barely-correlated noise source through a narrow bandpass centred
+ *     very high (freq×5) gives the sharp, hard "clack" of smooth porcelain
+ *     on a solid surface. Fully silent before 12 ms — zero tail.
+ *
+ *   Layer 2 — Cartoon pop: upward pitch-flick sine (≤35 ms total).
+ *     A sine oscillator that sweeps from freq×0.70 up to freq×1.12 in 7 ms
+ *     then holds near freq×1.05 until the fast exponential decay ends it.
+ *     The upward flick is the "cartoon touch" — a quick, playful rise that
+ *     reads as light and bouncy without becoming a slide or boing. Sine
+ *     (not triangle) keeps the tone smooth and non-hollow.
+ *
+ *   Layer 3 — Ceramic ring shimmer: octave-up sine (≤12 ms).
+ *     A very quiet, even briefer sine at freq×2.1 adds the high-definition
+ *     "ring" of polished ceramic — surface texture only, no perceptible
+ *     added length.
+ *
+ * Total maximum duration at the slowest speed preset: ~35 ms. Absolute zero
+ * reverb, no sub-bass, no downward glide, no sustain of any kind.
+ * Kept entirely separate from `scheduleWoodKnock` (untouched; powers the
+ * generic Classic UI click and capture), so this redesign cannot affect
+ * either of those cues.
  */
 function scheduleClassicPawnBody(
   context: AudioContext,
@@ -528,55 +537,60 @@ function scheduleClassicPawnBody(
   startTime: number,
   { amp, freq, decay, noiseMix = 0.5 }: { amp: number; freq: number; decay: number; noiseMix?: number },
 ): void {
-  // Hard mineral contact transient — bandpass and short, not the lowpass
-  // "thump" used for wood, so the attack reads as a crisp clack rather than
-  // a dull knock.
+  // ── Layer 1: Ceramic clack ───────────────────────────────────────────────
+  // Tight bandpass very high up the spectrum — not the warm lowpass "thump"
+  // of wood, nor the mid-range "knock" of stone. The barely-correlated noise
+  // buffer (0.15 smoothing) preserves enough high-frequency content for the
+  // bandpass to carve into. noiseDecay is hard-capped at 12 ms so this layer
+  // is always the sharpest, driest part of the cue.
   const noise = context.createBufferSource();
   noise.buffer = getClassicPawnNoiseBuffer(context);
   const noiseFilter = context.createBiquadFilter();
   noiseFilter.type = "bandpass";
-  noiseFilter.frequency.setValueAtTime(freq * 4.2, startTime);
-  noiseFilter.Q.value = 1.1;
+  noiseFilter.frequency.setValueAtTime(freq * 5.0, startTime);
+  noiseFilter.Q.value = 1.8;
   const noiseGain = context.createGain();
-  const noiseDecay = Math.min(decay * 0.6, 0.024);
+  const noiseDecay = Math.min(decay * 0.45, 0.012);
   noiseGain.gain.setValueAtTime(0.0001, startTime);
-  noiseGain.gain.linearRampToValueAtTime(amp * noiseMix, startTime + 0.002);
+  noiseGain.gain.linearRampToValueAtTime(amp * noiseMix, startTime + 0.001);
   noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + noiseDecay);
   noise.connect(noiseFilter).connect(noiseGain).connect(bus);
   noise.start(startTime);
-  noise.stop(startTime + noiseDecay + 0.01);
+  noise.stop(startTime + noiseDecay + 0.006);
 
-  // Tone — a very slight upward onset flick into the target pitch, then an
-  // immediate, fully dry decay. Sine wave (not triangle) so there are no odd
-  // harmonics: the result is a clean, smooth polished-stone body rather than
-  // a hollow or boxy one. No downward glide and no sustain.
-  const body = context.createOscillator();
-  body.type = "sine";
-  body.frequency.setValueAtTime(freq * 0.88, startTime);
-  body.frequency.exponentialRampToValueAtTime(freq, startTime + 0.008);
-  body.frequency.exponentialRampToValueAtTime(freq * 0.92, startTime + decay);
-  const bodyGain = context.createGain();
-  bodyGain.gain.setValueAtTime(0.0001, startTime);
-  bodyGain.gain.linearRampToValueAtTime(amp * (1 - noiseMix * 0.3), startTime + 0.004);
-  bodyGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
-  body.connect(bodyGain).connect(bus);
-  body.start(startTime);
-  body.stop(startTime + decay + 0.01);
+  // ── Layer 2: Cartoon pop ─────────────────────────────────────────────────
+  // Upward pitch flick (0.70× → 1.12× in 7 ms) is the defining "cartoon
+  // touch". The rise is fast enough to feel snappy and tactile rather than a
+  // slide; landing near 1.05× then immediately fading keeps it dry — no
+  // downward glide, no sustain, no reverb of any kind. The exponential decay
+  // to 0.0001 ensures absolute silence before `decay` seconds have elapsed.
+  const pop = context.createOscillator();
+  pop.type = "sine";
+  pop.frequency.setValueAtTime(freq * 0.70, startTime);
+  pop.frequency.exponentialRampToValueAtTime(freq * 1.12, startTime + 0.007);
+  pop.frequency.exponentialRampToValueAtTime(freq * 1.05, startTime + decay);
+  const popGain = context.createGain();
+  popGain.gain.setValueAtTime(0.0001, startTime);
+  popGain.gain.linearRampToValueAtTime(amp * (1 - noiseMix * 0.35), startTime + 0.003);
+  popGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
+  pop.connect(popGain).connect(bus);
+  pop.start(startTime);
+  pop.stop(startTime + decay + 0.006);
 
-  // Octave-up shimmer, very quiet and even shorter — the crisp,
-  // high-definition edge that reads as polished stone rather than plain
-  // wood, without adding any perceptible length to the cue.
+  // ── Layer 3: Ceramic ring shimmer ────────────────────────────────────────
+  // Very quiet octave-up sine — the glass-like surface ring of polished
+  // ceramic. Hard-capped at 12 ms so it contributes texture, not length.
   const shimmer = context.createOscillator();
   shimmer.type = "sine";
   shimmer.frequency.setValueAtTime(freq * 2.1, startTime);
   const shimmerGain = context.createGain();
-  const shimmerDecay = Math.min(decay * 0.45, 0.02);
+  const shimmerDecay = Math.min(decay * 0.42, 0.012);
   shimmerGain.gain.setValueAtTime(0.0001, startTime);
-  shimmerGain.gain.linearRampToValueAtTime(amp * 0.16, startTime + 0.002);
+  shimmerGain.gain.linearRampToValueAtTime(amp * 0.13, startTime + 0.001);
   shimmerGain.gain.exponentialRampToValueAtTime(0.0001, startTime + shimmerDecay);
   shimmer.connect(shimmerGain).connect(bus);
   shimmer.start(startTime);
-  shimmer.stop(startTime + shimmerDecay + 0.01);
+  shimmer.stop(startTime + shimmerDecay + 0.006);
 }
 
 /**
@@ -599,11 +613,13 @@ export function playClassicPawnMove(hopMs?: number): void {
   const scale = pawnStepTimeScale(hopMs);
   const jitter = 0.97 + Math.random() * 0.06;
   playSynthCue((context, now) => {
-    // Tuned for maximum snap and dryness: lighter amp, higher/brighter pitch,
-    // very short decay (≤40ms even at Slow), and a higher noise mix so the
-    // cue reads as a crisp click-and-clean-tone rather than a tonal body.
+    // 680 Hz base: bright enough for ceramic (not heavy/bassy), below the
+    // harsh register. noiseMix 0.55 balances the ceramic clack (layer 1)
+    // against the cartoon pop body (layer 2). decay 0.026×scale: 26 ms at
+    // Normal, 35 ms max at Slow — the pop flick completes in 7 ms and the
+    // remainder is a clean, fast exponential fade. Zero tail guaranteed.
     scheduleClassicPawnBody(context, context.destination, now, {
-      amp: 0.36, freq: 640 * jitter, decay: 0.030 * scale, noiseMix: 0.62,
+      amp: 0.38, freq: 680 * jitter, decay: 0.026 * scale, noiseMix: 0.55,
     });
   });
 }
