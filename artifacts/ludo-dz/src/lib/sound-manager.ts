@@ -1308,29 +1308,64 @@ function stopBgm(context: AudioContext): void {
 
 let bgmFirstGestureBound = false;
 
+// Browsers only grant the "user activation" that lets a freshly created
+// AudioContext leave its "suspended" state on specific trusted input events —
+// and a press's *start* (`pointerdown`, `touchstart`, `mousedown`) is
+// notably NOT one of them in Chromium/WebKit; only a press's *release*
+// (`click`, and `keydown` for keyboards) reliably qualifies. `touchstart` is
+// still included as a belt-and-braces attempt since some mobile browsers do
+// accept it, and a harmless extra `resume()` call costs nothing. This is why
+// the listener below tries `resume()` again on every one of these event
+// types instead of unbinding everything after whichever fires first: a
+// single tap dispatches `pointerdown`/`touchstart` *before* `click`, so
+// tearing down on that first (possibly-insufficient) event would mean the
+// later, actually-sufficient `click` is never seen.
+const BGM_UNLOCK_EVENTS = ["pointerdown", "touchstart", "click", "keydown"] as const;
+
 /**
- * Registers a one-time listener for the very first pointer/keyboard
- * interaction anywhere in the app. Browsers block audio until a real
- * gesture; when a returning player's saved preference is ON, this is what
- * restores BGM the moment they first tap anything — splash, welcome menu,
- * anywhere — without requiring a trip back into Settings.
+ * Registers listeners for the first several trusted interaction types
+ * anywhere in the app (capture phase, so an element's own
+ * `stopPropagation()` can't hide the gesture from this). Browsers block
+ * audio until a real gesture; when a returning player's saved preference is
+ * ON, this is what restores BGM the moment they first interact with
+ * anything — splash, welcome menu, the loading screen, anywhere — without
+ * requiring a trip back into Settings. Listeners stay bound, retrying
+ * `resume()` on each qualifying event, until the AudioContext actually
+ * reports "running", then remove themselves for good.
  */
 function bindBgmFirstGestureListener(): void {
   if (bgmFirstGestureBound || typeof document === "undefined") return;
   bgmFirstGestureBound = true;
 
-  const onFirstGesture = () => {
-    document.removeEventListener("pointerdown", onFirstGesture);
-    document.removeEventListener("keydown", onFirstGesture);
-    const context = getSynthAudioContext();
-    if (!context) return;
-    void context.resume().then(() => {
-      if (bgmEnabled) startBgm(context);
-    }).catch(() => {});
+  const unbindAll = () => {
+    for (const type of BGM_UNLOCK_EVENTS) {
+      document.removeEventListener(type, onFirstGesture, { capture: true });
+    }
   };
 
-  document.addEventListener("pointerdown", onFirstGesture, { once: true });
-  document.addEventListener("keydown", onFirstGesture, { once: true });
+  const onFirstGesture = () => {
+    const context = getSynthAudioContext();
+    if (!context) {
+      unbindAll();
+      return;
+    }
+    void context.resume().then(() => {
+      // This particular event type may not have satisfied the browser's
+      // autoplay policy (e.g. a `pointerdown` that isn't itself a valid
+      // activation trigger) — if the context is still suspended, leave the
+      // listeners bound so the next qualifying gesture gets its own chance
+      // instead of being silently missed.
+      if (context.state !== "running") return;
+      unbindAll();
+      if (bgmEnabled) startBgm(context);
+    }).catch(() => {
+      // Leave listeners bound; a later gesture may still succeed.
+    });
+  };
+
+  for (const type of BGM_UNLOCK_EVENTS) {
+    document.addEventListener(type, onFirstGesture, { capture: true, passive: true });
+  }
 }
 
 if (typeof window !== "undefined") {
