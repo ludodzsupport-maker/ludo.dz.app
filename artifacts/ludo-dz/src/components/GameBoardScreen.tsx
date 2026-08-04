@@ -40,10 +40,10 @@ const ANIM = {
   slow:   { cycles: 16, baseMs: 80, stepMs: 42, stiffness: 180, damping: 22, mass: 1.20, hopMs: 240 },
 } as const;
 
-// The shared ANIM presets serve all three board themes. Classic's slow dice
-// tumble uses this local timing only so its real recorded cue can remain
-// recognizably natural while still filling the whole roll animation window.
-// Pawn-hop physics and the Neon/DZ dice timing continue to use ANIM.slow.
+// The shared ANIM presets serve all three board themes. Classic and DZ use
+// this local timing only for their Slow dice tumble so their shared recorded
+// cue stays natural while filling the whole roll-animation window. Pawn-hop
+// physics and Neon's dice timing continue to use ANIM.slow.
 const CLASSIC_SLOW_DICE_TIMING = { cycles: 16, baseMs: 38, stepMs: 20 } as const;
 
 // Mirrors the cycle() scheduling math in handleRoll below to compute the
@@ -3545,11 +3545,11 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const handleRoll = useCallback(() => {
     if (rolling || game.phase !== 'rolling' || game.winner) return;
     const rollingPlayer = game.activePlayer; // capture now — must not close over future state
-    // Read timing before triggering audio so the Classic sample and this
-    // cycle() share an exact duration. The local slow override is deliberately
-    // Classic-only; all shared ANIM values remain untouched for Neon and DZ.
+    // Read timing before triggering audio so the shared Classic/DZ sample and
+    // this cycle() share an exact duration. The local slow override remains
+    // dice-roll-only; all shared ANIM values and Neon timing stay untouched.
     const { cycles, baseMs, stepMs } =
-      isClassic && animSpeed === 'slow' ? CLASSIC_SLOW_DICE_TIMING : ANIM[animSpeed];
+      (isClassic || isDz) && animSpeed === 'slow' ? CLASSIC_SLOW_DICE_TIMING : ANIM[animSpeed];
     if (isNeon) playNeonDiceRoll();
     else if (isClassic) playClassicDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
     else if (isDz) playDzDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
