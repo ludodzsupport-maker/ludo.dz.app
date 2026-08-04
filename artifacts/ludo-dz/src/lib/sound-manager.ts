@@ -816,6 +816,30 @@ export function playDzPawnMove(hopMs?: number): void {
   });
 }
 
+/**
+ * DZ board pawn selection: the tap that picks a playable pawn to move,
+ * distinct from both the pawn's own step/landing cue and from DZ's generic
+ * control-press click. Deliberately built on the exact same `scheduleDzPlop`
+ * voice as `playDzPawnMove` (untouched above) rather than the resonant
+ * `scheduleDzKnock` family used by `playDzClick` — sharing that pitch-bend
+ * "plop" DNA is what makes selecting and then stepping a pawn read as one
+ * cohesive tactile feedback loop instead of two unrelated sounds. It differs
+ * from the step cue on purpose: a single hit (no secondary settle-bounce, so
+ * it reads as an instant "activated" acknowledgment rather than a landing),
+ * pitched a little higher and louder with a brighter, longer gold-glint
+ * shimmer (a confident "premium select" glint vs. the step's subtler
+ * contact polish) — while staying low-mid and warm, never thin or harsh.
+ */
+export function playDzPawnSelect(): void {
+  const jitter = 0.97 + Math.random() * 0.06;
+  playSynthCue((context, now) => {
+    scheduleDzPlop(context, context.destination, now, {
+      amp: 0.40, freq: 400 * jitter, decay: 0.065,
+      shimmerAmp: 0.05, shimmerFreq: 2600, shimmerDecay: 0.055,
+    });
+  });
+}
+
 function getAudio(name: UiSoundName): HTMLAudioElement | null {
   if (typeof Audio === "undefined") return null;
   let audio = audioCache.get(name);
