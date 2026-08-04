@@ -105,3 +105,10 @@ uri = "file://attached_assets/generated_audio/ludo_toggle_off.mp3"
 type = "audio"
 title = "ludo toggle off"
 description = "Generated sound effect: Original premium mobile UI toggle OFF sound. A compact soft muted glass click with a gentle downward resolution, elegant and polished, no music, no speech, no harshness."
+
+[[outputs]]
+id = "yXchqQtWyIfzsLedAmb5c"
+uri = "file://attached_assets/generated_audio/bgm_universal_ambient_loop.mp3"
+type = "audio"
+title = "universal ambient loop"
+description = "Generated music: Warm, minimalist, elegant ambient background loop for a casual mobile board game (Ludo). Sustained soft analog synth pads with gentle, slow harmonic movement, a few sparse warm kalim…"

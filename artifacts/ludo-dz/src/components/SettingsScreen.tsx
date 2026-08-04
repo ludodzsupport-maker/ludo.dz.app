@@ -8,6 +8,8 @@ import * as DZ from '../lib/board-theme-dz';
 import {
   isSoundEnabled,
   setSoundEnabled,
+  isBgmEnabled,
+  setBgmEnabled,
   playLanguageChange,
   playNavBack,
   playSelection,
@@ -171,7 +173,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
   const t   = T[lang];
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const [sound,      setSound]      = useState(isSoundEnabled());
-  const [music,      setMusic]      = useState(true);
+  const [music,      setMusic]      = useState(isBgmEnabled());
   const [vibration,  setVibration]  = useState(true);
   const [langOpen,   setLangOpen]   = useState(false);
   const [boardOpen,  setBoardOpen]  = useState(false);
@@ -184,8 +186,13 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
     setSoundEnabled(next);
     setSound(next);
   };
+  // Background Music is fully independent from Sound Effects: its own
+  // storage key and playback lifecycle inside the audio manager. Flipping
+  // this toggle is itself a user gesture, so it's exactly where BGM playback
+  // is allowed to actually start under browser autoplay policy.
   const handleMusicToggle = (next: boolean) => {
     playToggleClick(next);
+    setBgmEnabled(next);
     setMusic(next);
   };
   const handleVibrationToggle = (next: boolean) => {

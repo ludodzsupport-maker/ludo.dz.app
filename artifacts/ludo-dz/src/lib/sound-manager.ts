@@ -1099,3 +1099,268 @@ export const playToggleClick = (turningOn: boolean) => playUiSound(turningOn ? "
 export const playStartPress = playPrimaryAction;
 /** @deprecated Use playSelection for selectable cards and options. */
 export const playModeSelect = playSelection;
+
+// ─── Background Music (BGM) ────────────────────────────────────────────────
+// A single seamless ambient loop, completely independent from the "Sound
+// Effects" system above: its own localStorage key, its own enabled flag, and
+// its own playback lifecycle. Bound to the "موسيقى الخلفية" (Background
+// Music) toggle in Settings — nothing else starts or stops it, and it never
+// checks `soundEnabled`.
+//
+// Loop technique: native `loop = true` playback is only gapless if the
+// source file's own start/end samples line up exactly, which a generated
+// asset can't guarantee. Instead each pass through the buffer is scheduled
+// as its own BufferSource with a short overlap-crossfade into the next pass
+// (see `scheduleBgmLoopIteration`) — the standard technique for an audibly
+// seamless loop (no gap, no click, no pop) regardless of the source
+// material's own edges.
+
+const BGM_STORAGE_KEY = "ludo-dz:bgm-enabled";
+const BGM_URL = "sounds/bgm-ambient-loop.mp3";
+const BGM_TARGET_VOLUME = 0.22;      // comfortable ambient bed level (spec range 0.20–0.25)
+const BGM_FADE_IN_SEC = 1.2;
+const BGM_FADE_OUT_SEC = 1.0;
+const BGM_LOOP_CROSSFADE_SEC = 1.6;  // overlap window that hides any seam at the loop boundary
+const BGM_SCHEDULE_LOOKAHEAD_SEC = 3; // JS-timer lead time before each pass's actual start
+
+function readStoredBgmPreference(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const raw = window.localStorage.getItem(BGM_STORAGE_KEY);
+    return raw === null ? true : raw === "1";
+  } catch {
+    return true;
+  }
+}
+
+let bgmEnabled = readStoredBgmPreference();
+let bgmBuffer: AudioBuffer | null = null;
+let bgmLoadPromise: Promise<AudioBuffer | null> | null = null;
+let bgmMasterGain: GainNode | null = null;
+let bgmActiveSources: AudioBufferSourceNode[] = [];
+let bgmSchedulerTimer: ReturnType<typeof setTimeout> | null = null;
+let bgmIsRunning = false;
+
+/** Current on/off state of the "Background Music" setting (persisted across reloads, independent of Sound Effects). */
+export function isBgmEnabled(): boolean {
+  return bgmEnabled;
+}
+
+function loadBgmBuffer(context: AudioContext): Promise<AudioBuffer | null> {
+  if (bgmBuffer) return Promise.resolve(bgmBuffer);
+  if (bgmLoadPromise) return bgmLoadPromise;
+
+  const base = typeof import.meta !== "undefined" && import.meta.env?.BASE_URL ? import.meta.env.BASE_URL : "/";
+  bgmLoadPromise = fetch(`${base}${BGM_URL}`)
+    .then((response) => {
+      if (!response.ok) throw new Error(`bgm fetch failed: ${response.status}`);
+      return response.arrayBuffer();
+    })
+    .then((data) => context.decodeAudioData(data))
+    .then((buffer) => {
+      bgmBuffer = buffer;
+      return buffer;
+    })
+    .catch(() => {
+      // A failed fetch/decode must never crash the game. Clear the promise so
+      // a later attempt (e.g. the next toggle-on) can retry.
+      bgmLoadPromise = null;
+      return null;
+    });
+
+  return bgmLoadPromise;
+}
+
+// Kick off the fetch/decode the moment this module is first imported — same
+// warm-load pattern as the Classic dice sample above — so playback can start
+// with zero latency the instant it's actually allowed to (first gesture).
+if (typeof window !== "undefined") {
+  const warmBgmContext = getSynthAudioContext();
+  if (warmBgmContext) void loadBgmBuffer(warmBgmContext);
+}
+
+/**
+ * Schedules one pass through the BGM buffer starting at `startTime`, and
+ * recursively schedules the next pass shortly before this one ends. Each
+ * pass gets its own gain envelope that fades in across the overlap with the
+ * previous pass and fades out across the overlap with the next one — an
+ * overlap-crossfade loop, so the seam is always inaudible regardless of
+ * whether the source file's raw start/end samples actually match.
+ */
+function scheduleBgmLoopIteration(context: AudioContext, startTime: number): void {
+  const buffer = bgmBuffer;
+  if (!buffer || !bgmMasterGain) return;
+
+  const duration = buffer.duration;
+  const crossfade = Math.min(BGM_LOOP_CROSSFADE_SEC, duration * 0.4);
+  const isFirstIteration = bgmActiveSources.length === 0;
+
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  const iterGain = context.createGain();
+
+  // Fade this pass in across the overlap with the previous one. The very
+  // first pass of a session skips this — `bgmMasterGain` already owns the
+  // "coming in from silence" fade-in, so a second fade here would just dull
+  // the attack for no reason.
+  if (isFirstIteration) {
+    iterGain.gain.setValueAtTime(1, startTime);
+  } else {
+    iterGain.gain.setValueAtTime(0.0001, startTime);
+    iterGain.gain.linearRampToValueAtTime(1, startTime + crossfade);
+  }
+  // Fade this pass out across its own overlap with the next one.
+  iterGain.gain.setValueAtTime(1, startTime + duration - crossfade);
+  iterGain.gain.linearRampToValueAtTime(0.0001, startTime + duration);
+
+  source.connect(iterGain).connect(bgmMasterGain);
+  source.start(startTime);
+  source.stop(startTime + duration + 0.05);
+  bgmActiveSources.push(source);
+  source.onended = () => {
+    bgmActiveSources = bgmActiveSources.filter((s) => s !== source);
+  };
+
+  const nextStart = startTime + duration - crossfade;
+  const delayMs = Math.max(0, (nextStart - context.currentTime - BGM_SCHEDULE_LOOKAHEAD_SEC) * 1000);
+  bgmSchedulerTimer = setTimeout(() => {
+    if (bgmIsRunning) scheduleBgmLoopIteration(context, nextStart);
+  }, delayMs);
+}
+
+/**
+ * Starts BGM playback with a smooth fade-in to the ambient target volume.
+ * No-op if already running or currently disabled. Must be called during/
+ * after a real user gesture so `context.resume()` (called by the caller)
+ * satisfies autoplay policy — see `setBgmEnabled` and the first-interaction
+ * listener below.
+ */
+function startBgm(context: AudioContext): void {
+  if (bgmIsRunning || !bgmEnabled) return;
+
+  const buffer = bgmBuffer;
+  if (!buffer) {
+    // Not decoded yet — retry once the load settles, if still wanted.
+    void loadBgmBuffer(context).then((loaded) => {
+      if (loaded && bgmEnabled && !bgmIsRunning) startBgm(context);
+    });
+    return;
+  }
+
+  const masterGain = context.createGain();
+  masterGain.gain.setValueAtTime(0.0001, context.currentTime);
+  masterGain.gain.linearRampToValueAtTime(BGM_TARGET_VOLUME, context.currentTime + BGM_FADE_IN_SEC);
+
+  // Gentle high-shelf cut carves out the mid-high range so pawn taps and
+  // dice rolls stay clearly audible on top of the bed instead of getting
+  // masked by it — a static "make room in the mix" EQ, always active while
+  // BGM plays, applied once here rather than relying solely on the source
+  // file's own mix.
+  const toneFilter = context.createBiquadFilter();
+  toneFilter.type = "highshelf";
+  toneFilter.frequency.setValueAtTime(1600, context.currentTime);
+  toneFilter.gain.setValueAtTime(-7, context.currentTime);
+
+  masterGain.connect(toneFilter).connect(context.destination);
+  bgmMasterGain = masterGain;
+  bgmActiveSources = [];
+  bgmIsRunning = true;
+  scheduleBgmLoopIteration(context, context.currentTime);
+}
+
+/**
+ * Fades BGM out over `BGM_FADE_OUT_SEC`, then stops and releases every
+ * active source. No-op if BGM isn't running. Captures the fading gain node
+ * and sources in local closures before resetting the module's live state, so
+ * a quick toggle-off-then-on-again starts a clean new session instead of
+ * racing with this fade-out's cleanup.
+ */
+function stopBgm(context: AudioContext): void {
+  if (!bgmIsRunning) return;
+  bgmIsRunning = false;
+
+  const fadingGain = bgmMasterGain;
+  const fadingSources = bgmActiveSources;
+  bgmMasterGain = null;
+  bgmActiveSources = [];
+  if (bgmSchedulerTimer !== null) {
+    clearTimeout(bgmSchedulerTimer);
+    bgmSchedulerTimer = null;
+  }
+
+  if (fadingGain) {
+    const now = context.currentTime;
+    const current = fadingGain.gain.value;
+    fadingGain.gain.cancelScheduledValues(now);
+    fadingGain.gain.setValueAtTime(current, now);
+    fadingGain.gain.linearRampToValueAtTime(0.0001, now + BGM_FADE_OUT_SEC);
+  }
+
+  setTimeout(() => {
+    for (const src of fadingSources) {
+      try { src.stop(); } catch { /* already stopped */ }
+    }
+    if (fadingGain) {
+      try { fadingGain.disconnect(); } catch { /* already disconnected */ }
+    }
+  }, BGM_FADE_OUT_SEC * 1000 + 60);
+}
+
+let bgmFirstGestureBound = false;
+
+/**
+ * Registers a one-time listener for the very first pointer/keyboard
+ * interaction anywhere in the app. Browsers block audio until a real
+ * gesture; when a returning player's saved preference is ON, this is what
+ * restores BGM the moment they first tap anything — splash, welcome menu,
+ * anywhere — without requiring a trip back into Settings.
+ */
+function bindBgmFirstGestureListener(): void {
+  if (bgmFirstGestureBound || typeof document === "undefined") return;
+  bgmFirstGestureBound = true;
+
+  const onFirstGesture = () => {
+    document.removeEventListener("pointerdown", onFirstGesture);
+    document.removeEventListener("keydown", onFirstGesture);
+    const context = getSynthAudioContext();
+    if (!context) return;
+    void context.resume().then(() => {
+      if (bgmEnabled) startBgm(context);
+    }).catch(() => {});
+  };
+
+  document.addEventListener("pointerdown", onFirstGesture, { once: true });
+  document.addEventListener("keydown", onFirstGesture, { once: true });
+}
+
+if (typeof window !== "undefined") {
+  bindBgmFirstGestureListener();
+}
+
+/**
+ * Update the "Background Music" setting. Persists to localStorage under its
+ * own key, completely independent of the Sound Effects setting, and
+ * immediately starts (fade-in) or stops (fade-out) playback. Call this
+ * directly from the Settings toggle's click handler — invoking it inside a
+ * real gesture lets `context.resume()` satisfy the browser's autoplay
+ * policy synchronously within that same event.
+ */
+export function setBgmEnabled(enabled: boolean): void {
+  bgmEnabled = enabled;
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(BGM_STORAGE_KEY, enabled ? "1" : "0");
+    } catch {
+      // ignore storage failures (e.g. private browsing)
+    }
+  }
+
+  const context = getSynthAudioContext();
+  if (!context) return;
+
+  if (enabled) {
+    void context.resume().then(() => startBgm(context)).catch(() => {});
+  } else {
+    stopBgm(context);
+  }
+}
