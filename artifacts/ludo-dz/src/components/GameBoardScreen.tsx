@@ -1137,7 +1137,7 @@ function PawnToken({
   onDustStep?: (x: number, y: number) => void; // Classic-only: fires at every hop-step's vacated cell (see DustPuffEffect)
   onDzSparkleStep?: (x: number, y: number) => void; // DZ-only: gold glint left at every vacated hop cell
   stackScale?: number; // Universal premium stacking (all themes): 1 = full size, <1 shrinks when sharing a cell. Defaults to 1.
-  showSafeStar?: boolean; // This pawn is alone on a safe-star cell → renders its own theme-matching glowing safe badge. Defaults to false.
+  showSafeStar?: boolean; // Neon-only: this pawn is alone on a safe-star cell → renders its own glowing badge on the pawn. Classic/DZ ignore this prop — their safe-space icons are permanent cell fixtures that never attach to a pawn. Defaults to false.
 }) {
   const baseCtrl  = useAnimationControls();
   const arcCtrl   = useAnimationControls();
@@ -1447,22 +1447,6 @@ function PawnToken({
             {/* Secondary sheen streak along the upper rim, glass-like curvature cue */}
             <path d={`M ${-domeR*0.55},${domeCY - domeR*0.72} A ${domeR} ${domeR} 0 0 1 ${domeR*0.15},${domeCY - domeR*0.985}`}
               fill="none" stroke="white" strokeOpacity="0.30" strokeWidth="0.012" strokeLinecap="round"/>
-
-            {/* Safe-star badge — this pawn is alone on a safe-star cell. A small
-                gilt star medallion sits on the dome, reusing the board's own
-                safe-square glow/gradients so it reads as the same motif at pawn
-                scale. The board-level star marker hides for exactly this case
-                (see the Classic safe-star cell block) so the two never double up. */}
-            {showSafeStar && (
-              <g filter="url(#cl-safe-glow)" pointerEvents="none">
-                <circle cx={0} cy={domeCY} r={domeR*0.62} fill="#FFB800" fillOpacity="0.16"/>
-                <polygon points={starPoints(0, domeCY, domeR*0.62, domeR*0.25, 5)}
-                  fill="url(#cl-safe-star)" fillOpacity="0.98"
-                  stroke="#8C6010" strokeWidth="0.014" strokeOpacity="0.85"/>
-                <circle cx={0} cy={domeCY} r={domeR*0.18} fill="url(#cl-star-jewel)"
-                  stroke="#C8960C" strokeWidth="0.012" strokeOpacity="0.90"/>
-              </g>
-            )}
           </>
         ) : isDz ? (
           <>
@@ -1516,21 +1500,6 @@ function PawnToken({
             {/* Eight-point star finial */}
             <polygon points={starPoints(0, domeCY - 1.15*domeR - 0.075, 0.075, 0.030, 8)} fill={DZ.BORDER_GOLD}/>
             <circle cx={0} cy={domeCY - 1.15*domeR - 0.075} r="0.022" fill="#fff" fillOpacity="0.7"/>
-
-            {/* Safe-star badge — this pawn is alone on a safe-star cell. A small
-                gold crescent-and-star medallion sits on the dome (the board's own
-                safe-square motif, scaled ~0.38× and recentred), so it reads as
-                the same emblem at pawn scale. The board-level marker hides for
-                exactly this case (see the DZ safe-star cell block) so the two
-                never double up. */}
-            {showSafeStar && (
-              <g filter="url(#dz-safe-glow)" pointerEvents="none">
-                <circle cx={0} cy={domeCY} r={domeR*0.62} fill="url(#dz-safe-glow-grad)"/>
-                <path fillRule="evenodd" fill={DZ.BORDER_GOLD}
-                  d={crescentPath(-0.053, domeCY, 0.106, -0.013, domeCY, 0.086)}/>
-                <polygon points={starPoints(0.114, domeCY, 0.051, 0.021, 5)} fill={DZ.BORDER_GOLD}/>
-              </g>
-            )}
           </>
         ) : (
           <>
@@ -3050,23 +3019,23 @@ function BoardSVG({
             {isStar && !isStart && (() => {
               const T = `translate(${c},${r})`;
               const seed = (r * 15 + c) * 0.06;
-              // Universal safe-star occupancy states (all board themes), driven by
-              // live occupant count — same pattern for Classic/DZ/Neon:
-              //   0 occupants → unchanged idle marker (native icon + ambient glow).
-              //   1 occupant  → marker hides here; the lone pawn carries its own
-              //                 theme-matching glowing badge instead (see PawnToken
-              //                 showSafeStar). Cell instead shows the theme's
-              //                 pulsing safe-zone halo border.
-              //   2+ occupants → halo border PLUS the marker stays, now reading
-              //                 as a persistent zone badge drawn beneath the
-              //                 mini stacked pawns (cells render before pieces).
+              // Safe-star occupancy states, driven by live occupant count.
+              // Classic/DZ: the icon (star / crescent-and-star) is a permanent
+              // fixture of this cell — drawn unconditionally, regardless of
+              // whether 0, 1, or several pawns occupy the cell. It NEVER hides,
+              // swaps to the pawn, or moves; only the pulsing safe-zone halo
+              // border reacts to occupancy (on whenever occCount > 0).
+              // Neon (unchanged): keeps the swap pattern — marker hides for a
+              // lone occupant, who instead carries its own glowing badge (see
+              // PawnToken showSafeStar); 2+ occupants keep the board marker.
               const occCount = safeCellOccupancy.get(`${r},${c}`) ?? 0;
 
               if (isClassic) {
                 return (
                   <g transform={T}>
-                    {occCount !== 1 && (
-                      <g filter="url(#cl-safe-glow)">
+                    {/* Permanent cell fixture — always rendered regardless of
+                        pawn occupancy; never hides and never attaches to a pawn. */}
+                    <g filter="url(#cl-safe-glow)">
                         {/* Wide warm amber haze — warms the ivory cell before the star */}
                         <circle cx="0.5" cy="0.5" r="0.46"
                           fill="#FFB800" fillOpacity="0.14"/>
@@ -3117,16 +3086,6 @@ function BoardSVG({
                         {/* Jewel hot-spot — pin-point light at the dome peak */}
                         <circle cx="0.478" cy="0.474" r="0.014" fill="white" fillOpacity="0.98"/>
                       </g>
-                    )}
-                    {occCount === 1 && (
-                      /* Subtle porcelain/marble ambient wash — the lone pawn now
-                         carries the star badge itself (see PawnToken showSafeStar). */
-                      <motion.circle cx="0.5" cy="0.5" r="0.40"
-                        fill="url(#cl-porcelain-halo)"
-                        animate={{ opacity: [0.45, 0.85, 0.45] }}
-                        transition={{ duration: 2.3, repeat: Infinity, ease: 'easeInOut', delay: seed }}
-                      />
-                    )}
                     {occCount > 0 && (
                       /* Marble/porcelain safe-zone halo border — soft pearl frame
                          around the whole cell, present whenever at least one pawn
@@ -3147,22 +3106,14 @@ function BoardSVG({
                 // shapes instead of fusing into one gold blob at this small scale.
                 return (
                   <g transform={T}>
-                    {occCount !== 1 && (
-                      <>
+                    {/* Permanent cell fixture — always rendered regardless of
+                        pawn occupancy; never hides and never attaches to a pawn. */}
+                    <>
                         <circle cx="0.475" cy="0.5" r="0.42" fill="url(#dz-safe-glow-grad)"/>
                         <path fillRule="evenodd" fill={DZ.BORDER_GOLD}
                           d={crescentPath(0.36, 0.5, 0.28, 0.465, 0.5, 0.225)}/>
                         <polygon points={starPoints(0.80, 0.5, 0.135, 0.054, 5)} fill={DZ.BORDER_GOLD}/>
                       </>
-                    )}
-                    {occCount === 1 && (
-                      /* Subtle gold/emerald ambient wash — the lone pawn now carries
-                         the crescent-and-star badge itself (see PawnToken showSafeStar). */
-                      <motion.circle cx="0.5" cy="0.5" r="0.40" fill="url(#dz-emerald-halo)"
-                        animate={{ opacity: [0.5, 0.9, 0.5] }}
-                        transition={{ duration: 2.3, repeat: Infinity, ease: 'easeInOut', delay: seed }}
-                      />
-                    )}
                     {occCount > 0 && (
                       <>
                         {/* Emerald outer bloom — feathered, sits behind the crisp gold ring */}
