@@ -3520,27 +3520,6 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     };
   }, []); // computed once at mount — viewport is stable during a game session
 
-  // TEMP-DEBUG-VERIFY: auto-plays (skipping dice-roll animation, rejection-
-  // sampling E.doRoll for a movable outcome, then directly calling triggerMove
-  // with the freshly computed result — no dependency on a second render/effect
-  // cycle) so the beam VFX can be screenshotted without manual clicks.
-  // Remove this whole effect before finishing.
-  useEffect(() => {
-    if (game.phase === 'rolling' && !game.diceRolled) {
-      let next = E.doRoll(game);
-      let guard = 0;
-      while (next.movable.length === 0 && guard < 200) {
-        next = E.doRoll(game);
-        guard++;
-      }
-      setGame(next);
-      setLastDice(ld => { const n = [...ld]; n[game.activePlayer] = next.dice; return n; });
-      if (next.movable.length > 0) {
-        setTimeout(() => triggerMove(next.movable[0]), 50);
-      }
-    }
-  }, []);
-
   // ── Roll handler ──────────────────────────────────────────────────────────
   const handleRoll = useCallback(() => {
     if (rolling || game.phase !== 'rolling' || game.winner) return;

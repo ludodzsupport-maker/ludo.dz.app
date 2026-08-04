@@ -15,10 +15,10 @@ type Screen = 'welcome' | 'mode-select' | 'settings' | 'game';
 export type BoardStyle = 'neon' | 'classic' | 'dz';
 
 function AppContent() {
-  const [showSplash, setShowSplash]   = useState(false);
-  const [screen, setScreen]           = useState<Screen>('game');
+  const [showSplash, setShowSplash]   = useState(true);
+  const [screen, setScreen]           = useState<Screen>('welcome');
   const [lang, setLang]               = useState<'fr' | 'ar'>('fr');
-  const [gameConfig, setGameConfig]   = useState<GameConfig | null>({ rule: 'classic', players: 4, modeId: 'computer' });
+  const [gameConfig, setGameConfig]   = useState<GameConfig | null>(null);
   const [boardStyle, setBoardStyle]   = useState<BoardStyle>('classic');
 
   useEffect(() => {
