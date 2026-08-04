@@ -210,8 +210,60 @@ const HOME_FINISH_SLOTS: readonly (readonly [number, number][])[] = [
   [[6.95, 8.70], [8.05, 8.70], [7.20, 8.25], [7.80, 8.25]], // Green — bottom triangle
 ];
 
+// ─── Shared board-cell stack lookup ────────────────────────────────────────────
+// Sorted-stack info for a piece's current board cell (main path / home column
+// only — home-base and finished pieces always get their own fixed slot and
+// never visually stack). `rank` is the piece's stable position within the
+// stack (sorted by player/index so every caller agrees on order); `count`
+// includes the piece itself. Shared by getPieceXY (positioning) and the Neon
+// theme's premium stack-scale / safe-star-badge lookups so all three always
+// agree on who's stacked with whom.
+function getBoardStack(piece: E.Piece, all: E.Piece[]): { count: number; rank: number } {
+  if (piece.relPos < 0 || piece.relPos === E.FINISHED_POS) return { count: 1, rank: 0 };
+  const gp = E.getGridPos(piece.player, piece.relPos);
+  if (!gp) return { count: 1, rank: 0 };
+  const [row, col] = gp;
+  const stack = all
+    .filter(p => {
+      if (p.relPos < 0 || p.relPos === E.FINISHED_POS) return false;
+      const g2 = E.getGridPos(p.player, p.relPos);
+      return g2 && g2[0] === row && g2[1] === col;
+    })
+    .sort((a, b) => a.player * 4 + a.index - (b.player * 4 + b.index));
+  const rank = stack.findIndex(p => p === piece);
+  return { count: stack.length, rank: rank < 0 ? 0 : rank };
+}
+
+// Is `piece` currently sitting on a safe-star cell (one of the 4 mid-arm
+// SAFE_SET cells, excluding the 4 player-start exit gates, which already
+// have their own distinct treatment)? Mirrors the isStar/isStart derivation
+// used by the cross-path cell render loop, applied per-piece instead of
+// per-cell, so both stay in agreement.
+function isSafeStarPiece(piece: E.Piece): boolean {
+  if (piece.relPos < 0 || piece.relPos === E.FINISHED_POS) return false;
+  const gp = E.getGridPos(piece.player, piece.relPos);
+  if (!gp) return false;
+  const pathPos = PATH_POS_MAP.get(`${gp[0]},${gp[1]}`);
+  if (pathPos === undefined) return false;
+  return E.SAFE_SET.has(pathPos) && !(E.PLAYER_STARTS as readonly number[]).includes(pathPos);
+}
+
+// Neon premium multi-pawn scale: 1 pawn reads at full size; 2 shrink just
+// enough to sit side-by-side without touching; 3-4 shrink further to fit a
+// clean 2×2 mini-grid without spilling past the cell edge.
+function getNeonStackScale(count: number): number {
+  if (count <= 1) return 1;
+  if (count === 2) return 0.70;
+  return 0.55;
+}
+
 // ─── Piece display position ───────────────────────────────────────────────────
-function getPieceXY(piece: E.Piece, all: E.Piece[]): [number, number] {
+// `neonStacking`: opt-in flag (Neon Board theme only) that swaps the shared
+// legacy diagonal stack offsets for a tighter mini-grid layout, paired with
+// getNeonStackScale's scale-down so a full stack still reads as "inside the
+// cell". Omitted/false ⇒ byte-identical to the original behaviour, so
+// Classic/DZ call sites are completely unaffected.
+function getPieceXY(piece: E.Piece, all: E.Piece[], neonStacking?: boolean): [number, number] {
   if (piece.relPos === -1) {
     const [br, bc] = E.HOME_BASES[piece.player][piece.index];
     return [bc + 0.5, br + 0.5];
@@ -224,18 +276,24 @@ function getPieceXY(piece: E.Piece, all: E.Piece[]): [number, number] {
   if (!gp) return [7.5, 7.5];
   const [row, col] = gp;
   const cx = col + 0.5, cy = row + 0.5;
-  // Stack multiple pieces on same cell
-  const sharers = all.filter(p => {
-    if (p === piece || p.relPos < 0 || p.relPos === E.FINISHED_POS) return false;
-    const g2 = E.getGridPos(p.player, p.relPos);
-    return g2 && g2[0] === row && g2[1] === col;
-  });
-  if (!sharers.length) return [cx, cy];
-  const stack = [piece, ...sharers].sort(
-    (a, b) => a.player * 4 + a.index - (b.player * 4 + b.index)
-  );
-  const rank = stack.indexOf(piece);
-  // ±0.18 keeps every pawn visually within its cell (max extent: cx ± 0.505,
+  const { count, rank } = getBoardStack(piece, all);
+  if (count <= 1) return [cx, cy];
+  if (neonStacking) {
+    if (count === 2) {
+      // Side-by-side pair, a touch closer than the legacy diagonal so the
+      // two read as a matched pair rather than scattered corners — but with
+      // enough of a gap that the hex bodies read as distinct pawns, not a
+      // single fused blob (verified at true on-board render density).
+      return [cx + (rank === 0 ? -0.215 : 0.215), cy];
+    }
+    // 3-4 pawns: tight 2×2 mini-grid (rank%4 wraps for the rare 5+ case,
+    // same overlap-fallback the legacy table already relies on).
+    const offsets: [number, number][] = [[-0.19,-0.19],[0.19,-0.19],[-0.19,0.19],[0.19,0.19]];
+    const [dx, dy] = offsets[rank % 4] || [0, 0];
+    return [cx + dx, cy + dy];
+  }
+  // Legacy / Classic / DZ stacking (unchanged): ±0.18 diagonal 2×2 quadrants.
+  // Keeps every pawn visually within its cell (max extent: cx ± 0.505,
   // negligibly over the 0.5 half-cell limit). Larger offsets clip on edge cells.
   const offsets: [number,number][] = [[-0.18,-0.18],[0.18,-0.18],[-0.18,0.18],[0.18,0.18]];
   const [dx, dy] = offsets[rank % 4] || [0, 0];
@@ -1071,6 +1129,7 @@ function buildHopPath(
 function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
   onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand, onDustStep, onDzSparkleStep,
+  stackScale, showSafeStar,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
@@ -1088,10 +1147,14 @@ function PawnToken({
   onStepLand?: (x: number, y: number, neon: string) => void; // Neon-only: fires at every hop-step landing (see HopBurstEffect)
   onDustStep?: (x: number, y: number) => void; // Classic-only: fires at every hop-step's vacated cell (see DustPuffEffect)
   onDzSparkleStep?: (x: number, y: number) => void; // DZ-only: gold glint left at every vacated hop cell
+  stackScale?: number; // Neon-only premium stacking: 1 = full size, <1 shrinks when sharing a cell. Defaults to 1 (Classic/DZ never pass this).
+  showSafeStar?: boolean; // Neon-only: this pawn is alone on a safe-star cell → renders its own glowing star badge. Defaults to false.
 }) {
-  const baseCtrl = useAnimationControls();
-  const arcCtrl  = useAnimationControls();
+  const baseCtrl  = useAnimationControls();
+  const arcCtrl   = useAnimationControls();
+  const scaleCtrl = useAnimationControls();
   const [isHopping, setIsHopping] = useState(false);
+  const stackScaleVal = stackScale ?? 1;
 
   // Stable refs so async closures always see latest values
   const seqKeyRef      = useRef(0);
@@ -1109,6 +1172,15 @@ function PawnToken({
   onStepLandRef.current = onStepLand;
   onDustStepRef.current = onDustStep;
   onDzSparkleStepRef.current = onDzSparkleStep;
+
+  // ── Effect 0: Neon premium stack-scale transition ──────────────────────────
+  // Independent of the position/arc/squash controls above — glides the whole
+  // pawn (body + ground shadow) to its new scale whenever the occupant count
+  // of its cell changes (arrival/departure). Classic/DZ never pass a non-1
+  // stackScale, so scaleCtrl simply never animates away from 1 for them.
+  useEffect(() => {
+    scaleCtrl.start({ scale: stackScaleVal, transition: { type: 'spring', ...springCfgRef.current } });
+  }, [stackScaleVal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Effect 1: hop sequence or defeat arc ────────────────────────────────────
   useEffect(() => {
@@ -1321,13 +1393,19 @@ function PawnToken({
       onClick={() => !isHopping && onPieceClick()}
       style={{ cursor: isMovable && !isHopping ? 'pointer' : 'default', willChange: 'transform' }}>
 
-      {/* Ground shadow — anchored to base elevation, NOT lifted by arc */}
-      <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
-        fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : 'rgba(0,0,0,0.62)'}
-        filter={isClassic ? 'url(#cl-pawn-shadow)' : isDz ? 'url(#dz-pawn-shadow)' : undefined}/>
+      {/* Stack-scale group: Neon premium multi-pawn shrink (1 → 0.70 → 0.55).
+          Wraps the shadow + arc/body so the shadow shrinks in lockstep with
+          the pawn. Sits outside the arc group so it never fights the
+          transient landing squash/stretch — the two scales simply compose. */}
+      <motion.g animate={scaleCtrl} initial={{ scale: stackScaleVal }} style={{ willChange: 'transform' }}>
 
-      {/* Inner group: parabolic Y-arc overlay — GPU-composited for buttery arcs */}
-      <motion.g animate={arcCtrl} initial={{ y: 0 }} style={{ willChange: 'transform' }}>
+        {/* Ground shadow — anchored to base elevation, NOT lifted by arc */}
+        <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
+          fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : 'rgba(0,0,0,0.62)'}
+          filter={isClassic ? 'url(#cl-pawn-shadow)' : isDz ? 'url(#dz-pawn-shadow)' : undefined}/>
+
+        {/* Inner group: parabolic Y-arc overlay — GPU-composited for buttery arcs */}
+        <motion.g animate={arcCtrl} initial={{ y: 0 }} style={{ willChange: 'transform' }}>
 
         {isClassic ? (
           <>
@@ -1504,8 +1582,23 @@ function PawnToken({
           stroke="white" strokeWidth="0.028" strokeOpacity="0.56" strokeLinecap="round"
         />
         <circle cx={-h3*0.27} cy={-HR*0.68} r="0.019" fill="white" opacity="0.46"/>
+
+        {/* Safe-star badge — this pawn is alone on a safe-star cell. A crisp
+            glowing white star medallion frames the targeting crosshair,
+            carrying the "safe" cue onto the pawn itself. The board-level star
+            hides for exactly this case (see the Neon safe-star cell block
+            below) so the two never double up. */}
+        {showSafeStar && (
+          <g filter="url(#star-glow)" pointerEvents="none">
+            <circle cx={0} cy={0} r="0.145" fill="white" fillOpacity="0.16"/>
+            <polygon points={starPoints(0, 0, 0.155, 0.064, 5)}
+              fill="white" fillOpacity="0.96"
+              stroke="white" strokeWidth="0.008" strokeOpacity="0.90"/>
+          </g>
+        )}
           </>
         )}
+      </motion.g>
       </motion.g>
     </motion.g>
   );
@@ -1848,14 +1941,42 @@ function BoardSVG({
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   const isClassic   = boardStyle === 'classic';
   const isDz        = boardStyle === 'dz';
+  // Neon Board is the implicit fallback everywhere else in this file; named
+  // here only for the new premium stacking/safe-star lookups below so their
+  // gating reads clearly, without touching that existing convention.
+  const isNeonTheme = !isClassic && !isDz;
   // Classic palette: uses module-level CL_SOLID / CL_LIGHT / CL_BORDER / CL_ARROW
   // DZ palette: uses ../lib/board-theme-dz (Phase 1 — base colors only)
   const pieces      = game.pieces;
 
   const piecePositions = useMemo(
-    () => pieces.map(p => ({ ...p, xy: getPieceXY(p, pieces) })),
-    [pieces]
+    () => pieces.map(p => {
+      const { count } = getBoardStack(p, pieces);
+      return {
+        ...p,
+        xy: getPieceXY(p, pieces, isNeonTheme),
+        stackScale: isNeonTheme ? getNeonStackScale(count) : 1,
+        showSafeStar: isNeonTheme && count === 1 && isSafeStarPiece(p),
+      };
+    }),
+    [pieces, isNeonTheme]
   );
+
+  // Per-cell occupant counts (main path / home column only) — drives the
+  // Neon safe-star cell's 0 / 1 / 2+ occupant states below. Keyed the same
+  // way as the cross-path cell render loop ("row,col") so lookups line up.
+  const safeCellOccupancy = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!isNeonTheme) return map;
+    pieces.forEach(p => {
+      if (p.relPos < 0 || p.relPos === E.FINISHED_POS) return;
+      const gp = E.getGridPos(p.player, p.relPos);
+      if (!gp) return;
+      const key = `${gp[0]},${gp[1]}`;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    });
+    return map;
+  }, [pieces, isNeonTheme]);
 
   const movableHighlights = useMemo(() => {
     if (game.phase !== 'selecting' || !game.movable.length) return [];
@@ -2959,26 +3080,51 @@ function BoardSVG({
               }
               const T = `translate(${c},${r})`;
               const seed = (r * 15 + c) * 0.06;
+              // Premium safe-star states, driven by live occupant count:
+              //   0 occupants → unchanged idle marker (ambient halo + star + core).
+              //   1 occupant  → marker hides here; the lone pawn carries its own
+              //                 glowing star badge instead (see PawnToken
+              //                 showSafeStar). Cell instead shows the pulsing
+              //                 Neon Safe-Zone Halo border.
+              //   2+ occupants → halo border PLUS the marker stays, now reading
+              //                 as a persistent zone badge drawn beneath the
+              //                 mini stacked pawns (cells render before pieces).
+              const occCount = safeCellOccupancy.get(`${r},${c}`) ?? 0;
               return (
                 // NOTE: static translate must live on a plain <g> ancestor — see
                 // the comment above about Framer Motion overriding SVG transform attributes.
                 <g transform={T} filter="url(#star-glow)">
-                  {/* soft ambient halo */}
-                  <motion.circle cx="0.5" cy="0.5" r="0.28"
-                    fill="white" fillOpacity="0.10"
-                    animate={{ opacity: [0.08, 0.22, 0.08] }}
-                    transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut', delay: seed }}
-                  />
-                  {/* 5-pointed star — R=0.30, r=0.12, tip pointing up */}
-                  <motion.polygon
-                    points="0.500,0.200 0.571,0.403 0.785,0.407 0.614,0.537 0.676,0.743 0.500,0.620 0.324,0.743 0.386,0.537 0.215,0.407 0.429,0.403"
-                    fill="white" fillOpacity="0.92"
-                    animate={{ opacity: [0.78, 1, 0.78], scale: [0.93, 1.02, 0.93] }}
-                    transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut', delay: seed }}
-                    style={{ transformOrigin: '0.5px 0.5px' }}
-                  />
-                  {/* white-hot core */}
-                  <circle cx="0.5" cy="0.5" r="0.055" fill="white" fillOpacity="0.95"/>
+                  {occCount !== 1 && (
+                    <>
+                      {/* soft ambient halo */}
+                      <motion.circle cx="0.5" cy="0.5" r="0.28"
+                        fill="white" fillOpacity="0.10"
+                        animate={{ opacity: [0.08, 0.22, 0.08] }}
+                        transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                      />
+                      {/* 5-pointed star — R=0.30, r=0.12, tip pointing up */}
+                      <motion.polygon
+                        points="0.500,0.200 0.571,0.403 0.785,0.407 0.614,0.537 0.676,0.743 0.500,0.620 0.324,0.743 0.386,0.537 0.215,0.407 0.429,0.403"
+                        fill="white" fillOpacity="0.92"
+                        animate={{ opacity: [0.78, 1, 0.78], scale: [0.93, 1.02, 0.93] }}
+                        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                        style={{ transformOrigin: '0.5px 0.5px' }}
+                      />
+                      {/* white-hot core */}
+                      <circle cx="0.5" cy="0.5" r="0.055" fill="white" fillOpacity="0.95"/>
+                    </>
+                  )}
+                  {/* Neon Safe-Zone Halo — soft pulsing border frame around the
+                      whole cell, present whenever at least one pawn occupies
+                      it. Neutral white (not player-tinted) since any player's
+                      pawns may share a safe cell. */}
+                  {occCount > 0 && (
+                    <motion.rect x="0.045" y="0.045" width="0.91" height="0.91" rx="0.09"
+                      fill="none" stroke="#ffffff" strokeWidth="0.052"
+                      animate={{ strokeOpacity: [0.32, 0.82, 0.32] }}
+                      transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                    />
+                  )}
                 </g>
               );
             })()}
@@ -3296,7 +3442,7 @@ function BoardSVG({
       ))}
 
       {/* ── Pieces ── each PawnToken manages its own dual-control animation ── */}
-      {piecePositions.map(({ player, index, xy: [fx, fy] }) => {
+      {piecePositions.map(({ player, index, xy: [fx, fy], stackScale, showSafeStar }) => {
         const pid  = E.pieceId(player, index);
         const anim = pieceAnims[pid] ?? { steps: null };
         return (
@@ -3320,6 +3466,8 @@ function BoardSVG({
             onStepLand={onHopStepLand}
             onDustStep={onDustStep}
             onDzSparkleStep={onDzSparkleStep}
+            stackScale={stackScale}
+            showSafeStar={showSafeStar}
           />
         );
       })}
@@ -3646,7 +3794,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
 
     // Seed startX/startY from the actual rendered position (getPieceXY) so that
     // stacking offsets are reflected — avoids off-lane axis-diff on first step.
-    const [startX, startY] = getPieceXY(piece, currentGame.pieces);
+    // isNeon read via closure (stable empty-deps callback): boardStyle never
+    // changes during a mounted board session, same accepted pattern already
+    // used for isClassic/isDz elsewhere in this callback (e.g. capture SFX).
+    const [startX, startY] = getPieceXY(piece, currentGame.pieces, isNeon);
 
     // Find which piece (if any) is captured in this move
     const capturedP = currentGame.pieces.find(p => {
