@@ -37,6 +37,7 @@ const DEFAULT_VOLUME = 0.55;
 const STORAGE_KEY = "ludo-dz:sound-effects-enabled";
 const NEON_PAWN_MIN_INTERVAL_MS = 38;
 const CLASSIC_PAWN_MIN_INTERVAL_MS = 46;
+const DZ_PAWN_MIN_INTERVAL_MS = 42;
 
 // Both pawn-step cues (Neon and Classic) were originally hand-tuned against
 // the "normal" animation speed's hop duration. `hopMs` — the caller's own
@@ -66,8 +67,10 @@ function pawnStepTimeScale(hopMs: number | undefined): number {
 let synthAudioContext: AudioContext | null = null;
 let neonNoiseBuffer: AudioBuffer | null = null;
 let woodNoiseBuffer: AudioBuffer | null = null;
+let dzNoiseBuffer: AudioBuffer | null = null;
 let lastNeonPawnAt = 0;
 let lastClassicPawnAt = 0;
+let lastDzPawnAt = 0;
 
 function readStoredPreference(): boolean {
   if (typeof window === "undefined") return true;
@@ -529,6 +532,231 @@ export function playClassicCapture(): void {
     body.connect(bodyGain).connect(master);
     body.start(now);
     body.stop(now + 0.2);
+  });
+}
+
+// ─── DZ (Algerian) board cues ───────────────────────────────────────────────
+// A third synthesized family, distinct from both Neon's digital sweep and
+// Classic's plain wood: a warm resonant body (suggesting polished stone or a
+// lacquered box) plus a brief pair of closely-detuned high sine partials —
+// standing in for a gold-inlay accent catching the light — layered on every
+// contact. Shares the module's one AudioContext/scheduler but keeps its own
+// noise buffer so its timbre never bleeds into the other two themes.
+
+function getDzNoiseBuffer(context: AudioContext): AudioBuffer {
+  if (dzNoiseBuffer?.sampleRate === context.sampleRate) return dzNoiseBuffer;
+  const duration = 0.22;
+  const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+  const samples = buffer.getChannelData(0);
+  for (let i = 0; i < samples.length; i++) {
+    // Correlation sits between Neon's crisp digital rattle (0.28) and
+    // Classic's dull wood (0.62): a rounder, more "lacquered" contact
+    // transient that still leaves the gold shimmer layer room to read
+    // clearly on top of it.
+    const previous = i === 0 ? 0 : samples[i - 1] * 0.48;
+    samples[i] = previous + (Math.random() * 2 - 1) * 0.62;
+  }
+  dzNoiseBuffer = buffer;
+  return buffer;
+}
+
+/**
+ * Shared building block for every synthesized DZ board cue: a soft filtered-
+ * noise contact transient, a two-partial resonant body (fundamental + a
+ * fifth above — a single triangle reads as flat "wood"; the extra partial
+ * gives a struck-object resonance suggesting stone or a lacquered, gold-
+ * trimmed box), and a pair of closely-detuned high sine partials that decay
+ * almost immediately (the slight detune beats briefly against itself,
+ * reading as a metallic/brass glint rather than a plain electronic beep).
+ * Reused with different parameters for the dice tumble/resolve, pawn step,
+ * and UI click so the whole DZ family shares one coherent "warm gold-and-
+ * green" timbre.
+ */
+function scheduleDzKnock(
+  context: AudioContext,
+  bus: AudioNode,
+  startTime: number,
+  { amp, freq, decay, shimmerAmp, shimmerFreq, shimmerDecay, noiseMix = 0.3 }: {
+    amp: number; freq: number; decay: number;
+    shimmerAmp: number; shimmerFreq: number; shimmerDecay: number;
+    noiseMix?: number;
+  },
+): void {
+  // Soft contact transient — quieter and rounder than Classic's bare "chk"
+  // so it reads as a padded, premium touch.
+  const noise = context.createBufferSource();
+  noise.buffer = getDzNoiseBuffer(context);
+  const noiseFilter = context.createBiquadFilter();
+  noiseFilter.type = "bandpass";
+  noiseFilter.frequency.setValueAtTime(freq * 2.3, startTime);
+  noiseFilter.Q.value = 1.1;
+  const noiseGain = context.createGain();
+  noiseGain.gain.setValueAtTime(0.0001, startTime);
+  noiseGain.gain.linearRampToValueAtTime(amp * noiseMix, startTime + 0.005);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay * 0.42);
+  noise.connect(noiseFilter).connect(noiseGain).connect(bus);
+  noise.start(startTime);
+  noise.stop(startTime + decay * 0.42 + 0.02);
+
+  // Fundamental body.
+  const body = context.createOscillator();
+  body.type = "triangle";
+  body.frequency.setValueAtTime(freq, startTime);
+  body.frequency.exponentialRampToValueAtTime(freq * 0.82, startTime + decay);
+  const bodyGain = context.createGain();
+  bodyGain.gain.setValueAtTime(0.0001, startTime);
+  bodyGain.gain.linearRampToValueAtTime(amp * (1 - noiseMix * 0.5), startTime + 0.007);
+  bodyGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
+  body.connect(bodyGain).connect(bus);
+  body.start(startTime);
+  body.stop(startTime + decay + 0.02);
+
+  // A fifth above the fundamental, quieter and shorter, gives the body a
+  // resonant "struck object" quality instead of a flat single tone.
+  const overtone = context.createOscillator();
+  overtone.type = "triangle";
+  overtone.frequency.setValueAtTime(freq * 1.5, startTime);
+  overtone.frequency.exponentialRampToValueAtTime(freq * 1.5 * 0.82, startTime + decay * 0.8);
+  const overtoneGain = context.createGain();
+  overtoneGain.gain.setValueAtTime(0.0001, startTime);
+  overtoneGain.gain.linearRampToValueAtTime(amp * 0.34, startTime + 0.006);
+  overtoneGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay * 0.75);
+  overtone.connect(overtoneGain).connect(bus);
+  overtone.start(startTime);
+  overtone.stop(startTime + decay * 0.75 + 0.02);
+
+  // Gold/brass shimmer: two closely-detuned high sines, near-instant decay.
+  for (const [index, f] of [shimmerFreq, shimmerFreq * 1.025].entries()) {
+    const shimmer = context.createOscillator();
+    shimmer.type = "sine";
+    shimmer.frequency.setValueAtTime(f, startTime);
+    const shimmerGain = context.createGain();
+    const gain = shimmerAmp * (index === 0 ? 1 : 0.7);
+    shimmerGain.gain.setValueAtTime(0.0001, startTime);
+    shimmerGain.gain.linearRampToValueAtTime(gain, startTime + 0.003);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.0001, startTime + shimmerDecay);
+    shimmer.connect(shimmerGain).connect(bus);
+    shimmer.start(startTime);
+    shimmer.stop(startTime + shimmerDecay + 0.02);
+  }
+}
+
+const DZ_DICE_ATTACK_MS = 45;
+const DZ_DICE_RESOLVE_MS = 270;
+const DZ_DICE_IDEAL_SPACING_MS = 125;
+const DZ_DICE_MAX_REPEATS = 14;
+
+/**
+ * DZ board dice: a warm, premium tumble built from a repeating resonant
+ * "knock + gold shimmer" unit rather than a fixed-length recording, so it
+ * naturally spans any roll duration instead of needing to be trimmed or
+ * stretched — a short flurry at Rapide, a slower and more deliberate cadence
+ * at Lent — and always closes with a dedicated "resolve" flourish timed to
+ * land exactly when `rollDurationMs` (the caller's own roll-animation
+ * length, unchanged here) elapses, so it is never cut off mid-tumble at any
+ * speed. It is separate from the Neon/Classic dice cues and the DZ pawn/
+ * click helpers below.
+ */
+export function playDzDiceRoll(rollDurationMs: number): void {
+  playSynthCue((context, now) => {
+    const master = context.createGain();
+    master.gain.setValueAtTime(1, now);
+    master.connect(context.destination);
+
+    const totalSec = Math.max(0.12, rollDurationMs / 1000);
+    const attackSec = Math.min(DZ_DICE_ATTACK_MS / 1000, totalSec * 0.25);
+    const resolveSec = Math.min(DZ_DICE_RESOLVE_MS / 1000, totalSec * 0.55);
+    const tumbleWindowSec = Math.max(0, totalSec - attackSec - resolveSec);
+    const idealRepeats = Math.round((tumbleWindowSec * 1000) / DZ_DICE_IDEAL_SPACING_MS);
+    const repeatCount = Math.min(DZ_DICE_MAX_REPEATS, Math.max(0, idealRepeats));
+    const spacingSec = repeatCount > 0 ? tumbleWindowSec / repeatCount : 0;
+
+    // Attack — a soft rising swell: picking up the dice to begin the shake.
+    const swell = context.createOscillator();
+    swell.type = "sine";
+    swell.frequency.setValueAtTime(220, now);
+    swell.frequency.exponentialRampToValueAtTime(300, now + attackSec);
+    const swellGain = context.createGain();
+    swellGain.gain.setValueAtTime(0.0001, now);
+    swellGain.gain.exponentialRampToValueAtTime(0.16, now + attackSec * 0.7);
+    swellGain.gain.exponentialRampToValueAtTime(0.0001, now + attackSec + 0.03);
+    swell.connect(swellGain).connect(master);
+    swell.start(now);
+    swell.stop(now + attackSec + 0.05);
+
+    // Tumble phase — evenly spaced resonant knocks with a gold-shimmer
+    // accent on each contact, always fitted exactly inside the window
+    // between the attack and the resolve regardless of how long that window
+    // is. A small per-hit jitter keeps a long run of repeats (Lent) from
+    // sounding mechanically identical without affecting overall timing.
+    for (let i = 0; i < repeatCount; i++) {
+      const t = now + attackSec + i * spacingSec;
+      const jitter = 0.94 + Math.random() * 0.12;
+      scheduleDzKnock(context, master, t, {
+        amp: 0.30 * jitter,
+        freq: 270 * jitter,
+        decay: 0.085,
+        shimmerAmp: 0.05,
+        shimmerFreq: 2200,
+        shimmerDecay: 0.05,
+        noiseMix: 0.30,
+      });
+    }
+
+    // Resolve — the dice's final settle: a richer, lower knock plus a longer
+    // brass-shimmer decay, anchored to the end so it always lands exactly
+    // when the roll animation does, at any speed.
+    const resolveStart = now + totalSec - resolveSec;
+    scheduleDzKnock(context, master, resolveStart, {
+      amp: 0.46,
+      freq: 210,
+      decay: Math.max(0.12, resolveSec * 0.62),
+      shimmerAmp: 0.11,
+      shimmerFreq: 2000,
+      shimmerDecay: Math.max(0.12, resolveSec * 0.72),
+      noiseMix: 0.26,
+    });
+  });
+}
+
+/**
+ * DZ board control press: a single warm, resonant press with a soft gold-
+ * shimmer accent — a deliberate, premium tap distinct from Classic's plain
+ * wood click and Neon's digital tick.
+ */
+export function playDzClick(): void {
+  playSynthCue((context, now) => {
+    scheduleDzKnock(context, context.destination, now, {
+      amp: 0.36, freq: 300, decay: 0.16,
+      shimmerAmp: 0.085, shimmerFreq: 2400, shimmerDecay: 0.10,
+      noiseMix: 0.28,
+    });
+  });
+}
+
+/**
+ * DZ board pawn step: a short, clean resonant tap — brighter and more
+ * "polished" than Classic's dry wooden tok, with a faint gold-shimmer glint
+ * standing in for a gold-inlay accent, so it stays pleasant and distinct
+ * through a rapid multi-hop move instead of blurring together. `hopMs` — the
+ * caller's own per-hop animation length for the active speed setting,
+ * unchanged here — scales the knock's decay (bounded, see
+ * `pawnStepTimeScale`) exactly as Neon's and Classic's pawn cues do, so all
+ * three themes track Fast/Rapide and Lent consistently.
+ */
+export function playDzPawnMove(hopMs?: number): void {
+  if (!soundEnabled) return;
+  const nowMs = typeof performance === "undefined" ? Date.now() : performance.now();
+  if (nowMs - lastDzPawnAt < DZ_PAWN_MIN_INTERVAL_MS) return;
+  lastDzPawnAt = nowMs;
+
+  const scale = pawnStepTimeScale(hopMs);
+  playSynthCue((context, now) => {
+    scheduleDzKnock(context, context.destination, now, {
+      amp: 0.27, freq: 640, decay: 0.058 * scale,
+      shimmerAmp: 0.045, shimmerFreq: 2600, shimmerDecay: 0.035 * scale,
+      noiseMix: 0.18,
+    });
   });
 }
 
