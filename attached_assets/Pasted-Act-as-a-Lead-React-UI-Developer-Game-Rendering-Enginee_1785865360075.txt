@@ -1,0 +1,27 @@
+Act as a Lead React UI Developer & Game Rendering Engineer.
+
+We need to UNIVERSALIZE our multi-pawn stacking and safe-zone rendering system across ALL board themes (Classic, DZ, and Neon) while strictly preserving each theme's unique visual identity and safe-space iconography (e.g., preserving the Crescent & Star symbol on the DZ board).
+
+Requirements:
+
+1. UNIVERSAL MULTI-PAWN STACKING & GRID ADAPTATION:
+   - Apply the dynamic scaling logic globally across all boards when multiple pawns share any cell:
+     * 1 Pawn: 100% scale, centered.
+     * 2 Pawns: ~70% scale, arranged cleanly side-by-side or diagonally.
+     * 3 to 4 Pawns: ~55% scale, arranged in a neat 2x2 mini-grid.
+   - Maintain smooth CSS transform/scale transitions when pawns enter or leave a cell.
+
+2. THEME-AWARE SAFE ZONE HIGHLIGHTING (PRESERVE ORIGINAL ICONS):
+   - Do NOT alter, replace, or overwrite the unique native safe-space icons of any board (e.g., keep the Algerian Crescent & Star on the DZ board intact, the classic star on the Classic board, and the neon star on the Neon board).
+   - Single Pawn on Safe Cell: Render a subtle, theme-matching safe halo around the cell, and display the corresponding theme's safe icon integrated onto/under the pawn.
+   - Multiple Pawns on Safe Cell: Keep the native board safe icon (e.g., Crescent & Star for DZ) visible as a background layer beneath the miniaturized pawns, accompanied by the theme-appropriate safe border glow.
+
+3. THEME-SPECIFIC AESTHETIC MATCHING:
+   - Classic Board: Soft, elegant marble/porcelain halo glow.
+   - DZ Board: Warm, authentic gold/emerald halo highlight complementing the Crescent & Star design.
+   - Neon Board: High-contrast neon pulse glow (already established).
+
+CRITICAL CONSTRAINTS (STRICT):
+- UI & RENDER LOGIC ONLY: Touch ONLY the cell/pawn rendering and stacking components across board themes.
+- DO NOT MODIFY: Do NOT alter any original SVG assets, sound logic, pawn move rules, or game state.
+- NO GIT COMMANDS: Do NOT run any git commands under any circumstances.

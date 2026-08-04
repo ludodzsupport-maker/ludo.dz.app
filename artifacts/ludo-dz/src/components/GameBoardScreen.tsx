@@ -248,22 +248,21 @@ function isSafeStarPiece(piece: E.Piece): boolean {
   return E.SAFE_SET.has(pathPos) && !(E.PLAYER_STARTS as readonly number[]).includes(pathPos);
 }
 
-// Neon premium multi-pawn scale: 1 pawn reads at full size; 2 shrink just
-// enough to sit side-by-side without touching; 3-4 shrink further to fit a
-// clean 2×2 mini-grid without spilling past the cell edge.
-function getNeonStackScale(count: number): number {
+// Universal multi-pawn scale (all board themes): 1 pawn reads at full size;
+// 2 shrink just enough to sit side-by-side without touching; 3-4 shrink
+// further to fit a clean 2×2 mini-grid without spilling past the cell edge.
+function getStackScale(count: number): number {
   if (count <= 1) return 1;
   if (count === 2) return 0.70;
   return 0.55;
 }
 
 // ─── Piece display position ───────────────────────────────────────────────────
-// `neonStacking`: opt-in flag (Neon Board theme only) that swaps the shared
-// legacy diagonal stack offsets for a tighter mini-grid layout, paired with
-// getNeonStackScale's scale-down so a full stack still reads as "inside the
-// cell". Omitted/false ⇒ byte-identical to the original behaviour, so
-// Classic/DZ call sites are completely unaffected.
-function getPieceXY(piece: E.Piece, all: E.Piece[], neonStacking?: boolean): [number, number] {
+// Universal stacking layout (all board themes — Classic, DZ, Neon all share
+// this): a lone pawn centers on the cell; 2 pawns sit as a tight side-by-side
+// pair; 3-4 pawns arrange in a clean 2×2 mini-grid. Paired with getStackScale's
+// scale-down so a full stack still reads as "inside the cell".
+function getPieceXY(piece: E.Piece, all: E.Piece[]): [number, number] {
   if (piece.relPos === -1) {
     const [br, bc] = E.HOME_BASES[piece.player][piece.index];
     return [bc + 0.5, br + 0.5];
@@ -278,24 +277,14 @@ function getPieceXY(piece: E.Piece, all: E.Piece[], neonStacking?: boolean): [nu
   const cx = col + 0.5, cy = row + 0.5;
   const { count, rank } = getBoardStack(piece, all);
   if (count <= 1) return [cx, cy];
-  if (neonStacking) {
-    if (count === 2) {
-      // Side-by-side pair, a touch closer than the legacy diagonal so the
-      // two read as a matched pair rather than scattered corners — but with
-      // enough of a gap that the hex bodies read as distinct pawns, not a
-      // single fused blob (verified at true on-board render density).
-      return [cx + (rank === 0 ? -0.215 : 0.215), cy];
-    }
-    // 3-4 pawns: tight 2×2 mini-grid (rank%4 wraps for the rare 5+ case,
-    // same overlap-fallback the legacy table already relies on).
-    const offsets: [number, number][] = [[-0.19,-0.19],[0.19,-0.19],[-0.19,0.19],[0.19,0.19]];
-    const [dx, dy] = offsets[rank % 4] || [0, 0];
-    return [cx + dx, cy + dy];
+  if (count === 2) {
+    // Side-by-side pair, close enough to read as a matched pair rather than
+    // scattered corners — but with enough of a gap that pawn bodies read as
+    // distinct, not a single fused blob (verified at true on-board render density).
+    return [cx + (rank === 0 ? -0.215 : 0.215), cy];
   }
-  // Legacy / Classic / DZ stacking (unchanged): ±0.18 diagonal 2×2 quadrants.
-  // Keeps every pawn visually within its cell (max extent: cx ± 0.505,
-  // negligibly over the 0.5 half-cell limit). Larger offsets clip on edge cells.
-  const offsets: [number,number][] = [[-0.18,-0.18],[0.18,-0.18],[-0.18,0.18],[0.18,0.18]];
+  // 3-4 pawns: tight 2×2 mini-grid (rank%4 wraps for the rare 5+ case).
+  const offsets: [number, number][] = [[-0.19,-0.19],[0.19,-0.19],[-0.19,0.19],[0.19,0.19]];
   const [dx, dy] = offsets[rank % 4] || [0, 0];
   return [cx + dx, cy + dy];
 }
@@ -1147,8 +1136,8 @@ function PawnToken({
   onStepLand?: (x: number, y: number, neon: string) => void; // Neon-only: fires at every hop-step landing (see HopBurstEffect)
   onDustStep?: (x: number, y: number) => void; // Classic-only: fires at every hop-step's vacated cell (see DustPuffEffect)
   onDzSparkleStep?: (x: number, y: number) => void; // DZ-only: gold glint left at every vacated hop cell
-  stackScale?: number; // Neon-only premium stacking: 1 = full size, <1 shrinks when sharing a cell. Defaults to 1 (Classic/DZ never pass this).
-  showSafeStar?: boolean; // Neon-only: this pawn is alone on a safe-star cell → renders its own glowing star badge. Defaults to false.
+  stackScale?: number; // Universal premium stacking (all themes): 1 = full size, <1 shrinks when sharing a cell. Defaults to 1.
+  showSafeStar?: boolean; // This pawn is alone on a safe-star cell → renders its own theme-matching glowing safe badge. Defaults to false.
 }) {
   const baseCtrl  = useAnimationControls();
   const arcCtrl   = useAnimationControls();
@@ -1173,11 +1162,10 @@ function PawnToken({
   onDustStepRef.current = onDustStep;
   onDzSparkleStepRef.current = onDzSparkleStep;
 
-  // ── Effect 0: Neon premium stack-scale transition ──────────────────────────
+  // ── Effect 0: universal stack-scale transition (all themes) ────────────────
   // Independent of the position/arc/squash controls above — glides the whole
   // pawn (body + ground shadow) to its new scale whenever the occupant count
-  // of its cell changes (arrival/departure). Classic/DZ never pass a non-1
-  // stackScale, so scaleCtrl simply never animates away from 1 for them.
+  // of its cell changes (arrival/departure).
   useEffect(() => {
     scaleCtrl.start({ scale: stackScaleVal, transition: { type: 'spring', ...springCfgRef.current } });
   }, [stackScaleVal]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1459,6 +1447,22 @@ function PawnToken({
             {/* Secondary sheen streak along the upper rim, glass-like curvature cue */}
             <path d={`M ${-domeR*0.55},${domeCY - domeR*0.72} A ${domeR} ${domeR} 0 0 1 ${domeR*0.15},${domeCY - domeR*0.985}`}
               fill="none" stroke="white" strokeOpacity="0.30" strokeWidth="0.012" strokeLinecap="round"/>
+
+            {/* Safe-star badge — this pawn is alone on a safe-star cell. A small
+                gilt star medallion sits on the dome, reusing the board's own
+                safe-square glow/gradients so it reads as the same motif at pawn
+                scale. The board-level star marker hides for exactly this case
+                (see the Classic safe-star cell block) so the two never double up. */}
+            {showSafeStar && (
+              <g filter="url(#cl-safe-glow)" pointerEvents="none">
+                <circle cx={0} cy={domeCY} r={domeR*0.62} fill="#FFB800" fillOpacity="0.16"/>
+                <polygon points={starPoints(0, domeCY, domeR*0.62, domeR*0.25, 5)}
+                  fill="url(#cl-safe-star)" fillOpacity="0.98"
+                  stroke="#8C6010" strokeWidth="0.014" strokeOpacity="0.85"/>
+                <circle cx={0} cy={domeCY} r={domeR*0.18} fill="url(#cl-star-jewel)"
+                  stroke="#C8960C" strokeWidth="0.012" strokeOpacity="0.90"/>
+              </g>
+            )}
           </>
         ) : isDz ? (
           <>
@@ -1512,6 +1516,21 @@ function PawnToken({
             {/* Eight-point star finial */}
             <polygon points={starPoints(0, domeCY - 1.15*domeR - 0.075, 0.075, 0.030, 8)} fill={DZ.BORDER_GOLD}/>
             <circle cx={0} cy={domeCY - 1.15*domeR - 0.075} r="0.022" fill="#fff" fillOpacity="0.7"/>
+
+            {/* Safe-star badge — this pawn is alone on a safe-star cell. A small
+                gold crescent-and-star medallion sits on the dome (the board's own
+                safe-square motif, scaled ~0.38× and recentred), so it reads as
+                the same emblem at pawn scale. The board-level marker hides for
+                exactly this case (see the DZ safe-star cell block) so the two
+                never double up. */}
+            {showSafeStar && (
+              <g filter="url(#dz-safe-glow)" pointerEvents="none">
+                <circle cx={0} cy={domeCY} r={domeR*0.62} fill="url(#dz-safe-glow-grad)"/>
+                <path fillRule="evenodd" fill={DZ.BORDER_GOLD}
+                  d={crescentPath(-0.053, domeCY, 0.106, -0.013, domeCY, 0.086)}/>
+                <polygon points={starPoints(0.114, domeCY, 0.051, 0.021, 5)} fill={DZ.BORDER_GOLD}/>
+              </g>
+            )}
           </>
         ) : (
           <>
@@ -1941,10 +1960,6 @@ function BoardSVG({
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   const isClassic   = boardStyle === 'classic';
   const isDz        = boardStyle === 'dz';
-  // Neon Board is the implicit fallback everywhere else in this file; named
-  // here only for the new premium stacking/safe-star lookups below so their
-  // gating reads clearly, without touching that existing convention.
-  const isNeonTheme = !isClassic && !isDz;
   // Classic palette: uses module-level CL_SOLID / CL_LIGHT / CL_BORDER / CL_ARROW
   // DZ palette: uses ../lib/board-theme-dz (Phase 1 — base colors only)
   const pieces      = game.pieces;
@@ -1954,20 +1969,19 @@ function BoardSVG({
       const { count } = getBoardStack(p, pieces);
       return {
         ...p,
-        xy: getPieceXY(p, pieces, isNeonTheme),
-        stackScale: isNeonTheme ? getNeonStackScale(count) : 1,
-        showSafeStar: isNeonTheme && count === 1 && isSafeStarPiece(p),
+        xy: getPieceXY(p, pieces),
+        stackScale: getStackScale(count),
+        showSafeStar: count === 1 && isSafeStarPiece(p),
       };
     }),
-    [pieces, isNeonTheme]
+    [pieces]
   );
 
-  // Per-cell occupant counts (main path / home column only) — drives the
-  // Neon safe-star cell's 0 / 1 / 2+ occupant states below. Keyed the same
+  // Per-cell occupant counts (main path / home column only) — drives every
+  // theme's safe-star cell 0 / 1 / 2+ occupant states below. Keyed the same
   // way as the cross-path cell render loop ("row,col") so lookups line up.
   const safeCellOccupancy = useMemo(() => {
     const map = new Map<string, number>();
-    if (!isNeonTheme) return map;
     pieces.forEach(p => {
       if (p.relPos < 0 || p.relPos === E.FINISHED_POS) return;
       const gp = E.getGridPos(p.player, p.relPos);
@@ -1976,7 +1990,7 @@ function BoardSVG({
       map.set(key, (map.get(key) ?? 0) + 1);
     });
     return map;
-  }, [pieces, isNeonTheme]);
+  }, [pieces]);
 
   const movableHighlights = useMemo(() => {
     if (game.phase !== 'selecting' || !game.movable.length) return [];
@@ -2190,6 +2204,22 @@ function BoardSVG({
               <stop offset="100%" stopColor="#7A5210"/>
             </radialGradient>
 
+            {/* ── Porcelain/marble safe-zone halo — soft pearl glow + veined ring,
+                  shown when a safe-star cell is occupied (single pawn's ambient
+                  wash, and the multi-pawn cell border). Deliberately cool/neutral
+                  so it reads as "porcelain" rather than repeating the gold star
+                  aesthetic. See the Classic safe-star cell block. ── */}
+            <radialGradient id="cl-porcelain-halo" cx="50%" cy="50%" r="50%">
+              <stop offset="0%"   stopColor="#FFFDF8" stopOpacity="0.85"/>
+              <stop offset="55%"  stopColor="#F3ECDD" stopOpacity="0.38"/>
+              <stop offset="100%" stopColor="#E8DCC0" stopOpacity="0"/>
+            </radialGradient>
+            <linearGradient id="cl-porcelain-ring" x1="10%" y1="0%" x2="90%" y2="100%">
+              <stop offset="0%"   stopColor="#FFFFFF"/>
+              <stop offset="45%"  stopColor="#E7DEC9"/>
+              <stop offset="100%" stopColor="#C9BFA3"/>
+            </linearGradient>
+
             {/* ── Center star ambient bloom — wide warm haze beneath the focal star ── */}
             <radialGradient id="cl-center-bloom" cx="50%" cy="50%" r="50%">
               <stop offset="0%"   stopColor="#FFE566" stopOpacity="0.70"/>
@@ -2254,6 +2284,16 @@ function BoardSVG({
               <stop offset="0%"   stopColor={DZ.BORDER_GOLD} stopOpacity="0.55"/>
               <stop offset="55%"  stopColor={DZ.BORDER_GOLD} stopOpacity="0.20"/>
               <stop offset="100%" stopColor={DZ.BORDER_GOLD} stopOpacity="0"/>
+            </radialGradient>
+            {/* Emerald companion glow for the safe-star halo/border — pairs with the
+                  gold radial above so the occupied safe-cell cue reads as "gold +
+                  emerald" rather than gold alone. Brightened well past the board's
+                  own deep-emerald field colour so it still reads as a glow against
+                  it. See the DZ safe-star cell block. */}
+            <radialGradient id="dz-emerald-halo" cx="50%" cy="50%" r="50%">
+              <stop offset="0%"   stopColor="#00B368" stopOpacity="0.42"/>
+              <stop offset="60%"  stopColor="#00B368" stopOpacity="0.16"/>
+              <stop offset="100%" stopColor="#00B368" stopOpacity="0"/>
             </radialGradient>
             {/* Islamic star-lattice (najma) — 8-point stars centered on each tile reach exactly
                   to the tile edges, so neighbouring tiles' points touch and chain into a
@@ -3008,58 +3048,95 @@ function BoardSVG({
             )}
 
             {isStar && !isStart && (() => {
+              const T = `translate(${c},${r})`;
+              const seed = (r * 15 + c) * 0.06;
+              // Universal safe-star occupancy states (all board themes), driven by
+              // live occupant count — same pattern for Classic/DZ/Neon:
+              //   0 occupants → unchanged idle marker (native icon + ambient glow).
+              //   1 occupant  → marker hides here; the lone pawn carries its own
+              //                 theme-matching glowing badge instead (see PawnToken
+              //                 showSafeStar). Cell instead shows the theme's
+              //                 pulsing safe-zone halo border.
+              //   2+ occupants → halo border PLUS the marker stays, now reading
+              //                 as a persistent zone badge drawn beneath the
+              //                 mini stacked pawns (cells render before pieces).
+              const occCount = safeCellOccupancy.get(`${r},${c}`) ?? 0;
+
               if (isClassic) {
                 return (
-                  <g transform={`translate(${c},${r})`} filter="url(#cl-safe-glow)">
-                    {/* Wide warm amber haze — warms the ivory cell before the star */}
-                    <circle cx="0.5" cy="0.5" r="0.46"
-                      fill="#FFB800" fillOpacity="0.14"/>
-                    {/* Outer gilt ring — engraved compass band around the star */}
-                    <circle cx="0.5" cy="0.5" r="0.435"
-                      fill="none" stroke="url(#cl-star-ring)" strokeWidth="0.026" strokeOpacity="0.70"/>
-                    {/* Stamped impression ring — the star is pressed into the ivory like a seal */}
-                    <circle cx="0.5" cy="0.5" r="0.412"
-                      fill="none" stroke="#8C6420" strokeWidth="0.014" strokeOpacity="0.32"/>
-                    <circle cx="0.5" cy="0.5" r="0.388"
-                      fill="none" stroke="rgba(184,134,59,0.22)" strokeWidth="0.008"/>
-                    {/* Deep emboss — two-layer offset shadow for real pressed-metal depth */}
-                    <polygon
-                      points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
-                      fill="#3A1E04" fillOpacity="0.20"
-                      transform="translate(0.022,0.022)"/>
-                    <polygon
-                      points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
-                      fill="#7A4C08" fillOpacity="0.28"
-                      transform="translate(0.012,0.012)"/>
-                    {/* Main star — rich gradient gold from cream highlight to deep amber */}
-                    <polygon
-                      points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
-                      fill="url(#cl-safe-star)" fillOpacity="1.0"
-                      stroke="#8C6010" strokeWidth="0.022" strokeOpacity="0.80"/>
-                    {/* Gilt rim highlight — bright catch-light on top of the star stroke */}
-                    <polygon
-                      points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
-                      fill="none"
-                      stroke="url(#clbevel)" strokeWidth="0.010" strokeOpacity="0.60"/>
-                    {/* Five tip accent dots — tiny brass studs at each outer star point */}
-                    {([
-                      [0.500,0.185],[0.800,0.400],[0.690,0.750],[0.310,0.750],[0.200,0.400]
-                    ] as [number,number][]).map(([tx,ty],ti)=>(
-                      <circle key={ti} cx={tx} cy={ty} r="0.024"
-                        fill="url(#clbrass)" fillOpacity="0.92"
-                        stroke="#5C3D14" strokeWidth="0.006" strokeOpacity="0.55"/>
-                    ))}
-                    {/* Faceted jewel dome at centre — slightly larger for presence */}
-                    <circle cx="0.5" cy="0.5" r="0.092"
-                      fill="url(#cl-star-jewel)"
-                      stroke="#C8960C" strokeWidth="0.016" strokeOpacity="0.92"/>
-                    {/* Jewel facet engraving — inner ring reads as a cut gem edge */}
-                    <circle cx="0.5" cy="0.5" r="0.060"
-                      fill="none" stroke="rgba(255,255,255,0.42)" strokeWidth="0.008"/>
-                    {/* Jewel primary specular */}
-                    <circle cx="0.468" cy="0.464" r="0.032" fill="white" fillOpacity="0.86"/>
-                    {/* Jewel hot-spot — pin-point light at the dome peak */}
-                    <circle cx="0.478" cy="0.474" r="0.014" fill="white" fillOpacity="0.98"/>
+                  <g transform={T}>
+                    {occCount !== 1 && (
+                      <g filter="url(#cl-safe-glow)">
+                        {/* Wide warm amber haze — warms the ivory cell before the star */}
+                        <circle cx="0.5" cy="0.5" r="0.46"
+                          fill="#FFB800" fillOpacity="0.14"/>
+                        {/* Outer gilt ring — engraved compass band around the star */}
+                        <circle cx="0.5" cy="0.5" r="0.435"
+                          fill="none" stroke="url(#cl-star-ring)" strokeWidth="0.026" strokeOpacity="0.70"/>
+                        {/* Stamped impression ring — the star is pressed into the ivory like a seal */}
+                        <circle cx="0.5" cy="0.5" r="0.412"
+                          fill="none" stroke="#8C6420" strokeWidth="0.014" strokeOpacity="0.32"/>
+                        <circle cx="0.5" cy="0.5" r="0.388"
+                          fill="none" stroke="rgba(184,134,59,0.22)" strokeWidth="0.008"/>
+                        {/* Deep emboss — two-layer offset shadow for real pressed-metal depth */}
+                        <polygon
+                          points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
+                          fill="#3A1E04" fillOpacity="0.20"
+                          transform="translate(0.022,0.022)"/>
+                        <polygon
+                          points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
+                          fill="#7A4C08" fillOpacity="0.28"
+                          transform="translate(0.012,0.012)"/>
+                        {/* Main star — rich gradient gold from cream highlight to deep amber */}
+                        <polygon
+                          points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
+                          fill="url(#cl-safe-star)" fillOpacity="1.0"
+                          stroke="#8C6010" strokeWidth="0.022" strokeOpacity="0.80"/>
+                        {/* Gilt rim highlight — bright catch-light on top of the star stroke */}
+                        <polygon
+                          points="0.500,0.185 0.574,0.395 0.800,0.400 0.624,0.535 0.690,0.750 0.500,0.618 0.310,0.750 0.376,0.535 0.200,0.400 0.426,0.395"
+                          fill="none"
+                          stroke="url(#clbevel)" strokeWidth="0.010" strokeOpacity="0.60"/>
+                        {/* Five tip accent dots — tiny brass studs at each outer star point */}
+                        {([
+                          [0.500,0.185],[0.800,0.400],[0.690,0.750],[0.310,0.750],[0.200,0.400]
+                        ] as [number,number][]).map(([tx,ty],ti)=>(
+                          <circle key={ti} cx={tx} cy={ty} r="0.024"
+                            fill="url(#clbrass)" fillOpacity="0.92"
+                            stroke="#5C3D14" strokeWidth="0.006" strokeOpacity="0.55"/>
+                        ))}
+                        {/* Faceted jewel dome at centre — slightly larger for presence */}
+                        <circle cx="0.5" cy="0.5" r="0.092"
+                          fill="url(#cl-star-jewel)"
+                          stroke="#C8960C" strokeWidth="0.016" strokeOpacity="0.92"/>
+                        {/* Jewel facet engraving — inner ring reads as a cut gem edge */}
+                        <circle cx="0.5" cy="0.5" r="0.060"
+                          fill="none" stroke="rgba(255,255,255,0.42)" strokeWidth="0.008"/>
+                        {/* Jewel primary specular */}
+                        <circle cx="0.468" cy="0.464" r="0.032" fill="white" fillOpacity="0.86"/>
+                        {/* Jewel hot-spot — pin-point light at the dome peak */}
+                        <circle cx="0.478" cy="0.474" r="0.014" fill="white" fillOpacity="0.98"/>
+                      </g>
+                    )}
+                    {occCount === 1 && (
+                      /* Subtle porcelain/marble ambient wash — the lone pawn now
+                         carries the star badge itself (see PawnToken showSafeStar). */
+                      <motion.circle cx="0.5" cy="0.5" r="0.40"
+                        fill="url(#cl-porcelain-halo)"
+                        animate={{ opacity: [0.45, 0.85, 0.45] }}
+                        transition={{ duration: 2.3, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                      />
+                    )}
+                    {occCount > 0 && (
+                      /* Marble/porcelain safe-zone halo border — soft pearl frame
+                         around the whole cell, present whenever at least one pawn
+                         occupies it (both the lone-pawn and stacked cases). */
+                      <motion.rect x="0.045" y="0.045" width="0.91" height="0.91" rx="0.10"
+                        fill="none" stroke="url(#cl-porcelain-ring)" strokeWidth="0.048"
+                        animate={{ strokeOpacity: [0.34, 0.82, 0.34] }}
+                        transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                      />
+                    )}
                   </g>
                 );
               }
@@ -3068,28 +3145,43 @@ function BoardSVG({
                 // hold up at 1-cell scale, sitting on a soft warm radial glow. Star is
                 // pushed clear of the crescent's horn tips so the two read as distinct
                 // shapes instead of fusing into one gold blob at this small scale.
-                const T = `translate(${c},${r})`;
                 return (
                   <g transform={T}>
-                    <circle cx="0.475" cy="0.5" r="0.42" fill="url(#dz-safe-glow-grad)"/>
-                    <path fillRule="evenodd" fill={DZ.BORDER_GOLD}
-                      d={crescentPath(0.36, 0.5, 0.28, 0.465, 0.5, 0.225)}/>
-                    <polygon points={starPoints(0.80, 0.5, 0.135, 0.054, 5)} fill={DZ.BORDER_GOLD}/>
+                    {occCount !== 1 && (
+                      <>
+                        <circle cx="0.475" cy="0.5" r="0.42" fill="url(#dz-safe-glow-grad)"/>
+                        <path fillRule="evenodd" fill={DZ.BORDER_GOLD}
+                          d={crescentPath(0.36, 0.5, 0.28, 0.465, 0.5, 0.225)}/>
+                        <polygon points={starPoints(0.80, 0.5, 0.135, 0.054, 5)} fill={DZ.BORDER_GOLD}/>
+                      </>
+                    )}
+                    {occCount === 1 && (
+                      /* Subtle gold/emerald ambient wash — the lone pawn now carries
+                         the crescent-and-star badge itself (see PawnToken showSafeStar). */
+                      <motion.circle cx="0.5" cy="0.5" r="0.40" fill="url(#dz-emerald-halo)"
+                        animate={{ opacity: [0.5, 0.9, 0.5] }}
+                        transition={{ duration: 2.3, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                      />
+                    )}
+                    {occCount > 0 && (
+                      <>
+                        {/* Emerald outer bloom — feathered, sits behind the crisp gold ring */}
+                        <motion.rect x="0.01" y="0.01" width="0.98" height="0.98" rx="0.14"
+                          fill="none" stroke="#00B368" strokeWidth="0.10" filter="url(#dz-safe-glow)"
+                          animate={{ strokeOpacity: [0.20, 0.48, 0.20] }}
+                          transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                        />
+                        {/* Gold safe-zone halo border — crisp frame around the whole cell */}
+                        <motion.rect x="0.045" y="0.045" width="0.91" height="0.91" rx="0.10"
+                          fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.048"
+                          animate={{ strokeOpacity: [0.38, 0.88, 0.38] }}
+                          transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                        />
+                      </>
+                    )}
                   </g>
                 );
               }
-              const T = `translate(${c},${r})`;
-              const seed = (r * 15 + c) * 0.06;
-              // Premium safe-star states, driven by live occupant count:
-              //   0 occupants → unchanged idle marker (ambient halo + star + core).
-              //   1 occupant  → marker hides here; the lone pawn carries its own
-              //                 glowing star badge instead (see PawnToken
-              //                 showSafeStar). Cell instead shows the pulsing
-              //                 Neon Safe-Zone Halo border.
-              //   2+ occupants → halo border PLUS the marker stays, now reading
-              //                 as a persistent zone badge drawn beneath the
-              //                 mini stacked pawns (cells render before pieces).
-              const occCount = safeCellOccupancy.get(`${r},${c}`) ?? 0;
               return (
                 // NOTE: static translate must live on a plain <g> ancestor — see
                 // the comment above about Framer Motion overriding SVG transform attributes.
@@ -3794,10 +3886,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
 
     // Seed startX/startY from the actual rendered position (getPieceXY) so that
     // stacking offsets are reflected — avoids off-lane axis-diff on first step.
-    // isNeon read via closure (stable empty-deps callback): boardStyle never
-    // changes during a mounted board session, same accepted pattern already
-    // used for isClassic/isDz elsewhere in this callback (e.g. capture SFX).
-    const [startX, startY] = getPieceXY(piece, currentGame.pieces, isNeon);
+    const [startX, startY] = getPieceXY(piece, currentGame.pieces);
 
     // Find which piece (if any) is captured in this move
     const capturedP = currentGame.pieces.find(p => {
