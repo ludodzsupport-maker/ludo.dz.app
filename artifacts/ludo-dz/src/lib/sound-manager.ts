@@ -484,120 +484,111 @@ export function playClassicClick(): void {
 let classicPawnNoiseBuffer: AudioBuffer | null = null;
 
 /**
- * Dedicated noise texture for Classic's upgraded pawn select/step family —
+ * Dedicated noise texture for Classic's marble pawn select/step family —
  * distinct from `getWoodNoiseBuffer` (shared by the generic Classic click
- * and capture, both untouched below) so retuning this premium wood/resin
- * pawn material can never bleed into either. More correlated than the
- * click's buffer for a rounder, less papery contact transient.
+ * and capture, both untouched below). Only lightly correlated (unlike the
+ * smoothed, rounded buffers used elsewhere) so a bandpass filter still has
+ * real high-frequency content to carve into — the hard, bright "mineral
+ * surface" edge a duller buffer can't give.
  */
 function getClassicPawnNoiseBuffer(context: AudioContext): AudioBuffer {
   if (classicPawnNoiseBuffer?.sampleRate === context.sampleRate) return classicPawnNoiseBuffer;
-  const duration = 0.2;
+  const duration = 0.08;
   const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
   const samples = buffer.getChannelData(0);
   for (let i = 0; i < samples.length; i++) {
-    const previous = i === 0 ? 0 : samples[i - 1] * 0.7;
-    samples[i] = previous + (Math.random() * 2 - 1) * 0.42;
+    const previous = i === 0 ? 0 : samples[i - 1] * 0.15;
+    samples[i] = previous + (Math.random() * 2 - 1) * 0.85;
   }
   classicPawnNoiseBuffer = buffer;
   return buffer;
 }
 
 /**
- * Shared building block for Classic's upgraded "premium wood/resin" pawn
- * family — the pawn tap-to-select and the pawn jump/step landing — kept
- * entirely separate from `scheduleWoodKnock` (untouched; still powers the
- * generic Classic UI click and capture) so this pass can never affect
- * either. A lowpass-filtered contact thump (rounder and warmer than the
- * click's bandpass "chk" — no bright or tinny edge) underlies a
- * dual-oscillator body: a triangle fundamental with a gentle downward
- * pitch-glide (the organic "plop" character a static tone can't give) plus a
- * quiet sine overtone a fifth above for harmonic warmth, and a sine sub layer
- * an octave below the fundamental for deep low-end weight. Every cue built on
- * this shares the exact same partial structure and — critically — the exact
- * same base frequency, so select and step always read as the same physical
- * pawn material; only decay/mix/echo differ per cue.
+ * Shared building block for Classic's marble/stone pawn family — the pawn
+ * tap-to-select and the pawn jump/step landing. Replaces an earlier
+ * wood/resin design (dual detuned oscillators plus a sub-bass layer and a
+ * delayed second hit) that read as reverby and hollow; this version is
+ * deliberately a single hit with a very short exponential decay and no
+ * sub-bass at all, so nothing here can sustain, ring, or repeat — a real
+ * marble "clack" is over in well under a tenth of a second. A
+ * bandpass-filtered noise burst (bright and hard, tuned high — not the warm
+ * lowpass "thump" used for wood) supplies the mineral contact transient; a
+ * short triangle tone with a quick upward pitch-flick at the very onset
+ * supplies the light cartoon "pop" rather than a flat static beep; a quiet,
+ * even shorter octave-up sine shimmer adds the crisp, high-definition edge
+ * that reads as polished stone. Kept entirely separate from
+ * `scheduleWoodKnock` (untouched; still powers the generic Classic UI click
+ * and capture), so this redesign can't affect either. Every cue built on
+ * this shares the exact recipe; only freq/amp/decay/mix differ.
  */
 function scheduleClassicPawnBody(
   context: AudioContext,
   bus: AudioNode,
   startTime: number,
-  { amp, freq, decay, subMix = 0.5, noiseMix = 0.3 }: {
-    amp: number; freq: number; decay: number; subMix?: number; noiseMix?: number;
-  },
+  { amp, freq, decay, noiseMix = 0.5 }: { amp: number; freq: number; decay: number; noiseMix?: number },
 ): void {
-  // Warm contact thump — lowpass, not bandpass, so the transient reads as a
-  // soft rounded touch instead of a bright papery "chk".
+  // Hard mineral contact transient — bandpass and short, not the lowpass
+  // "thump" used for wood, so the attack reads as a crisp clack rather than
+  // a dull knock.
   const noise = context.createBufferSource();
   noise.buffer = getClassicPawnNoiseBuffer(context);
   const noiseFilter = context.createBiquadFilter();
-  noiseFilter.type = "lowpass";
-  noiseFilter.frequency.setValueAtTime(freq * 1.6, startTime);
-  noiseFilter.Q.value = 0.6;
+  noiseFilter.type = "bandpass";
+  noiseFilter.frequency.setValueAtTime(freq * 4.2, startTime);
+  noiseFilter.Q.value = 1.1;
   const noiseGain = context.createGain();
-  const noiseDecay = decay * 0.34;
+  const noiseDecay = Math.min(decay * 0.6, 0.024);
   noiseGain.gain.setValueAtTime(0.0001, startTime);
-  noiseGain.gain.linearRampToValueAtTime(amp * noiseMix, startTime + 0.004);
+  noiseGain.gain.linearRampToValueAtTime(amp * noiseMix, startTime + 0.002);
   noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + noiseDecay);
   noise.connect(noiseFilter).connect(noiseGain).connect(bus);
   noise.start(startTime);
-  noise.stop(startTime + noiseDecay + 0.02);
+  noise.stop(startTime + noiseDecay + 0.01);
 
-  // Fundamental — triangle with a gentle downward glide; the plop/thud's
-  // organic pitch motion, not a flat static beep.
+  // Tone — a quick upward pitch-flick into the target pitch (the light
+  // cartoon "pop" attack), then an immediate, fully dry decay. No downward
+  // glide and no sustain: it ends the instant it lands, never lingering into
+  // anything that could read as reverb.
   const body = context.createOscillator();
   body.type = "triangle";
-  body.frequency.setValueAtTime(freq, startTime);
-  body.frequency.exponentialRampToValueAtTime(freq * 0.76, startTime + decay);
+  body.frequency.setValueAtTime(freq * 0.72, startTime);
+  body.frequency.exponentialRampToValueAtTime(freq, startTime + 0.008);
+  body.frequency.exponentialRampToValueAtTime(freq * 0.92, startTime + decay);
   const bodyGain = context.createGain();
   bodyGain.gain.setValueAtTime(0.0001, startTime);
-  bodyGain.gain.linearRampToValueAtTime(amp * (1 - noiseMix * 0.4), startTime + 0.006);
+  bodyGain.gain.linearRampToValueAtTime(amp * (1 - noiseMix * 0.3), startTime + 0.004);
   bodyGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay);
   body.connect(bodyGain).connect(bus);
   body.start(startTime);
-  body.stop(startTime + decay + 0.02);
+  body.stop(startTime + decay + 0.01);
 
-  // A fifth above the fundamental, quiet sine — dual-oscillator depth and
-  // harmonic warmth without adding brightness (a sine carries no upper
-  // harmonics, so it thickens the tone instead of sharpening it).
-  const overtone = context.createOscillator();
-  overtone.type = "sine";
-  overtone.frequency.setValueAtTime(freq * 1.5, startTime);
-  overtone.frequency.exponentialRampToValueAtTime(freq * 1.5 * 0.76, startTime + decay * 0.85);
-  const overtoneGain = context.createGain();
-  overtoneGain.gain.setValueAtTime(0.0001, startTime);
-  overtoneGain.gain.linearRampToValueAtTime(amp * 0.22, startTime + 0.006);
-  overtoneGain.gain.exponentialRampToValueAtTime(0.0001, startTime + decay * 0.8);
-  overtone.connect(overtoneGain).connect(bus);
-  overtone.start(startTime);
-  overtone.stop(startTime + decay * 0.8 + 0.02);
-
-  // Sub layer an octave below the fundamental — the "deep, organic" low-end
-  // weight both cues share; a touch longer than the fundamental so the
-  // warmth lingers briefly after the main tone has finished.
-  const subDecay = decay * 1.2;
-  const sub = context.createOscillator();
-  sub.type = "sine";
-  sub.frequency.setValueAtTime(freq * 0.5, startTime);
-  sub.frequency.exponentialRampToValueAtTime(freq * 0.5 * 0.82, startTime + subDecay);
-  const subGain = context.createGain();
-  subGain.gain.setValueAtTime(0.0001, startTime);
-  subGain.gain.linearRampToValueAtTime(amp * subMix, startTime + 0.007);
-  subGain.gain.exponentialRampToValueAtTime(0.0001, startTime + subDecay);
-  sub.connect(subGain).connect(bus);
-  sub.start(startTime);
-  sub.stop(startTime + subDecay + 0.02);
+  // Octave-up shimmer, very quiet and even shorter — the crisp,
+  // high-definition edge that reads as polished stone rather than plain
+  // wood, without adding any perceptible length to the cue.
+  const shimmer = context.createOscillator();
+  shimmer.type = "sine";
+  shimmer.frequency.setValueAtTime(freq * 2.1, startTime);
+  const shimmerGain = context.createGain();
+  const shimmerDecay = Math.min(decay * 0.45, 0.02);
+  shimmerGain.gain.setValueAtTime(0.0001, startTime);
+  shimmerGain.gain.linearRampToValueAtTime(amp * 0.16, startTime + 0.002);
+  shimmerGain.gain.exponentialRampToValueAtTime(0.0001, startTime + shimmerDecay);
+  shimmer.connect(shimmerGain).connect(bus);
+  shimmer.start(startTime);
+  shimmer.stop(startTime + shimmerDecay + 0.01);
 }
 
 /**
- * Classic board pawn step: a deep, organic "thud" with a soft second-contact
- * bounce — built on `scheduleClassicPawnBody` (shared with the select cue
- * below) using the exact same base frequency as selection but a heavier sub
- * layer, longer decay, and a quieter echo ~30ms later standing in for a
- * settle bounce — the "juicy" quality a single flat hit can't give. `hopMs`
- * — the caller's own per-hop animation length for the active speed setting,
- * unchanged here — scales the envelope (bounded, see `pawnStepTimeScale`) so
- * it tracks Fast/Rapid and Slow hop timing exactly as before.
+ * Classic board pawn step: a snappy, solid marble drop/landing — one dry hit
+ * only (no settle-bounce echo; the previous design's delayed second hit was
+ * part of what read as "echo"). Lower-pitched and a touch heavier than
+ * selection below for the "solid landing" weight, while sharing the exact
+ * same `scheduleClassicPawnBody` recipe so the two cues still read as the
+ * same material. `hopMs` — the caller's own per-hop animation length for the
+ * active speed setting, unchanged here — lightly scales the decay (bounded,
+ * see `pawnStepTimeScale`); even at its longest (Slow) the cue stays under
+ * 70ms, well inside "ends instantly."
  */
 export function playClassicPawnMove(hopMs?: number): void {
   if (!soundEnabled) return;
@@ -609,33 +600,27 @@ export function playClassicPawnMove(hopMs?: number): void {
   const jitter = 0.97 + Math.random() * 0.06;
   playSynthCue((context, now) => {
     scheduleClassicPawnBody(context, context.destination, now, {
-      amp: 0.36, freq: 285 * jitter, decay: 0.095 * scale, subMix: 0.62, noiseMix: 0.28,
-    });
-    // Soft settle-bounce — a quieter, slightly lower echo of the same body,
-    // the "juicy" second contact that reads as an organic landing rather
-    // than one clean hit stopping cold.
-    scheduleClassicPawnBody(context, context.destination, now + 0.03 * scale, {
-      amp: 0.14, freq: 255 * jitter, decay: 0.055 * scale, subMix: 0.5, noiseMix: 0.22,
+      amp: 0.44, freq: 560 * jitter, decay: 0.05 * scale, noiseMix: 0.46,
     });
   });
 }
 
 /**
  * Classic board pawn selection: the tap that picks a playable pawn to move —
- * a crisp, warm "tap/plop" like picking up a smooth, premium wooden/resin
- * pawn. Built on the exact same `scheduleClassicPawnBody` voice and base
- * frequency as `playClassicPawnMove` above (a lighter sub layer and quicker
- * decay, no settle-bounce) so selecting and then stepping a pawn read as one
- * cohesive, studio-polished material rather than two unrelated sounds.
- * Distinct from the generic `playClassicClick` (still `scheduleWoodKnock`,
- * untouched) used by settings/back/restart/speed-picker buttons — "pawn
- * click/selection" means specifically this tap-to-select action.
+ * a sharp, clean, dry marble tap, brighter and quicker than the step above
+ * with no low-end weight at all. Built on the exact same
+ * `scheduleClassicPawnBody` recipe as `playClassicPawnMove` (just a higher
+ * base frequency and a shorter, lighter decay) so selecting and then
+ * stepping a pawn read as one cohesive marble material. Distinct from the
+ * generic `playClassicClick` (still `scheduleWoodKnock`, untouched) used by
+ * settings/back/restart/speed-picker buttons — "pawn click/selection" means
+ * specifically this tap-to-select action.
  */
 export function playClassicPawnSelect(): void {
   const jitter = 0.97 + Math.random() * 0.06;
   playSynthCue((context, now) => {
     scheduleClassicPawnBody(context, context.destination, now, {
-      amp: 0.40, freq: 285 * jitter, decay: 0.07, subMix: 0.30, noiseMix: 0.32,
+      amp: 0.40, freq: 760 * jitter, decay: 0.034, noiseMix: 0.56,
     });
   });
 }
