@@ -15,6 +15,7 @@ import {
   playSelection,
   playToggleClick,
 } from '../lib/sound-manager';
+import { isHapticsEnabled, setHapticsEnabled } from '../lib/haptics-manager';
 interface SettingsScreenProps {
   lang: 'fr' | 'ar';
   setLang: (lang: 'fr' | 'ar') => void;
@@ -174,7 +175,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const [sound,      setSound]      = useState(isSoundEnabled());
   const [music,      setMusic]      = useState(isBgmEnabled());
-  const [vibration,  setVibration]  = useState(true);
+  const [vibration,  setVibration]  = useState(isHapticsEnabled());
   const [langOpen,   setLangOpen]   = useState(false);
   const [boardOpen,  setBoardOpen]  = useState(false);
 
@@ -195,8 +196,11 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
     setBgmEnabled(next);
     setMusic(next);
   };
+  // Vibrations is fully independent from Sound Effects / Music: its own
+  // storage key and gate inside the haptics manager, same pattern as BGM.
   const handleVibrationToggle = (next: boolean) => {
     playToggleClick(next);
+    setHapticsEnabled(next);
     setVibration(next);
   };
 

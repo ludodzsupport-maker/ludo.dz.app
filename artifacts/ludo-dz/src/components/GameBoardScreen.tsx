@@ -27,6 +27,7 @@ import {
   playPrimaryAction,
   playSelection,
 } from '../lib/sound-manager';
+import { vibrateDiceRoll, vibratePawnStep, vibrateCaptureOrWin } from '../lib/haptics-manager';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 import type { BoardStyle } from '../App';
@@ -3532,6 +3533,9 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     if (isNeon) playNeonDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
     else if (isClassic) playClassicDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
     else if (isDz) playDzDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
+    // Haptics are theme-independent (unlike the synthesized cues above), so
+    // every roll gets a pulse regardless of which board style is active.
+    vibrateDiceRoll();
     setRolling(true);
     setJustLanded(false);
 
@@ -3576,6 +3580,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     // Fast/Rapid and Slow instead of staying fixed-length. See
     // playNeonPawnMove's bounded scale in sound-manager.ts.
     if (isNeon) playNeonPawnMove(cfg.hopMs);
+    // Haptics are theme-independent: this callback is only ever invoked when
+    // Neon is active (see PawnToken's per-step guard), so exactly one of the
+    // three handle*Step callbacks fires per physical hop regardless of theme.
+    vibratePawnStep();
   }, [isNeon, spawnHopBurst, cfg.hopMs]);
 
   // Mirrors handleNeonHopLand above, but hooks the existing Classic-only dust
@@ -3585,6 +3593,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const handleClassicDustStep = useCallback((x: number, y: number) => {
     spawnDustPuff(x, y);
     if (isClassic) playClassicPawnMove(cfg.hopMs);
+    // Haptics are theme-independent: this callback is only ever invoked when
+    // Classic is active (see PawnToken's per-step guard), so exactly one of
+    // the three handle*Step callbacks fires per physical hop regardless of theme.
+    vibratePawnStep();
   }, [isClassic, spawnDustPuff, cfg.hopMs]);
 
   // Mirrors handleNeonHopLand/handleClassicDustStep above, but hooks the
@@ -3595,6 +3607,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const handleDzSparkleStep = useCallback((x: number, y: number) => {
     spawnDzSparkle(x, y);
     if (isDz) playDzPawnMove(cfg.hopMs);
+    // Haptics are theme-independent: this callback is only ever invoked when
+    // DZ is active (see PawnToken's per-step guard), so exactly one of the
+    // three handle*Step callbacks fires per physical hop regardless of theme.
+    vibratePawnStep();
   }, [isDz, spawnDzSparkle, cfg.hopMs]);
 
   // ── triggerMove — async-safe, decoupled animation from state resolution ──
@@ -3645,6 +3661,9 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       if (capturedPid && lastStep) {
         setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() });
         if (isClassic) playClassicCapture();
+        // Haptics are theme-independent: fires on every capture regardless
+        // of which board style's SFX is gated above.
+        vibrateCaptureOrWin();
       }
       if (isHomeFinish) {
         setHomeFinishVFX({ x: 7.5, y: 7.5, neon: captorNeon, id: Date.now() });
@@ -3664,6 +3683,9 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       if (capturedPid && lastStep) {
         setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() });
         if (isClassic) playClassicCapture();
+        // Haptics are theme-independent: fires on every capture regardless
+        // of which board style's SFX is gated above.
+        vibrateCaptureOrWin();
       }
       if (isHomeFinish) {
         setHomeFinishVFX({ x: 7.5, y: 7.5, neon: captorNeon, id: Date.now() });
@@ -3746,6 +3768,12 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       triggerMove(redirect);
     }
   }, [isHumanTurn, isNeon, isClassic, isDz, triggerMove]);
+
+  // ── Win haptic — fires exactly once, the moment game.winner is first set ─
+  useEffect(() => {
+    if (game.winner === null) return;
+    vibrateCaptureOrWin();
+  }, [game.winner]);
 
   // ── Auto-pass when no valid moves — blocked while animation is in flight ─
   useEffect(() => {
