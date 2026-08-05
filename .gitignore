@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Cordova/Monaca packaging build output (see cordova/README.md)
+/cordova/www/
