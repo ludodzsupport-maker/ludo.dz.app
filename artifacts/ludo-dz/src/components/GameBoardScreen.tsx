@@ -6,8 +6,9 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
-import { ArrowLeft, Bot, Settings, Trophy, X, Zap } from 'lucide-react';
+import { ArrowLeft, Bot, Settings, X, Zap } from 'lucide-react';
 import { GamePiece } from './GamePiece';
+import { VictoryScreen } from './VictoryScreen';
 import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
 import type { GameConfig } from './GameConfigOverlay';
@@ -3641,6 +3642,16 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const [restartKey, setRestartKey] = useState(0);
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
 
+  // ── Match stats (additive, local to this screen) — feeds VictoryScreen ────
+  // Tracked here rather than in ludo-engine.ts so the pure engine stays
+  // untouched. moveCount/captureCounts increment exactly once per real move,
+  // at the single spot in triggerMove where a move is first resolved
+  // (covers both the zero-step-commit and onLastHop-deferred-commit paths).
+  const [moveCount, setMoveCount] = useState(0);
+  const [captureCounts, setCaptureCounts] = useState<number[]>([0, 0, 0, 0]);
+  const [matchDurationMs, setMatchDurationMs] = useState(0);
+  const matchStartRef = useRef(Date.now());
+
   // ── Animation queue state (owned here, threaded down to BoardSVG) ─────────
   const [isAnimating,   setIsAnimating]   = useState(false);
   const [pieceAnims,    setPieceAnims]    = useState<Record<string, PieceAnim>>({});
@@ -3847,6 +3858,14 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     }) ?? null;
     const capturedPid = capturedP ? E.pieceId(capturedP.player, capturedP.index) : null;
 
+    // ── Match stats — increments exactly once per real move (this function
+    // already returned early above for non-movable pids), regardless of
+    // which commit path below (zero-step vs. onLastHop) resolves it.
+    setMoveCount(c => c + 1);
+    if (capturedPid) {
+      setCaptureCounts(prev => { const next = [...prev]; next[ps] = (next[ps] ?? 0) + 1; return next; });
+    }
+
     const captorNeon   = E.PLAYER_NEONS[ps];
     const lastStep     = steps.length > 0 ? steps[steps.length - 1] : null;
     const isHomeFinish = pTo === E.FINISHED_POS;
@@ -3985,6 +4004,19 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     vibrateCaptureOrWin();
   }, [game.winner]);
 
+  // ── Match duration + victory fanfare — fires exactly once, the moment
+  // game.winner is first set. Kept as its own effect (separate from the
+  // haptics effect above) so neither can affect the other's firing
+  // conditions. Reuses each theme's existing welcome-jingle cue as the
+  // victory fanfare rather than introducing new synthesized audio.
+  useEffect(() => {
+    if (game.winner === null) return;
+    setMatchDurationMs(Date.now() - matchStartRef.current);
+    if (isNeon) playNeonWelcomeJingle();
+    else if (isClassic) playClassicWelcomeJingle();
+    else if (isDz) playDzWelcomeJingle();
+  }, [game.winner]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Auto-pass when no valid moves — blocked while animation is in flight ─
   useEffect(() => {
     if (game.phase !== 'selecting' || game.movable.length > 0 || game.winner || isAnimating) return;
@@ -4040,6 +4072,12 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     setHomeFinishVFX(null);
     setGame(E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
     setRestartKey(k => k + 1);
+    // Reset match stats for the new match — this instance never unmounts on
+    // restart (same key="game" in App.tsx), so these must be cleared here.
+    setMoveCount(0);
+    setCaptureCounts([0, 0, 0, 0]);
+    setMatchDurationMs(0);
+    matchStartRef.current = Date.now();
   }, [config.players, config.rule]);
 
   // ── Status text ───────────────────────────────────────────────────────────
@@ -4277,98 +4315,12 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       {/* ── Victory overlay ── */}
       <AnimatePresence>
         {game.winner !== null && (
-          <motion.div
-            className="absolute inset-0 z-30 flex flex-col items-center justify-center"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            style={{ backdropFilter: 'blur(16px)', background: 'rgba(3,11,22,0.92)' }}>
-            {/* Confetti */}
-            {Array.from({ length: 22 }, (_, i) => (
-              <motion.div key={i}
-                className="absolute rounded-full"
-                style={{
-                  width: 6+(i%5)*4, height: 6+(i%5)*4,
-                  background: E.PLAYER_COLORS[i%4],
-                  left: `${6+(i*4)%88}%`, top: '-5%', opacity: 0.85,
-                }}
-                animate={{
-                  y: ['0vh','115vh'],
-                  rotate: [0, 360*(i%2?1:-1)],
-                  x: [0, (i%2?1:-1)*(16+i*4)],
-                }}
-                transition={{
-                  duration: 2.0+(i%4)*0.28, delay: i*0.06,
-                  ease: 'easeIn', repeat: Infinity, repeatDelay: 0.3,
-                }}
-              />
-            ))}
-
-            <motion.div
-              initial={{ scale: 0.55, y: 40, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 22, delay: 0.10 }}
-              style={{
-                background: `linear-gradient(145deg, ${E.PLAYER_COLORS[game.winner]}22, rgba(3,11,22,0.97))`,
-                border: `2px solid ${E.PLAYER_NEONS[game.winner]}65`,
-                boxShadow: `0 0 55px ${E.PLAYER_COLORS[game.winner]}35, 0 0 110px ${E.PLAYER_COLORS[game.winner]}15`,
-                borderRadius: 28, padding: '32px 28px 28px',
-                maxWidth: 300, width: '88%',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
-              }}>
-              <motion.div
-                animate={{ rotate: [0,-12,12,-6,6,0], scale: [1,1.18,1] }}
-                transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 2 }}>
-                <Trophy size={54} color={E.PLAYER_NEONS[game.winner]}
-                  style={{ filter: `drop-shadow(0 0 12px ${E.PLAYER_NEONS[game.winner]})` }}/>
-              </motion.div>
-
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ fontFamily: 'Cairo, sans-serif', fontSize: 12,
-                  color: 'rgba(255,255,255,0.45)', marginBottom: 4 }}>
-                  {lang === 'ar' ? 'الفائز' : 'VAINQUEUR'}
-                </p>
-                <p style={{
-                  fontFamily: 'Rajdhani, sans-serif', fontWeight: 800, fontSize: 34,
-                  color: E.PLAYER_NEONS[game.winner],
-                  textShadow: `0 0 22px ${E.PLAYER_NEONS[game.winner]}`,
-                }}>
-                  {lang === 'ar'
-                    ? E.PLAYER_NAMES_AR[game.winner]
-                    : E.PLAYER_NAMES_FR[game.winner].toUpperCase()}
-                </p>
-                {isComputer && game.winner === 0 && (
-                  <p style={{ fontFamily: 'Cairo, sans-serif', fontSize: 13, marginTop: 6,
-                    color: E.PLAYER_NEONS[game.winner], opacity: 0.88 }}>
-                    {lang === 'ar' ? '🎉 لقد فزت!' : '🎉 Vous avez gagné !'}
-                  </p>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', gap: 10, width: '100%' }}>
-                <motion.button onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playPrimaryAction(); handleRestart(); }}
-                  whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
-                  style={{
-                    flex: 1, padding: '11px 0', borderRadius: 18, cursor: 'pointer',
-                    background: `linear-gradient(135deg, ${E.PLAYER_COLORS[game.winner]}cc, ${E.PLAYER_COLORS[game.winner]}88)`,
-                    border: `1.5px solid ${E.PLAYER_NEONS[game.winner]}`,
-                    color: '#fff', fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 13,
-                    boxShadow: `0 0 20px ${E.PLAYER_COLORS[game.winner]}40`,
-                  }}>
-                  {lang === 'ar' ? 'جديد' : 'Rejouer'}
-                </motion.button>
-                <motion.button onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playNavBack(); onBack(); }}
-                  whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
-                  style={{
-                    flex: 1, padding: '11px 0', borderRadius: 18, cursor: 'pointer',
-                    background: 'rgba(255,255,255,0.07)',
-                    border: '1.5px solid rgba(255,255,255,0.16)',
-                    color: 'rgba(255,255,255,0.72)',
-                    fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 13,
-                  }}>
-                  {lang === 'ar' ? 'القائمة' : 'Menu'}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
+          <VictoryScreen
+            game={game} lang={lang} boardStyle={boardStyle} isComputer={isComputer}
+            moveCount={moveCount} captureCounts={captureCounts} matchDurationMs={matchDurationMs}
+            onPlayAgain={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playPrimaryAction(); handleRestart(); }}
+            onMenu={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playNavBack(); onBack(); }}
+          />
         )}
       </AnimatePresence>
     </motion.div>
