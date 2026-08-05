@@ -10,3 +10,4 @@
 - [Ludo DZ splash screen churn](ludo-splash-screen-churn.md) — each new splash "concept" brief means a full rewrite, not incremental edits; keep only what's explicitly named to retain.
 - [Ludo DZ victory/results screen](ludo-victory-screen.md) — stats live in GameBoardScreen state (not the engine); Classic/DZ share gold accent #C9A227; RTL needs no manual mirroring.
 - [Temp entry-point screenshot harness](temp-entry-point-harness.md) — swap main.tsx to mount a hard-to-reach component with mock props, screenshot, then revert exactly; safe because it never lands in the diff.
+- [Codemagic free-tier instance types](codemagic-free-tier.md) — only `mac_mini_m2` is unbilled; no free Linux keyword (`linux_x2`/`x4` both require billing) as of Aug 2026.
