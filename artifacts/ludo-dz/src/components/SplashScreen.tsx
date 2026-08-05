@@ -1,25 +1,22 @@
 /**
- * SplashScreen — "The Ludo Eclipse"
+ * SplashScreen — "Destiny Die"
  *
- * Design concept: a deep indigo/emerald night sky, textured with a
- * whisper-faint isometric lattice of Ludo board squares for depth. At
- * its centre, the logo sits behind a static, polished-gold "solar
- * eclipse" bezel — no spinning parts. Instead, the logo ignites from
- * behind: a rhythmic, breathing pulse of light in the four signature
- * player colours (Red, Green, Blue, Gold) bleeds out from under the
- * gold ring, blooming and fading like a living aurora. The four corner
- * pawns return as frosted glass medallions, each lit by a bright neon
- * glow in its own colour — static, but luminous. A wave of four
- * classic loading dots pulses and floats along the bottom, sequencing
- * through the game's colours as they go.
+ * Design concept: a cinematic, jewel-black stage for a single hero
+ * object — a tumbling 3D die, cast from dark glass and gold, lit from
+ * within by a slow-shifting glow in the four signature player colours.
+ * It tumbles in with weight and drama, lands with a burst of light,
+ * then settles into a slow, continuous showcase spin — alive for the
+ * whole load, never static. Four minimal glowing corner brackets frame
+ * the stage (Red·TL, Blue·TR, Gold·BR, Green·BL), and a soft field of
+ * drifting light motes gives the space depth. Loading is shown as a
+ * shimmering light sweeping through a glass track — no dots, no rings.
  *
- * Content, hierarchy, the four player colours, corner positions, and
- * all title/subtitle copy are unchanged — only the presentation layer
- * is new.
+ * Content, hierarchy, the four player colours, and all title/subtitle
+ * copy are unchanged — only the presentation layer is new.
  */
 
-import { motion, useReducedMotion } from "framer-motion";
-import { GamePiece } from "./GamePiece";
+import { motion, useAnimationControls, useReducedMotion } from "framer-motion";
+import { useEffect } from "react";
 import type { CSSProperties } from "react";
 
 // ── Brand palette ──────────────────────────────────────────────────────
@@ -30,29 +27,10 @@ const PC = {
   gold : "#FFD700",
 } as const;
 
-// ── Polished gold-metal accents for the eclipse bezel ───────────────────
-const GOLD = {
-  deep: "#7D5700", // rich brass shadow
-  base: "#C9A227", // border gold
-  gilt: "#FFE49A", // gilt highlight
-};
-
-// ── Isometric Ludo-square lattice (data URI, no spaces → no encoding hell) ──
-// A fine diamond grid (squares in isometric projection) plus a larger
-// second scale for depth — both rendered in ultra-faint gold so they
-// read as texture, never as decoration.
-const ISO_FINE =
-  `url("data:image/svg+xml,` +
-  `%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='32'%3E` +
-  `%3Cpolygon points='28,0,56,16,28,32,0,16' fill='none' stroke='%23C9A227' stroke-width='0.6' stroke-opacity='.05'/%3E` +
-  `%3Cline x1='28' y1='0' x2='28' y2='32' stroke='%23C9A227' stroke-opacity='.03' stroke-width='0.5'/%3E` +
-  `%3C/svg%3E") center/56px 32px repeat`;
-
-const ISO_LARGE =
-  `url("data:image/svg+xml,` +
-  `%3Csvg xmlns='http://www.w3.org/2000/svg' width='168' height='96'%3E` +
-  `%3Cpolygon points='84,0,168,48,84,96,0,48' fill='none' stroke='%23C9A227' stroke-width='0.6' stroke-opacity='.028'/%3E` +
-  `%3C/svg%3E") center/168px 96px repeat`;
+// ── Die geometry ────────────────────────────────────────────────────────
+const CUBE = 124;              // cube edge length
+const HALF = CUBE / 2;
+const GLOW = CUBE + 150;       // inner core-glow / stage diameter
 
 // ── Small style helper — perfectly centres an absolutely-positioned
 //    square layer of a given size, regardless of its parent's size ──────
@@ -65,223 +43,262 @@ function centered(size: number): CSSProperties {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// EclipseCore — the centrepiece:
-//   • a base aurora glow that ignites once from behind the bezel
-//   • a breathing multicolour bloom layered on top (grows & fades)
-//   • a static, polished-gold "solar eclipse" bezel ring (never spins)
-//   • a bright corona-edge highlight catching the aurora's light
-//   • a glassmorphism logo disc
+// Die faces — classic pip layouts on a 3×3 grid, opposite faces sum to 7
 // ─────────────────────────────────────────────────────────────────────
-function EclipseCore({ logoPath, reduced }: { logoPath: string; reduced: boolean }) {
-  const OUTER = 232;              // bezel outer diameter
-  const BAND  = 15;                // bezel ring band width
-  const R_IN  = OUTER / 2 - BAND;  // bezel inner radius
-  const AURA  = 306;               // breathing aurora diameter (bleeds past the bezel)
-  const DISC  = 184;               // glassmorphism logo disc diameter
+const PIP_LAYOUTS: Record<number, Array<[number, number]>> = {
+  1: [[1, 1]],
+  2: [[0, 0], [2, 2]],
+  3: [[0, 0], [1, 1], [2, 2]],
+  4: [[0, 0], [2, 0], [0, 2], [2, 2]],
+  5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]],
+  6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]],
+};
 
-  const ringMask =
-    `radial-gradient(circle at center,` +
-    ` transparent ${R_IN - 1}px,` +
-    ` white ${R_IN + 1}px,` +
-    ` white ${OUTER / 2}px,` +
-    ` transparent ${OUTER / 2 + 1}px)`;
-
-  return (
-    <motion.div
-      style={{ position: "relative", width: OUTER, height: OUTER }}
-      initial={{ opacity: 0, scale: 0.7 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ type: "spring", stiffness: 210, damping: 19, delay: 0.2 }}
-    >
-      {/* base ignited aurora — the logo "igniting" from behind, once */}
-      <motion.div
-        style={{
-          ...centered(AURA), borderRadius: "50%",
-          background: `conic-gradient(from -45deg, ${PC.red}, ${PC.gold} 25%, ${PC.green} 50%, ${PC.blue} 75%, ${PC.red} 100%)`,
-          filter: "blur(46px) saturate(1.35)",
-          willChange: "opacity, transform",
-        }}
-        initial={{ opacity: 0, scale: 0.5 }}
-        animate={{ opacity: reduced ? 0.65 : 0.72, scale: 1 }}
-        transition={{ duration: 1.3, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      />
-
-      {/* breathing bloom — rhythmic grow/fade layered on the base glow */}
-      {!reduced && (
-        <motion.div
-          style={{
-            ...centered(AURA), borderRadius: "50%",
-            background: `conic-gradient(from 45deg, ${PC.gold}, ${PC.red} 25%, ${PC.blue} 50%, ${PC.green} 75%, ${PC.gold} 100%)`,
-            filter: "blur(50px) saturate(1.3)",
-            willChange: "opacity, transform",
-          }}
-          initial={{ opacity: 0, scale: 1 }}
-          animate={{ opacity: [0, 0.55, 0], scale: [1, 1.16, 1] }}
-          transition={{ duration: 4.8, delay: 1.6, repeat: Infinity, ease: "easeInOut" }}
-        />
-      )}
-
-      {/* weight shadow beneath the metal ring */}
-      <div style={{ ...centered(OUTER), borderRadius: "50%", boxShadow: "0 16px 36px rgba(0,0,0,0.65)" }} />
-
-      {/* polished gold "solar eclipse" bezel ring — static, never rotates */}
-      <div
-        style={{
-          ...centered(OUTER), borderRadius: "50%",
-          background: `conic-gradient(from -90deg, ${GOLD.deep} 0%, ${GOLD.gilt} 22%, ${GOLD.base} 45%, ${GOLD.gilt} 68%, ${GOLD.deep} 88%, ${GOLD.base} 100%)`,
-          WebkitMask: ringMask,
-          mask: ringMask,
-          boxShadow: "inset 0 2px 3px rgba(255,255,255,0.4), inset 0 -3px 7px rgba(0,0,0,0.5)",
-        }}
-      />
-
-      {/* bright corona-edge highlight, catching the aurora's glow */}
-      <motion.div
-        style={{
-          ...centered(R_IN * 2 + 3), borderRadius: "50%",
-          border: `1.5px solid ${GOLD.gilt}`,
-          boxShadow: `0 0 10px ${GOLD.gilt}, 0 0 3px rgba(255,255,255,0.5)`,
-          pointerEvents: "none",
-        }}
-        animate={reduced ? {} : { opacity: [0.5, 1, 0.5] }}
-        transition={{ duration: 4.8, repeat: Infinity, ease: "easeInOut", delay: 1.6 }}
-      />
-
-      {/* glassmorphism logo disc */}
-      <div
-        style={{
-          ...centered(DISC), zIndex: 2, borderRadius: "50%",
-          background: "linear-gradient(145deg, rgba(255,255,255,0.10) 0%, rgba(4,18,60,0.68) 100%)",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          border: "1.5px solid rgba(255,255,255,0.22)",
-          boxShadow: [
-            "0 10px 40px rgba(0,0,0,0.7)",
-            "inset 0 1.5px 0 rgba(255,255,255,0.30)",
-            "inset 0 -6px 22px rgba(0,0,30,0.45)",
-          ].join(", "),
-          display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
-        }}
-      >
-        {/* top-gloss arc */}
-        <div
-          style={{
-            position: "absolute", top: 0, left: "12%", right: "12%", height: "42%",
-            background: "linear-gradient(180deg, rgba(255,255,255,0.20) 0%, transparent 100%)",
-            borderRadius: "50%", pointerEvents: "none",
-          }}
-        />
-        <img
-          src={logoPath}
-          alt="Ludo DZ"
-          style={{
-            width: "68%", height: "68%", objectFit: "contain",
-            position: "relative", zIndex: 0,
-            filter: "drop-shadow(0 6px 18px rgba(0,0,0,0.75))",
-          }}
-          onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-        />
-      </div>
-    </motion.div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// CornerPawn — a frosted-glass medallion holding one corner piece, lit
-// by a bright neon glow in its own colour. Static position — luminous,
-// not moving.
-// ─────────────────────────────────────────────────────────────────────
-interface CornerDef { color: string; pos: CSSProperties; delay: number; }
-
-const CORNERS: CornerDef[] = [
-  { color: PC.red,   pos: { top:    "5%", left:  "6%" }, delay: 0.55 },
-  { color: PC.green, pos: { top:    "5%", right: "6%" }, delay: 0.70 },
-  { color: PC.blue,  pos: { bottom: "9%", left:  "6%" }, delay: 0.85 },
-  { color: PC.gold,  pos: { bottom: "9%", right: "6%" }, delay: 1.00 },
+const FACES: Array<{ n: number; transform: string }> = [
+  { n: 1, transform: `translateZ(${HALF}px)` },                 // front
+  { n: 6, transform: `rotateY(180deg) translateZ(${HALF}px)` }, // back
+  { n: 2, transform: `rotateY(90deg) translateZ(${HALF}px)` },  // right
+  { n: 5, transform: `rotateY(-90deg) translateZ(${HALF}px)` }, // left
+  { n: 3, transform: `rotateX(90deg) translateZ(${HALF}px)` },  // top
+  { n: 4, transform: `rotateX(-90deg) translateZ(${HALF}px)` }, // bottom
 ];
 
-function CornerPawn({ color, pos, delay, reduced }: CornerDef & { reduced: boolean }) {
+function DieFace({ n, transform }: { n: number; transform: string }) {
+  return (
+    <div
+      style={{
+        position: "absolute", inset: 0, transform, backfaceVisibility: "hidden",
+        borderRadius: 20,
+        background: "linear-gradient(155deg, rgba(74,60,106,0.95) 0%, rgba(30,22,46,0.97) 55%, rgba(9,6,15,0.98) 100%)",
+        border: "1.5px solid rgba(255,213,128,0.38)",
+        boxShadow: "inset 0 2px 5px rgba(255,255,255,0.22), inset 0 -9px 20px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.4)",
+        display: "grid", gridTemplateColumns: "repeat(3,1fr)", gridTemplateRows: "repeat(3,1fr)",
+        padding: 18,
+      }}
+    >
+      {Array.from({ length: 9 }).map((_, idx) => {
+        const col = idx % 3, row = Math.floor(idx / 3);
+        const active = PIP_LAYOUTS[n].some(([c, r]) => c === col && r === row);
+        return (
+          <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {active && (
+              <div
+                style={{
+                  width: 13, height: 13, borderRadius: "50%",
+                  background: "radial-gradient(circle at 32% 28%, #FFF6D8 0%, #FFD700 52%, #B8860B 100%)",
+                  boxShadow: "0 0 8px 1px rgba(255,215,0,0.85), inset 0 1px 1px rgba(255,255,255,0.6)",
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// TumblingDie — dramatic multi-axis tumble on mount, lands, then spins
+// slowly forever on the vertical axis like a showcase display piece.
+// ─────────────────────────────────────────────────────────────────────
+function TumblingDie({ reduced }: { reduced: boolean }) {
+  const controls = useAnimationControls();
+
+  useEffect(() => {
+    if (reduced) { controls.set({ rotateX: -20, rotateY: 32 }); return; }
+    let alive = true;
+    (async () => {
+      await controls.start({
+        rotateX: [-60, 250, 490, -20 + 720],
+        rotateY: [-40, 320, 640, 32 + 1080],
+        transition: { duration: 1.7, ease: [0.22, 1, 0.36, 1] },
+      });
+      if (!alive) return;
+      controls.start({
+        rotateY: [32 + 1080, 32 + 1080 + 360],
+        transition: { duration: 11, ease: "linear", repeat: Infinity },
+      });
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduced]);
+
+  return (
+    <div style={{ width: CUBE, height: CUBE, position: "relative", perspective: 900 }}>
+      <motion.div
+        style={{ width: CUBE, height: CUBE, position: "relative", transformStyle: "preserve-3d", willChange: "transform" }}
+        initial={{ rotateX: -60, rotateY: -40 }}
+        animate={controls}
+      >
+        {FACES.map(f => <DieFace key={f.n} n={f.n} transform={f.transform} />)}
+      </motion.div>
+    </div>
+  );
+}
+
+// A living light source behind the die — slow colour-cycling rotation
+// plus a gentle breathing pulse, blurred into a soft glow.
+function CoreGlow({ reduced }: { reduced: boolean }) {
   return (
     <motion.div
-      style={{ position: "absolute", ...pos, width: 66, height: 66 }}
-      initial={{ opacity: 0, scale: 0.25 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ delay, type: "spring", stiffness: 230, damping: 17 }}
-    >
-      {/* frosted glass roundel */}
-      <div
-        style={{
-          position: "absolute", inset: 0, borderRadius: "50%",
-          background: "rgba(255,255,255,0.07)",
-          backdropFilter: "blur(13px)",
-          WebkitBackdropFilter: "blur(13px)",
-          border: "1px solid rgba(255,255,255,0.28)",
-          boxShadow: "inset 0 1.5px 0 rgba(255,255,255,0.35), inset 0 -4px 10px rgba(0,0,0,0.30)",
-        }}
-      />
-      {/* neon glow matching the piece colour — static position, breathing luminance */}
+      style={{
+        ...centered(GLOW), borderRadius: "50%",
+        background: `conic-gradient(from 0deg, ${PC.red}, ${PC.gold} 25%, ${PC.blue} 50%, ${PC.green} 75%, ${PC.red} 100%)`,
+        filter: "blur(52px) saturate(1.4)", willChange: "transform, opacity",
+      }}
+      initial={{ opacity: 0 }}
+      animate={reduced ? { opacity: 0.4 } : { opacity: [0.32, 0.56, 0.32], rotate: [0, 360] }}
+      transition={
+        reduced
+          ? { duration: 1 }
+          : {
+              opacity: { duration: 4.2, repeat: Infinity, ease: "easeInOut" },
+              rotate  : { duration: 22, repeat: Infinity, ease: "linear" },
+            }
+      }
+    />
+  );
+}
+
+// One-shot shockwave rings + a soft flash, fired the instant the die lands.
+function ImpactBurst({ reduced }: { reduced: boolean }) {
+  if (reduced) return null;
+  return (
+    <>
       <motion.div
-        style={{
-          position: "absolute", inset: -7, borderRadius: "50%",
-          boxShadow: `0 0 18px 2px ${color}, 0 0 32px 6px ${color}88`,
-          pointerEvents: "none",
-        }}
-        animate={reduced ? {} : { opacity: [0.55, 1, 0.55] }}
-        transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut", delay }}
+        style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(circle at 50% 50%, rgba(255,244,214,0.4), transparent 58%)" }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 1, 0] }}
+        transition={{ duration: 0.5, delay: 1.62, ease: "easeOut" }}
       />
-      <div
-        style={{
-          position: "absolute", inset: 0, display: "flex",
-          alignItems: "center", justifyContent: "center",
-          filter: `drop-shadow(0 0 8px ${color}) drop-shadow(0 2px 6px rgba(0,0,0,0.5))`,
-        }}
-      >
-        <GamePiece color={color} className="w-8 h-11" />
-      </div>
+      {[0, 0.12].map((extra, i) => (
+        <motion.div
+          key={i}
+          style={{ ...centered(CUBE), borderRadius: "50%", border: "2px solid rgba(255,222,140,0.85)", pointerEvents: "none" }}
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: [0, 0.85, 0], scale: [0.5, 2.2] }}
+          transition={{ duration: 0.9, delay: 1.65 + extra, ease: "easeOut" }}
+        />
+      ))}
+    </>
+  );
+}
+
+function DiceHero({ reduced }: { reduced: boolean }) {
+  return (
+    <motion.div
+      style={{ position: "relative", width: GLOW, height: GLOW, display: "flex", alignItems: "center", justifyContent: "center" }}
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.6, ease: "easeOut" }}
+    >
+      <CoreGlow reduced={reduced} />
+      <ImpactBurst reduced={reduced} />
+      <TumblingDie reduced={reduced} />
     </motion.div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// WaveLoadingDots — 4 dots that pulse, float vertically in a travelling
-// wave, and sequence through the game's colours as they go.
+// CornerBracket — a minimal glowing viewfinder-style corner, one per
+// player colour, framing the stage. Red·TL, Blue·TR, Gold·BR, Green·BL.
 // ─────────────────────────────────────────────────────────────────────
-function WaveLoadingDots({ reduced }: { reduced: boolean }) {
-  const SEQUENCE = [PC.red, PC.green, PC.blue, PC.gold, PC.red];
+type Corner = "tl" | "tr" | "br" | "bl";
+
+const BRACKET_POS: Record<Corner, CSSProperties> = {
+  tl: { top: 26, left: 26, borderTopLeftRadius: 12 },
+  tr: { top: 26, right: 26, borderTopRightRadius: 12 },
+  br: { bottom: 30, right: 26, borderBottomRightRadius: 12 },
+  bl: { bottom: 30, left: 26, borderBottomLeftRadius: 12 },
+};
+
+const BRACKET_BORDER: Record<Corner, (c: string) => CSSProperties> = {
+  tl: c => ({ borderTop: `3px solid ${c}`, borderLeft: `3px solid ${c}` }),
+  tr: c => ({ borderTop: `3px solid ${c}`, borderRight: `3px solid ${c}` }),
+  br: c => ({ borderBottom: `3px solid ${c}`, borderRight: `3px solid ${c}` }),
+  bl: c => ({ borderBottom: `3px solid ${c}`, borderLeft: `3px solid ${c}` }),
+};
+
+const CORNER_DEFS: { corner: Corner; color: string; delay: number }[] = [
+  { corner: "tl", color: PC.red,  delay: 0.50 },
+  { corner: "tr", color: PC.blue, delay: 0.62 },
+  { corner: "br", color: PC.gold, delay: 0.74 },
+  { corner: "bl", color: PC.green, delay: 0.86 },
+];
+
+function CornerBracket({ corner, color, delay, reduced }: { corner: Corner; color: string; delay: number; reduced: boolean }) {
   return (
     <motion.div
-      style={{ display: "flex", gap: 14, alignItems: "center" }}
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 1.15, duration: 0.5 }}
+      style={{ position: "absolute", width: 34, height: 34, ...BRACKET_POS[corner] }}
+      initial={{ opacity: 0, scale: 0.4 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay, type: "spring", stiffness: 260, damping: 20 }}
     >
-      {[0, 1, 2, 3].map(i => (
+      <motion.div
+        style={{ position: "absolute", inset: 0, ...BRACKET_BORDER[corner](color), filter: `drop-shadow(0 0 6px ${color})` }}
+        animate={reduced ? { opacity: 0.75 } : { opacity: [0.45, 0.9, 0.45] }}
+        transition={reduced ? {} : { duration: 3.4, repeat: Infinity, ease: "easeInOut", delay }}
+      />
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// BokehField — a faint scatter of drifting light motes for depth.
+// ─────────────────────────────────────────────────────────────────────
+const BOKEH: { x: string; y: string; size: number; dur: number; delay: number; opacity: number }[] = [
+  { x: "12%", y: "78%", size: 5, dur: 9,    delay: 0,   opacity: 0.5  },
+  { x: "85%", y: "70%", size: 4, dur: 11,   delay: 1.5, opacity: 0.4  },
+  { x: "22%", y: "18%", size: 3, dur: 8,    delay: 0.6, opacity: 0.35 },
+  { x: "78%", y: "22%", size: 6, dur: 12,   delay: 2.2, opacity: 0.45 },
+  { x: "50%", y: "88%", size: 4, dur: 10,   delay: 0.9, opacity: 0.4  },
+  { x: "8%",  y: "45%", size: 3, dur: 9.5,  delay: 1.8, opacity: 0.3  },
+  { x: "92%", y: "48%", size: 4, dur: 10.5, delay: 0.3, opacity: 0.35 },
+];
+
+function BokehField({ reduced }: { reduced: boolean }) {
+  if (reduced) return null;
+  return (
+    <>
+      {BOKEH.map((b, i) => (
         <motion.div
           key={i}
-          style={{ width: 11, height: 11, borderRadius: "50%", willChange: "transform" }}
-          animate={
-            reduced
-              ? { backgroundColor: PC.gold, boxShadow: `0 0 10px ${PC.gold}` }
-              : {
-                  y: [0, -9, 0],
-                  scale: [1, 1.4, 1],
-                  backgroundColor: SEQUENCE,
-                  boxShadow: SEQUENCE.map(c => `0 0 16px ${c}, 0 0 5px ${c}`),
-                }
-          }
-          transition={
-            reduced
-              ? {}
-              : {
-                  y:               { duration: 1.3, repeat: Infinity, ease: "easeInOut", delay: i * 0.17 },
-                  scale:           { duration: 1.3, repeat: Infinity, ease: "easeInOut", delay: i * 0.17 },
-                  backgroundColor: { duration: 3.2, repeat: Infinity, ease: "linear",     delay: i * 0.8  },
-                  boxShadow:       { duration: 3.2, repeat: Infinity, ease: "linear",     delay: i * 0.8  },
-                }
-          }
+          style={{
+            position: "absolute", left: b.x, top: b.y, width: b.size, height: b.size, borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(255,238,200,0.9), transparent 70%)",
+            filter: "blur(1px)", pointerEvents: "none",
+          }}
+          animate={{ y: [0, -26, 0], opacity: [0, b.opacity, 0] }}
+          transition={{ duration: b.dur, repeat: Infinity, delay: b.delay, ease: "easeInOut" }}
         />
       ))}
-    </motion.div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// LightSweepBar — an indeterminate loading indicator: a glass track
+// with a multicolour band of light sweeping back and forth.
+// ─────────────────────────────────────────────────────────────────────
+function LightSweepBar({ reduced }: { reduced: boolean }) {
+  return (
+    <div
+      style={{
+        width: 172, height: 5, borderRadius: 99,
+        background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.10)",
+        boxShadow: "inset 0 1px 3px rgba(0,0,0,0.5)",
+        overflow: "hidden", position: "relative",
+      }}
+    >
+      <motion.div
+        style={{
+          position: "absolute", top: 0, bottom: 0, width: "36%", borderRadius: 99,
+          background: `linear-gradient(90deg, transparent, ${PC.red}, ${PC.gold}, ${PC.blue}, ${PC.green}, transparent)`,
+        }}
+        animate={reduced ? { left: "32%" } : { left: ["-36%", "100%"] }}
+        transition={reduced ? {} : { duration: 1.5, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
+      />
+    </div>
   );
 }
 
@@ -299,35 +316,33 @@ const TITLE: { ch: string; gold: boolean }[] = [
 interface SplashScreenProps { lang: "fr" | "ar"; }
 
 export function SplashScreen({ lang }: SplashScreenProps) {
-  const logoPath   = import.meta.env.BASE_URL + "ludo-logo.png";
   const reduced    = useReducedMotion() ?? false;
-  const subtitle   = lang === "fr" ? "Le Ludo Algérien"      : "لودو جزائري";
-  const loadingTxt = lang === "fr" ? "Chargement en cours"   : "جارٍ التحميل";
+  const subtitle   = lang === "fr" ? "Le Ludo Algérien"    : "لودو جزائري";
+  const loadingTxt = lang === "fr" ? "Chargement en cours" : "جارٍ التحميل";
 
   return (
     <motion.div
       style={{
         position: "absolute", inset: 0, zIndex: 50, overflow: "hidden",
-        // Isometric Ludo-square lattice (two scales) over a deep,
-        // deepened blue → emerald → near-black night gradient.
-        background: `${ISO_LARGE}, ${ISO_FINE},
-          radial-gradient(
-            ellipse 130% 100% at 50% 36%,
-            #123957 0%, #0a2d49 18%, #073234 36%,
-            #052c22 56%, #02170f 78%, #000504 100%
-          )`,
+        background: `radial-gradient(
+          ellipse 130% 90% at 50% 32%,
+          #201333 0%, #170d26 26%, #0d0817 50%, #060410 74%, #020103 100%
+        )`,
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
       }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: 1.08, filter: "blur(12px)" }}
-      transition={{ duration: 0.6, ease: "easeInOut" }}
+      exit={{ opacity: 0, scale: 1.05, filter: "blur(10px)" }}
+      transition={{ duration: 0.55, ease: "easeInOut" }}
     >
+      {/* ── Ambient depth ─────────────────────────────────────────────── */}
+      <BokehField reduced={reduced} />
+      <div style={{ position: "absolute", inset: 0, boxShadow: "inset 0 0 150px 50px rgba(0,0,0,0.65)", pointerEvents: "none" }} />
 
-      {/* ── Corner pawns — frosted glass, static, luminous ──────────── */}
-      {CORNERS.map((c, i) => (
-        <CornerPawn key={i} {...c} reduced={reduced} />
+      {/* ── Corner brackets — Red·TL Blue·TR Gold·BR Green·BL ─────────── */}
+      {CORNER_DEFS.map(c => (
+        <CornerBracket key={c.corner} {...c} reduced={reduced} />
       ))}
 
       {/* ── Centred content column ───────────────────────────────────── */}
@@ -335,12 +350,12 @@ export function SplashScreen({ lang }: SplashScreenProps) {
         style={{
           position: "relative", zIndex: 10,
           display: "flex", flexDirection: "column",
-          alignItems: "center", gap: 16,
+          alignItems: "center", gap: 20,
         }}
       >
 
-        {/* ① Eclipse bezel: static gold ring + breathing colour aurora */}
-        <EclipseCore logoPath={logoPath} reduced={reduced} />
+        {/* ① Hero: tumbling, glowing 3D die */}
+        <DiceHero reduced={reduced} />
 
         {/* ② "LUDO DZ" — per-letter spring stagger, gold letters shimmer */}
         <motion.div
@@ -368,7 +383,7 @@ export function SplashScreen({ lang }: SplashScreenProps) {
                 fontWeight   : 700,
                 fontSize     : ch === "\u00A0" ? 20 : 72,
                 display      : "inline-block",
-                color        : gold ? "transparent" : "white",
+                color        : gold ? "transparent" : "#F3EEFF",
                 background   : gold
                   ? "linear-gradient(170deg, #FFF8DC 0%, #FFE55C 22%, #FFBC00 55%, #FF9500 82%, #C9861A 100%)"
                   : undefined,
@@ -377,7 +392,7 @@ export function SplashScreen({ lang }: SplashScreenProps) {
                 backgroundClip      : gold ? "text" : undefined,
                 textShadow   : gold
                   ? undefined
-                  : "0 0 40px rgba(255,255,255,0.28), 2px 5px 0px rgba(0,0,0,0.55)",
+                  : "0 0 34px rgba(168,130,255,0.40), 0 5px 14px rgba(0,0,0,0.65)",
                 letterSpacing: "0.14em",
                 filter       : gold
                   ? "drop-shadow(0 3px 16px rgba(255,180,40,0.95)) drop-shadow(0 0 22px rgba(255,220,120,0.5))"
@@ -413,7 +428,7 @@ export function SplashScreen({ lang }: SplashScreenProps) {
             fontWeight   : 700,
             letterSpacing: "0.28em",
             textTransform: "uppercase",
-            color        : "rgba(255,244,214,0.46)",
+            color        : "rgba(230,222,255,0.50)",
             margin       : "-4px 0 2px",
           }}
           initial={{ opacity: 0 }}
@@ -424,8 +439,14 @@ export function SplashScreen({ lang }: SplashScreenProps) {
           {subtitle}
         </motion.p>
 
-        {/* ④ Loading dots — pulse, float in a wave, sequence through colours */}
-        <WaveLoadingDots reduced={reduced} />
+        {/* ④ Loading indicator — a shimmer of light sweeping a glass track */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.15, duration: 0.5 }}
+        >
+          <LightSweepBar reduced={reduced} />
+        </motion.div>
 
         {/* ⑤ Loading label */}
         <motion.p
@@ -435,7 +456,7 @@ export function SplashScreen({ lang }: SplashScreenProps) {
             fontWeight   : 600,
             letterSpacing: "0.22em",
             textTransform: "uppercase",
-            color        : "rgba(255,238,190,0.28)",
+            color        : "rgba(230,222,255,0.30)",
             margin       : "-4px 0 0",
           }}
           initial={{ opacity: 0 }}
