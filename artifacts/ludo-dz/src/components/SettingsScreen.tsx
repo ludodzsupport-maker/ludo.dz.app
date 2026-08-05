@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Globe, Volume2, Vibrate, Info, ChevronRight, Check } from "lucide-react";
 import { GamePiece } from "./GamePiece";
+import { LoadingOverlay } from "./LoadingOverlay";
 
 import type { BoardStyle } from '../App';
 import * as DZ from '../lib/board-theme-dz';
@@ -178,6 +179,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
   const [vibration,  setVibration]  = useState(isHapticsEnabled());
   const [langOpen,   setLangOpen]   = useState(false);
   const [boardOpen,  setBoardOpen]  = useState(false);
+  const [pendingStyle, setPendingStyle] = useState<BoardStyle | null>(null);
 
   // Toggle click sounds are gated on the *current* Sound Effects setting
   // (checked before it changes), so flipping Sound Effects off is the last
@@ -202,6 +204,17 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
     playToggleClick(next);
     setHapticsEnabled(next);
     setVibration(next);
+  };
+
+  // Brief themed "reskin" flourish over the board-style card: the picker
+  // closes immediately, but the actual style swap is held behind the
+  // flourish so the badge/thumbnails never visibly snap under the user's eye.
+  const handlePickBoardStyle = (style: BoardStyle) => {
+    setBoardOpen(false);
+    if (style === boardStyle) return;
+    setPendingStyle(style);
+    setTimeout(() => setBoardStyle(style), 260);
+    setTimeout(() => setPendingStyle(null), 480);
   };
 
   return (
@@ -502,7 +515,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
 
           <motion.div
             variants={itemVariants}
-            className="rounded-2xl overflow-hidden"
+            className="rounded-2xl overflow-hidden relative"
             style={{
               background: "linear-gradient(145deg, #001a1a 0%, #002a28 100%)",
               border: "1px solid rgba(0,255,238,0.22)",
@@ -578,7 +591,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                 >
                   <div className="px-4 pb-4">
                     <motion.button
-                      onClick={() => { playSelection(); setBoardStyle("neon"); setBoardOpen(false); }}
+                      onClick={() => { playSelection(); handlePickBoardStyle("neon"); }}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.97 }}
                       className="w-full flex items-center justify-between px-4 py-3 rounded-xl relative overflow-hidden"
@@ -656,7 +669,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
 
                     {/* ── Classic Board option ── */}
                     <motion.button
-                      onClick={() => { playSelection(); setBoardStyle("classic"); setBoardOpen(false); }}
+                      onClick={() => { playSelection(); handlePickBoardStyle("classic"); }}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.97 }}
                       className="w-full flex items-center justify-between px-4 py-3 rounded-xl relative overflow-hidden mt-2"
@@ -742,7 +755,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
 
                     {/* ── DZ Board option ── */}
                     <motion.button
-                      onClick={() => { playSelection(); setBoardStyle("dz"); setBoardOpen(false); }}
+                      onClick={() => { playSelection(); handlePickBoardStyle("dz"); }}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.97 }}
                       className="w-full flex items-center justify-between px-4 py-3 rounded-xl relative overflow-hidden mt-2"
@@ -804,6 +817,12 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                     </motion.button>
                   </div>
                 </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {pendingStyle && (
+                <LoadingOverlay key="reskin-flourish" boardStyle={pendingStyle} lang={lang} variant="flourish" />
               )}
             </AnimatePresence>
           </motion.div>

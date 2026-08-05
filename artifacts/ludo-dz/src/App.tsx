@@ -8,11 +8,19 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { GameModeScreen } from '@/components/GameModeScreen';
 import { SettingsScreen } from '@/components/SettingsScreen';
 import { GameBoardScreen } from '@/components/GameBoardScreen';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { AnimatePresence } from 'framer-motion';
 import type { GameConfig } from '@/components/GameConfigOverlay';
 
-type Screen = 'welcome' | 'mode-select' | 'settings' | 'game';
+type Screen = 'welcome' | 'mode-select' | 'settings' | 'preparing-match' | 'game';
 export type BoardStyle = 'neon' | 'classic' | 'dz';
+
+// Splash stays on screen at least this long so its tumble-and-impact
+// choreography always finishes before it's dismissed, but never longer than
+// MAX_SPLASH_MS even if fonts/assets are unusually slow to settle.
+const MIN_SPLASH_MS = 2700;
+const MAX_SPLASH_MS = 4200;
+const PREPARING_MATCH_MS = 800;
 
 function AppContent() {
   const [showSplash, setShowSplash]   = useState(true);
@@ -21,14 +29,47 @@ function AppContent() {
   const [gameConfig, setGameConfig]   = useState<GameConfig | null>(null);
   const [boardStyle, setBoardStyle]   = useState<BoardStyle>('classic');
 
+  // Gate the splash on real readiness (fonts + hero logo decoded) instead of
+  // a blind timer, so the welcome screen never flashes in with un-swapped
+  // fonts or a popping-in logo — while keeping a min/max floor so it neither
+  // flickers on a fast load nor hangs on a slow one.
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 2500);
-    return () => clearTimeout(timer);
+    let cancelled = false;
+    const start = Date.now();
+
+    const logoReady = new Promise<void>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+      img.src = import.meta.env.BASE_URL + 'ludo-logo.png';
+    });
+    const fontsReady = typeof document !== 'undefined' && document.fonts
+      ? document.fonts.ready
+      : Promise.resolve();
+    const readiness = Promise.all([logoReady, fontsReady]);
+    const maxWait = new Promise<void>((resolve) => setTimeout(resolve, MAX_SPLASH_MS));
+
+    Promise.race([readiness, maxWait]).then(() => {
+      if (cancelled) return;
+      const remaining = Math.max(0, MIN_SPLASH_MS - (Date.now() - start));
+      setTimeout(() => { if (!cancelled) setShowSplash(false); }, remaining);
+    });
+
+    return () => { cancelled = true; };
   }, []);
+
+  // Brief themed curtain between confirming a match and the board mounting,
+  // so a heavy screen swap always reads as an intentional beat rather than
+  // an abrupt cut.
+  useEffect(() => {
+    if (screen !== 'preparing-match') return;
+    const timer = setTimeout(() => setScreen('game'), PREPARING_MATCH_MS);
+    return () => clearTimeout(timer);
+  }, [screen]);
 
   const handleStartGame = (config: GameConfig) => {
     setGameConfig(config);
-    setScreen('game');
+    setScreen('preparing-match');
   };
 
   return (
@@ -62,6 +103,14 @@ function AppContent() {
               boardStyle={boardStyle}
               setBoardStyle={setBoardStyle}
               onBack={() => setScreen('welcome')}
+            />
+          ) : screen === 'preparing-match' ? (
+            <LoadingOverlay
+              key="preparing-match"
+              boardStyle={boardStyle}
+              lang={lang}
+              variant="curtain"
+              label={lang === 'ar' ? 'جارٍ تحضير اللعبة' : 'Préparation de la partie'}
             />
           ) : screen === 'game' && gameConfig ? (
             <GameBoardScreen
