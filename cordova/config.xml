@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.ludodz.app" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>Ludo DZ</name>
+    <description>Ludo DZ — a themed multiplayer Ludo board game, packaged for Android via Cordova.</description>
+    <content src="index.html" />
+    <access origin="*" />
+    <preference name="AndroidXEnabled" value="true" />
+    <platform name="android">
+        <preference name="android-minSdkVersion" value="24" />
+    </platform>
+</widget>

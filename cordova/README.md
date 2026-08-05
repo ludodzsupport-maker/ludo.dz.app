@@ -26,11 +26,23 @@ This produces `cordova/www/` — a static bundle suitable for wrapping in a
 Cordova or Monaca shell. `cordova/www` is gitignored since it's build
 output, not source.
 
-## Next steps (not yet done)
+## Cordova project shell
 
-No actual Cordova/Monaca project has been scaffolded yet — there's no
-`config.xml`, `platforms/`, or `plugins/` directory. When you're ready to
-package this for app stores, scaffold the Cordova project shell here
-(e.g. `cordova create . <id> "Ludo DZ"` run from within this directory, or
-via the Monaca CLI/dashboard) so `config.xml` sits alongside `www/` as
-Cordova expects.
+`config.xml` lives here (app id `com.ludodz.app`, name "Ludo DZ", version
+`1.0.0`), alongside the `www/` bundle above. It was scaffolded by hand
+(rather than `cordova create`, which requires an empty target directory)
+plus `cordova platform add android`, which generates `package.json`,
+`package-lock.json`, and `platforms/android/`.
+
+- `config.xml` and `package.json`/`package-lock.json` are committed — they
+  fully describe the project (app id, name, version, which platforms are
+  installed).
+- `platforms/`, `plugins/`, `node_modules/`, and `www/` are all gitignored
+  build/scaffolding output. `codemagic.yaml` regenerates them on every CI
+  run via `pnpm --filter @workspace/ludo-dz run build:cordova` followed by
+  `cordova platform add android` and `cordova build android`.
+- To reproduce or update the Android platform locally: build the web
+  bundle first (see above), then run `npx cordova platform add android`
+  and `npx cordova build android` from within this directory. A full
+  `cordova build android` needs a JDK + Android SDK, which aren't part of
+  this Replit container — Codemagic's build machine provides those.
