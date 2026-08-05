@@ -1,0 +1,16 @@
+I'm continuing work on my Ludo game app "Ludo DZ". In a previous session, I asked for a Victory/Results screen that appears at the end of a match (showing the winner, match statistics, and next-action options), with full creative freedom on design as long as it matches the app's existing visual identity. That session was interrupted by a daily quota limit before completion — the agent had found an existing basic "Victory overlay" in GameBoardScreen.tsx and was in the process of reviewing/redesigning it when it stopped.
+Please start by:
+Checking the current state of the codebase (especially GameBoardScreen.tsx and any related victory/results components) to see exactly what was already done, what's partial, and what's still missing.
+Continuing the work in the same direction/style the previous session was heading — don't restart from scratch or change approach unless you find something clearly broken or incomplete that needs fixing first.
+Reminder of the original task (for full context):
+Design a Victory/Results screen shown at match end, including:
+Clear indication of the winner
+Match statistics (captures, moves, time played, or whatever meaningful stats are available from existing game data)
+Appropriate next-action options (play again, return to menu, etc.)
+You have full creative freedom on layout, visuals, and structure — just make sure it feels cohesive with the app's existing polish and identity (themed per board or unified elegant design, whichever fits better, your judgment).
+Strictly forbidden / requirements (same as always):
+Do not touch, modify, or break any existing game logic, screens, or functionality — additive only.
+Do not modify anything unrelated to this Victory/Results screen.
+Do not refactor unrelated code.
+Do not commit, push, or deploy anything to GitHub — local changes only, for my review. Do not run any git commands yourself.
+Please first report back on what you find regarding the current state, then continue and complete the screen. Once done, test it in the live preview by reaching/simulating a match end, confirm it displays and functions correctly, then give me a summary of the files created/changed.

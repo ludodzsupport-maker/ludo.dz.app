@@ -8,3 +8,5 @@
 - [Ludo DZ BGM system](ludo-bgm-system.md) — universal ambient loop is SFX-independent; verify the asset FILE exists at its exact fetch path, not just the code.
 - [Ludo DZ haptics system](ludo-haptics-system.md) — vibration triggers are theme-independent (unlike per-theme SFX); win detection uses a `[game.winner]`-keyed useEffect.
 - [Ludo DZ splash screen churn](ludo-splash-screen-churn.md) — each new splash "concept" brief means a full rewrite, not incremental edits; keep only what's explicitly named to retain.
+- [Ludo DZ victory/results screen](ludo-victory-screen.md) — stats live in GameBoardScreen state (not the engine); Classic/DZ share gold accent #C9A227; RTL needs no manual mirroring.
+- [Temp entry-point screenshot harness](temp-entry-point-harness.md) — swap main.tsx to mount a hard-to-reach component with mock props, screenshot, then revert exactly; safe because it never lands in the diff.
