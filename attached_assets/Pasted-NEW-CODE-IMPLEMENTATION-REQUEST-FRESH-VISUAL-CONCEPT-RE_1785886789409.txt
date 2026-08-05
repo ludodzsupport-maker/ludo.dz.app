@@ -1,0 +1,28 @@
+NEW CODE IMPLEMENTATION REQUEST: FRESH VISUAL CONCEPT RETAINING GAME SOUL.
+
+We are discarding the previous "spinning ring" code logic for the splash screen. I need you to write a COMPLETELY NEW implementation for `SplashScreen.tsx`.
+
+CRITICAL CONSTRAINT: Although the code and visual concept are new, you must STRICTLY RETAIN the core "Gaming Soul" and "Vibrant Feel" of the application. The previous corporate/minimalist approach is unacceptable. We need excitement, high-contrast, and clear Ludo identity.
+
+NEW VISUAL CONCEPT: "THE LUDO ECLIPSE"
+
+1. BACKGROUND & PALETTE (RETAIN & DEEPEN):
+   - Keep the signature deep, dark blue/emerald background. Enhance it with a subtle, very dark isometric pattern of Ludo board squares to give it depth.
+
+2. CENTRAL LOGO BEZEL (NEW CONCEPT):
+   - Replace the spinning ring. The central Ludo DZ logo should now be framed by a static, circular "Solar Eclipse" bezel made of polished gold.
+   - When the screen loads, instead of spinning, the logo should "ignite" from behind. A smooth, rhythmic, breathing pulse of light—using the signature Red, Green, Blue, Yellow colors—should bleed out from under the gold bezel, creating a colorful, soft-glowing aurora that grows and fades.
+
+3. CORNER ENTITIES (RESTORE & REFINE):
+   - The 4 corner pawns (Red, Green, Blue, Yellow) must return. They are essential to the game's identity. Render them with a frosted glassmorphism effect and a clear, bright neon drop-shadow matching their respective colors. They should remain static but luminous.
+
+4. LOADING INDICATOR (VIBRANT & DYNAMIC):
+   - Remove the gold crescent track. At the bottom, restore the 4 classic loading dots. But make them more dynamic: they should not just change color, but subtly pulse and float vertically in a wave pattern as they sequence through the game's colors (Red, Green, Blue, Yellow).
+
+5. TYPOGRAPHY (PRESERVE):
+   - Keep "LUDO DZ" as the prominent centerpiece, sharp and striking. Maintain the exact font and text for "LE LUDO ALGÉRIEN" and "CHARGEMENT EN COURS" below it.
+
+6. TRANSITIONS:
+   - Ensure smooth fade-in animations for all elements when the screen loads, creating a feeling of the game coming to life.
+
+CRITICAL INSTRUCTION: This must feel like a high-end, exciting mobile board game loading screen. Use rich colors, deep contrasts, and crisp luminous accents. Do not make it flat or muted. Rebuild the visual hierarchy to feel premium yet vibrant.

@@ -1,0 +1,10 @@
+---
+name: Ludo DZ SplashScreen — full-rewrite churn pattern
+description: SplashScreen.tsx gets replaced wholesale on each new creative brief, not incrementally edited. Know this going in.
+---
+
+`artifacts/ludo-dz/src/components/SplashScreen.tsx` has already been through multiple *complete* visual-concept rewrites, not incremental tweaks: an earlier "Midnight Royale" concept (rotating gold zellige jewel-cage, orbiting gem loading indicator, sparkle/dust/light-trail atmosphere) was fully discarded (2026-08-04) in favor of "The Ludo Eclipse" (static polished-gold "solar eclipse" bezel, a breathing multicolour aurora igniting from behind it, frosted-glass neon corner pawns, wave-animated colour-cycling loading dots).
+
+**Why:** the user briefs this screen as a named creative concept ("NEW VISUAL CONCEPT: THE LUDO ECLIPSE...") with an explicit instruction to discard the previous code logic, not merge with it. Each brief so far has specified its own centrepiece animation metaphor (spinning ring vs. static bezel + breathing glow), its own loading-indicator mechanic, and which older decorative layers to drop (sparkles/dust/light-trails/rotating jewel-cage were all removed, not restyled).
+
+**How to apply:** when asked for a new splash-screen "concept," don't try to preserve the prior file's component structure or decorative systems by default — re-read the brief's numbered constraints line by line and rewrite fresh, keeping only what it explicitly says to retain (typically: the deep blue/emerald background hue journey, the four corner player pawns, the exact "LUDO DZ" title treatment/font, and the bilingual FR/AR subtitle+loading text with their existing `textTransform:uppercase` CSS — the brief's literal all-caps text like "LE LUDO ALGÉRIEN" is just how those already-uppercase-transformed strings render, not a request to change casing logic or drop Arabic support). The component's external contract (`SplashScreen({ lang: "fr" | "ar" })`, single default export) has stayed stable across rewrites — only the internal implementation churns.
