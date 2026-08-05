@@ -1,0 +1,48 @@
+# Codemagic CI configuration for Ludo DZ's Cordova/Android packaging.
+#
+# Builds the web bundle from artifacts/ludo-dz via the existing
+# `build:cordova` script (outputs to cordova/www), wraps it with Cordova,
+# and produces a debug Android APK as a build artifact.
+#
+# This is a custom Vite + Cordova project, not React Native or Flutter, so
+# this workflow uses a generic Linux build machine and plain shell scripts
+# rather than a framework-specific Codemagic workflow type.
+#
+# Note: Codemagic checks out the repository automatically before any
+# scripts run, so there is no explicit "checkout" step below.
+workflows:
+  ludo-dz-cordova-android:
+    name: Ludo DZ - Cordova Android (debug)
+    max_build_duration: 90
+    instance_type: linux_x2
+    environment:
+      node: 20.20.0
+    scripts:
+      - name: Install pnpm
+        script: |
+          npm install -g pnpm@10.26.1
+
+      - name: Install workspace dependencies
+        script: |
+          pnpm install
+
+      - name: Build Cordova web bundle (artifacts/ludo-dz -> cordova/www)
+        script: |
+          pnpm --filter @workspace/ludo-dz run build:cordova
+
+      - name: Install Cordova CLI
+        script: |
+          npm install -g cordova
+
+      - name: Add Android platform
+        script: |
+          cd cordova
+          cordova platform add android
+
+      - name: Build debug APK
+        script: |
+          cd cordova
+          cordova build android
+
+    artifacts:
+      - cordova/platforms/android/app/build/outputs/apk/debug/*.apk
