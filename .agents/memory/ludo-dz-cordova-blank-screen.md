@@ -47,3 +47,21 @@ even though it would more directly address the `type="module"` question.
   `@vitejs/plugin-legacy` (needs installing, touches `package.json`) is the
   logical next escalation, or getting real `adb logcat`/remote-debugging
   access to see the actual browser-level error.
+
+**2026-08-06 root cause found (pending on-device confirmation):** a later
+round added a progressive diagnostic overlay (stage text in a fixed bar,
+independent of the fatal-error overlay above) and confirmed on-device that
+"App rendered" fires normally — ruling out load/parse/JS-error failures
+entirely. The real cause: `App.tsx`'s full-screen containers were sized with
+the `dvh` unit (`min-h-[100dvh]`, `h-[100dvh]`), which the built Cordova CSS
+shipped with no fallback. See
+[css-dvh-fallback-pattern.md](css-dvh-fallback-pattern.md) for why that
+collapses all visible content to zero height while React still mounts
+everything, and for the general fix pattern (`@supports`, not a stacked
+`vh`/`dvh` declaration — the latter gets stripped by this project's CSS
+minifier). Fix applied to all `dvh` usages in `App.tsx`, `GameBoardScreen.tsx`,
+`GameConfigOverlay.tsx`, `VictoryScreen.tsx` and verified against the actual
+minified `build:cordova` output, but not yet
+confirmed on the physical device that originally showed the bug — if it
+recurs, confirm the fix actually reached the device build before assuming a
+new cause.

@@ -12,6 +12,7 @@ import { VictoryScreen } from './VictoryScreen';
 import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
 import type { GameConfig } from './GameConfigOverlay';
+import { supportsDvh } from '../lib/utils';
 import {
   pauseBgmForGameplay,
   playClassicCapture,
@@ -4204,7 +4205,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             position: 'relative',
             // min() ensures the board is always square and never overflows:
             // width-constrained on portrait phones, height-constrained on short screens.
-            width: `min(calc(100vw - ${2 * BOARD_MARGIN}px), calc(100dvh - 270px))`,
+            width: `min(calc(100vw - ${2 * BOARD_MARGIN}px), calc(${supportsDvh ? '100dvh' : '100vh'} - 270px))`,
             aspectRatio: '1',
             boxSizing: 'border-box',
             borderRadius: 22,

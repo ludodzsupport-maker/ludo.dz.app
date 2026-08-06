@@ -128,6 +128,50 @@
   filter: drop-shadow(0px 8px 4px rgba(0,0,0,0.4));
 }
 
+/* Viewport-height utilities with a `vh` fallback for engines that don't
+   support `dvh` (dynamic viewport height) — notably some Android WebView
+   versions used by the Cordova build. An unsupported unit isn't clamped or
+   ignored per-value: the whole declaration is invalid and dropped,
+   reverting the property to its initial value (e.g. `height: auto`), which
+   silently collapses this app's full-height layout to zero height.
+   Gated with `@supports` rather than a same-rule "declare vh then dvh"
+   fallback -- the latter looks equivalent, but CSS minifiers treat a
+   duplicate property within one rule as dead code and strip the earlier
+   (fallback) line, which defeats the whole point. `@supports` blocks are
+   never collapsed like that, so this survives minification correctly. */
+.h-viewport-full {
+  height: 100vh;
+}
+@supports (height: 100dvh) {
+  .h-viewport-full {
+    height: 100dvh;
+  }
+}
+
+.min-h-viewport-full {
+  min-height: 100vh;
+}
+@supports (height: 100dvh) {
+  .min-h-viewport-full {
+    min-height: 100dvh;
+  }
+}
+
+/* Combine with `h-viewport-full` -- applies only at the `sm` breakpoint
+   (640px / 40rem, matching this project's Tailwind config) and up, and
+   wins the tie via source order (defined after `.h-viewport-full` above),
+   the same mechanism Tailwind's own responsive variants rely on. */
+@media (min-width: 40rem) {
+  .h-viewport-capped-sm {
+    height: min(100vh, 900px);
+  }
+  @supports (height: 100dvh) {
+    .h-viewport-capped-sm {
+      height: min(100dvh, 900px);
+    }
+  }
+}
+
 /* Respect user motion preferences for all infinite animations */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

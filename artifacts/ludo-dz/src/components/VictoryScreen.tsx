@@ -11,6 +11,7 @@ import { GamePiece } from './GamePiece';
 import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
 import type { BoardStyle } from '../App';
+import { supportsDvh } from '../lib/utils';
 
 interface VictoryScreenProps {
   game: E.GameState;
@@ -178,7 +179,7 @@ export function VictoryScreen({
           border: `2px solid ${theme.borderOuter}`,
           boxShadow: theme.ringGlow,
           borderRadius: 28, padding: '28px 22px 22px',
-          maxWidth: 336, width: '90%', maxHeight: '88dvh', overflowY: 'auto',
+          maxWidth: 336, width: '90%', maxHeight: supportsDvh ? '88dvh' : '88vh', overflowY: 'auto',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
         }}>
         {/* Ornamental inner hairline — gold-leaf double-border feel on Classic/DZ */}

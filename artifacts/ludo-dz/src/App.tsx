@@ -74,10 +74,10 @@ function AppContent() {
 
   return (
     <div
-      className={`min-h-[100dvh] w-full flex items-center justify-center bg-black overflow-hidden select-none ${lang === 'ar' ? 'rtl' : 'ltr'}`}
+      className={`min-h-viewport-full w-full flex items-center justify-center bg-black overflow-hidden select-none ${lang === 'ar' ? 'rtl' : 'ltr'}`}
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
-      <div className="w-full max-w-[430px] h-[100dvh] relative bg-deep-blue shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden text-white sm:rounded-[2rem] sm:h-[min(100dvh,900px)] sm:border-[8px] sm:border-gray-900 mx-auto">
+      <div className="w-full max-w-[430px] h-viewport-full h-viewport-capped-sm relative bg-deep-blue shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden text-white sm:rounded-[2rem] sm:border-[8px] sm:border-gray-900 mx-auto">
         <AnimatePresence mode="wait">
           {showSplash ? (
             <SplashScreen key="splash" lang={lang} />

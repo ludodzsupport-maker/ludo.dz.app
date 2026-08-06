@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { playIconTap, playNavBack, playSelection, playStartPress, playToggleClick } from "../lib/sound-manager";
+import { supportsDvh } from "../lib/utils";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 export interface SelectedMode {
@@ -343,7 +344,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
           borderRadius: "28px 28px 0 0",
           boxShadow:
             "0 -16px 56px rgba(0,0,0,0.70), 0 0 0 1px rgba(255,255,255,0.07)",
-          maxHeight: "83dvh",
+          maxHeight: supportsDvh ? "83dvh" : "83vh",
         }}
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
