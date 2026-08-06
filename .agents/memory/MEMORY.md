@@ -11,3 +11,4 @@
 - [Ludo DZ victory/results screen](ludo-victory-screen.md) — stats live in GameBoardScreen state (not the engine); Classic/DZ share gold accent #C9A227; RTL needs no manual mirroring.
 - [Temp entry-point screenshot harness](temp-entry-point-harness.md) — swap main.tsx to mount a hard-to-reach component with mock props, screenshot, then revert exactly; safe because it never lands in the diff.
 - [Codemagic free-tier instance types](codemagic-free-tier.md) — only `mac_mini_m2` is unbilled; no free Linux keyword (`linux_x2`/`x4` both require billing) as of Aug 2026.
+- [Ludo DZ Cordova blank-screen debugging](ludo-dz-cordova-blank-screen.md) — Vite always emits type=module+crossorigin (target alone won't change it); cordova-android 15.x defaults to https://localhost, not file://.

@@ -1,0 +1,15 @@
+I need you to attempt a fix for the blank blue screen issue in the Cordova build, without device console access. This is a best-effort fix based on the two most likely causes you identified earlier: (1) the bundled <script type="module"> failing in the Android WebView depending on how cordova-android serves www/ (file:// vs https://), or (2) an uncaught JS error during React's first render specific to WebView behavior.
+
+Please apply these changes together, as a combined attempt:
+
+1. **Script loading compatibility**: Check vite.cordova.config.ts's build target and module settings. If it's set to a modern target (like "esnext" or "module"), change it to a safer target like "es2015" (or add "legacy" plugin support) so the bundle doesn't rely on native ES module script loading, which is known to fail in some Android WebView configurations.
+
+2. **Global error visibility**: Add a global error handler in main.tsx (window.onerror and window.addEventListener('unhandledrejection', ...)) that catches any uncaught error and renders a visible message into the page (not just console.log, since we can't see the console) — e.g. replacing the body content with the error text/stack. This won't fix the root cause but will let us see what's actually failing on the next real device test, if this attempt doesn't fully work.
+
+3. **cordova-android URL scheme check**: Check config.xml for any setting related to <preference name="AndroidInsecureFileModeEnabled">, <preference name="scheme">, or similar Cordova/WebView preferences that affect how www/ is served, and report what's currently set (don't change unless it's clearly misconfigured based on Cordova's own documentation for this issue).
+
+Conditions:
+- Only touch vite.cordova.config.ts, main.tsx, and config.xml
+- Do not change any game logic, UI components, sounds, or other source files
+- After making changes, run the local build:cordova command to confirm it still builds successfully
+- Show me a summary of every change made, and explain your reasoning for each, before I commit and push

@@ -40,5 +40,22 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, '..', '..', 'cordova', 'www'),
     emptyOutDir: true,
+    // Vite's default build target is "baseline-widely-available" (current
+    // evergreen browsers). Android WebView is a separately-updated system
+    // component, so an older/managed device can lag well behind that,
+    // fail to parse the emitted syntax, and show nothing -- a JS parse
+    // error aborts the whole file with no console access to prove it.
+    // "es2015" trades a slightly larger bundle for syntax that's safe on
+    // much older WebView versions.
+    //
+    // Note this only lowers JS *syntax* (e.g. optional chaining, nullish
+    // coalescing, class fields). It does NOT change the emitted
+    // `<script type="module" crossorigin>` tag -- Vite always outputs ES
+    // module scripts for a normal (non-library) build; only
+    // @vitejs/plugin-legacy replaces that with a nomodule/SystemJS
+    // fallback, and adding a new dependency was out of scope for this
+    // fix. If the real failure is the module script itself failing to
+    // load (rather than failing to parse), this change won't address it.
+    target: 'es2015',
   },
 });
