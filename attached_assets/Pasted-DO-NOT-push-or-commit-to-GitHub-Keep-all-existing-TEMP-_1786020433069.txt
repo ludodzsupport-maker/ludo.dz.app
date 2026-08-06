@@ -1,0 +1,29 @@
+DO NOT push or commit to GitHub. Keep all existing TEMP DEBUG logging in place — do not remove any of it.
+
+Context: We've conclusively proven the root cause of the blank screen on the real Cordova Android device. Diagnostic logs from the actual device build showed:
+
+- location.href = https://localhost/index.html
+- pathname = /index.html
+- base = "./"
+- AppContent's component function log NEVER fired
+- SplashScreen's component function log NEVER fired
+- AppContent state stayed "NOT SET"
+
+The router (Wouter) is configured with <Route path="/" component={AppContent}/>. Since the actual pathname in the Cordova WebView is "/index.html" and not "/", the route never matches, AppContent is never called, and nothing renders under #root — with no JS error, since this is just a routing mismatch, not a crash.
+
+Please fix this precisely:
+
+1. In App.tsx, update the route so AppContent renders regardless of whether the pathname is "/" or "/index.html" (or any other path Cordova might report). The safest fix is to either:
+   - Add both "/" and "/index.html" as explicit matching routes pointing to AppContent, or
+   - Make the main route match unconditionally (no path restriction / wildcard), since this is a single-page app with no real multi-page routing need.
+   Choose whichever approach is cleaner given how NotFound and the rest of the router are currently structured, and explain which one you chose and why.
+
+2. Do not touch anything else — no changes to SplashScreen, animation logic, timers, or any other component.
+
+3. After the fix, add ONE additional TEMP DEBUG log right after AppContent's existing entry-point log, confirming which path this fix matched on (e.g. log the pathname that triggered the render). This is to verify the fix works on the next device test.
+
+4. Confirm the build is clean (tsc --noEmit passes, dev server runs without errors) and that git status still only shows the files you touched. Do not commit or push.
+
+5. Report back in plain language: exactly which routing approach you used, and exactly what changed in App.tsx.
+
+Note: there is a separate, already-known issue where #root computed height is 0px and the dvh-related CSS classes are not found in the DOM. Do NOT attempt to fix that in this pass — we'll tackle it separately once we've confirmed AppContent actually renders on-device after this routing fix.

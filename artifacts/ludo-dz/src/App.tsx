@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import NotFound from '@/pages/not-found';
 import { SplashScreen } from '@/components/SplashScreen';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { GameModeScreen } from '@/components/GameModeScreen';
@@ -29,6 +28,13 @@ function AppContent() {
   // SplashScreen component function was never called while "App rendered"
   // still fired -- this narrows down whether AppContent itself ever ran.
   (window as any).__diagLog?.('AppContent: component function called');
+  // TEMP DEBUG - remove after diagnosis: confirms which pathname the
+  // now-unconditional <Route> (see App() below) matched on for this
+  // render, to verify the routing fix actually took effect on the next
+  // device test.
+  (window as any).__diagLog?.(
+    `AppContent: rendering (matched unconditional route) for pathname=${window.location.pathname}`,
+  );
 
   const [showSplash, setShowSplash]   = useState(true);
   const [screen, setScreen]           = useState<Screen>('welcome');
@@ -188,8 +194,20 @@ function App() {
     <TooltipProvider>
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
         <Switch>
-          <Route path="/" component={AppContent} />
-          <Route component={NotFound} />
+          {/* Root cause confirmed on-device: the Cordova Android WebView
+              reports location.pathname as "/index.html", not "/", so the
+              previous path-gated <Route path="/"> never matched and
+              AppContent silently never rendered (no thrown error -- just
+              an empty #root). Wouter has no other Route anywhere in this
+              codebase and the app has no real multi-page navigation (all
+              screens are internal React state in AppContent), so instead
+              of hardcoding every pathname a WebView build might report,
+              the robust fix is to make this one meaningful route match
+              unconditionally (no `path` prop matches any location -- see
+              wouter's Route/matchRoute implementation). The former
+              catch-all NotFound route is now unreachable by construction
+              and has been removed along with its import. */}
+          <Route component={AppContent} />
         </Switch>
       </WouterRouter>
       <Toaster />
