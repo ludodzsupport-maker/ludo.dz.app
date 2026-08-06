@@ -23,6 +23,13 @@ const MAX_SPLASH_MS = 4200;
 const PREPARING_MATCH_MS = 800;
 
 function AppContent() {
+  // TEMP DEBUG - remove after diagnosis: confirms the Route actually
+  // matched and this component's function body executes at all. Added
+  // alongside the App()-level location log below because on-device the
+  // SplashScreen component function was never called while "App rendered"
+  // still fired -- this narrows down whether AppContent itself ever ran.
+  (window as any).__diagLog?.('AppContent: component function called');
+
   const [showSplash, setShowSplash]   = useState(true);
   const [screen, setScreen]           = useState<Screen>('welcome');
   const [lang, setLang]               = useState<'fr' | 'ar'>('fr');
@@ -36,23 +43,49 @@ function AppContent() {
   useEffect(() => {
     let cancelled = false;
     const start = Date.now();
+    // TEMP DEBUG - remove after diagnosis
+    (window as any).__diagLog?.('App: splash-gating effect started');
 
     const logoReady = new Promise<void>((resolve) => {
       const img = new Image();
-      img.onload = () => resolve();
-      img.onerror = () => resolve();
+      img.onload = () => {
+        // TEMP DEBUG - remove after diagnosis
+        (window as any).__diagLog?.('App: hero logo loaded');
+        resolve();
+      };
+      img.onerror = () => {
+        // TEMP DEBUG - remove after diagnosis
+        (window as any).__diagLog?.('App: hero logo failed to load (resolving anyway)');
+        resolve();
+      };
       img.src = import.meta.env.BASE_URL + 'ludo-logo.png';
     });
     const fontsReady = typeof document !== 'undefined' && document.fonts
       ? document.fonts.ready
       : Promise.resolve();
+    // TEMP DEBUG - remove after diagnosis: tap the promise for logging only,
+    // does not consume or alter it -- fontsReady is still passed to
+    // Promise.all below exactly as before.
+    fontsReady.then(() => (window as any).__diagLog?.('App: fonts ready resolved'));
+
     const readiness = Promise.all([logoReady, fontsReady]);
+    // TEMP DEBUG - remove after diagnosis
+    readiness.then(() => (window as any).__diagLog?.('App: readiness (logo+fonts) resolved'));
+
     const maxWait = new Promise<void>((resolve) => setTimeout(resolve, MAX_SPLASH_MS));
+    // TEMP DEBUG - remove after diagnosis
+    maxWait.then(() => (window as any).__diagLog?.('App: max-wait timer (4200ms) elapsed'));
 
     Promise.race([readiness, maxWait]).then(() => {
       if (cancelled) return;
       const remaining = Math.max(0, MIN_SPLASH_MS - (Date.now() - start));
-      setTimeout(() => { if (!cancelled) setShowSplash(false); }, remaining);
+      setTimeout(() => {
+        if (!cancelled) {
+          // TEMP DEBUG - remove after diagnosis
+          (window as any).__diagLog?.('App: calling setShowSplash(false)');
+          setShowSplash(false);
+        }
+      }, remaining);
     });
 
     return () => { cancelled = true; };
@@ -70,6 +103,19 @@ function AppContent() {
   const handleStartGame = (config: GameConfig) => {
     setGameConfig(config);
     setScreen('preparing-match');
+  };
+
+  // TEMP DEBUG - remove after diagnosis: main.tsx has no direct access to
+  // this component's local state, so expose the values that determine what
+  // gets rendered on `window` and read them from main.tsx right after
+  // 'App rendered' logs. Runs on every render, so it always reflects the
+  // latest values.
+  (window as any).__appDebugState = {
+    showSplash,
+    screen,
+    lang,
+    hasGameConfig: gameConfig !== null,
+    boardStyle,
   };
 
   return (
@@ -128,6 +174,16 @@ function AppContent() {
 }
 
 function App() {
+  // TEMP DEBUG - remove after diagnosis: confirms the exact location/base
+  // wouter matches routes against. On-device, SplashScreen's component
+  // function was never called even though "App rendered" fired -- if
+  // location.pathname doesn't match "/" under this base, <Route path="/">
+  // silently falls through to the catch-all NotFound route instead of
+  // AppContent, which would explain that without any thrown error.
+  (window as any).__diagLog?.(
+    `App: location.href=${window.location.href} pathname=${window.location.pathname} base="${import.meta.env.BASE_URL}"`
+  );
+
   return (
     <TooltipProvider>
       <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>

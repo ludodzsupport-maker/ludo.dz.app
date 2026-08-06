@@ -127,6 +127,23 @@ try {
   // TEMP DEBUG - remove after diagnosis
   (window as any).__diagLog?.('App rendered');
 
+  // TEMP DEBUG - remove after diagnosis: AppContent (see App.tsx) writes its
+  // current state to window.__appDebugState on every render, since main.tsx
+  // has no direct access to that component's local state. Reading it here
+  // -- immediately after 'App rendered' -- doubles as a check for whether
+  // AppContent ever ran at all: React 18's initial createRoot().render() is
+  // synchronous, so if the route matched and AppContent executed, this
+  // value is already set by the time root.render() returns above. If it's
+  // still "not set" here, AppContent's function body never ran (e.g. the
+  // Switch/Route matched NotFound instead -- see the location/base log
+  // App() emits -- rather than any loading/asset condition inside it).
+  const appDebugState = (window as any).__appDebugState;
+  (window as any).__diagLog?.(
+    appDebugState
+      ? `AppContent state: ${JSON.stringify(appDebugState)}`
+      : 'AppContent state: NOT SET (component function likely never ran)',
+  );
+
   // TEMP DEBUG - remove after diagnosis: if SplashScreen's fade-in never
   // completes, say so explicitly instead of leaving the timeline silent --
   // distinguishes "truly stuck" from "just slow". The flag is set by

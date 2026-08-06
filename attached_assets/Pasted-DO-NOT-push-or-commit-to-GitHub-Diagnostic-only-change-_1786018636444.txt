@@ -1,0 +1,36 @@
+DO NOT push or commit to GitHub. Diagnostic-only change, no functional edits.
+
+Context: Our diagnostic proved SplashScreen's component function is NEVER called 
+on the real Android Cordova WebView APK (no "component function called" log, no 
+mount log, no animation log, no JS errors). Yet "App rendered" DOES fire. This 
+means App.tsx itself is not reaching the point where it renders SplashScreen — 
+likely gated by some condition (loading state, deviceready listener, asset/font 
+preload promise, etc.) that never resolves on-device.
+
+Please:
+
+1. Open App.tsx and identify EVERY conditional branch that determines what gets 
+   rendered (loading states, deviceready checks, asset-loading checks, route/
+   screen state, etc.). Report back to me exactly what these conditions are — 
+   don't change them yet, just describe them.
+
+2. Add a TEMP DEBUG log (to the same on-screen diagnostic overlay used before) 
+   immediately after "App rendered" that logs the CURRENT VALUE of every relevant 
+   state variable that controls which screen/component gets rendered (e.g. 
+   isLoading, deviceReady, assetsLoaded, currentScreen, or whatever the actual 
+   variable names are in the code).
+
+3. If App.tsx listens for Cordova's `deviceready` event before rendering main 
+   content, add a TEMP DEBUG log the moment that listener is registered, AND 
+   another log inside the event handler itself (to confirm whether `deviceready` 
+   ever actually fires on this device).
+
+4. If App.tsx waits on any promise (font loading via document.fonts.ready, image 
+   preloading, fetch of local config/JSON, etc.) before rendering the main screen, 
+   add TEMP DEBUG logs before the promise starts and after it resolves/rejects — 
+   so we can see if it's stuck pending forever.
+
+Keep everything purely additive to the existing diagnostic overlay — no styling, 
+no logic, no functional changes. Once done, confirm it builds cleanly, then stop — 
+do not commit or push. Also report back to me in plain terms what conditions you 
+found in step 1, before I proceed with the rebuild.
