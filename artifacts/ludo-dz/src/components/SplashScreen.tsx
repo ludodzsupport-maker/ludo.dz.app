@@ -335,6 +335,13 @@ export function SplashScreen({ lang }: SplashScreenProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 1.05, filter: "blur(10px)" }}
       transition={{ duration: 0.55, ease: "easeInOut" }}
+      // TEMP DEBUG - remove after diagnosis: confirms whether this root
+      // fade-in ever completes on-device (or never fires at all, which
+      // would point at Framer Motion never resolving the animation rather
+      // than a pure CSS layout collapse).
+      onAnimationComplete={() =>
+        (window as any).__diagLog?.('SplashScreen fade-in animation complete')
+      }
     >
       {/* ── Ambient depth ─────────────────────────────────────────────── */}
       <BokehField reduced={reduced} />

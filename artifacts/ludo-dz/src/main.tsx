@@ -107,6 +107,54 @@ try {
   root.render(<App />);
   // TEMP DEBUG - remove after diagnosis
   (window as any).__diagLog?.('App rendered');
+
+  // TEMP DEBUG - remove after diagnosis: deeper on-screen layout diagnostics
+  // for the "React renders but nothing is visible" Cordova blank-screen
+  // investigation. We have no chrome://inspect access on-device, so every
+  // value that would normally come from devtools gets appended to the same
+  // on-screen overlay instead. Isolated in its own try/catch so a failure
+  // here logs a line rather than being mistaken for a render failure.
+  try {
+    const diagLog = (window as any).__diagLog as ((msg: string) => void) | undefined;
+
+    // 1. Actual rendered height of the literal #root element.
+    const rootEl = document.getElementById('root');
+    if (rootEl) {
+      const rect = rootEl.getBoundingClientRect();
+      const computedHeight = getComputedStyle(rootEl).height;
+      diagLog?.(`#root height: ${rect.height}px (computed height: ${computedHeight})`);
+    } else {
+      diagLog?.('#root height: element not found');
+    }
+
+    // 2. Does this WebView's CSS engine support the dvh unit at all?
+    const dvhSupported =
+      typeof CSS !== 'undefined' && typeof CSS.supports === 'function'
+        ? String(CSS.supports('height', '100dvh'))
+        : 'CSS.supports unavailable';
+    diagLog?.(`CSS.supports("height", "100dvh"): ${dvhSupported}`);
+
+    // 3. Computed height actually applied to the two dvh-based containers
+    // App.tsx renders (queried by class instead of editing App.tsx itself,
+    // per the "only touch index.html/main.tsx/SplashScreen.tsx" scope).
+    const outer = document.querySelector('.min-h-viewport-full');
+    diagLog?.(
+      outer
+        ? `.min-h-viewport-full computed height: ${getComputedStyle(outer).height}`
+        : '.min-h-viewport-full: NOT FOUND IN DOM',
+    );
+
+    const card = document.querySelector('.h-viewport-full');
+    diagLog?.(
+      card
+        ? `.h-viewport-full computed height: ${getComputedStyle(card).height}`
+        : '.h-viewport-full: NOT FOUND IN DOM',
+    );
+  } catch (diagError) {
+    (window as any).__diagLog?.(
+      `Diagnostic measurement threw: ${diagError instanceof Error ? diagError.message : String(diagError)}`,
+    );
+  }
 } catch (error) {
   showFatalError(
     'Error during initial render',
