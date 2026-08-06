@@ -9,6 +9,25 @@ import './index.css';
 // which stage the app reaches on a device with no console access.
 (window as any).__diagLog?.('main.tsx started');
 
+// TEMP DEBUG - remove after diagnosis: minimal global error/rejection
+// listeners that write straight to the __diagLog overlay (not just
+// console, which isn't visible on-device) so any error shows up inline
+// with the rest of the load-stage timeline. Deliberately separate from the
+// permanent showFatalError-based handlers below, and placed as early as
+// possible -- before that function even exists -- so this whole block can
+// be deleted later without touching any non-debug code.
+window.addEventListener('error', (e: ErrorEvent) => {
+  (window as any).__diagLog?.(
+    `TEMP DEBUG error: ${e.message ?? '(no message)'} @ ${e.filename ?? '?'}:${e.lineno ?? '?'}`,
+  );
+});
+window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
+  const { reason } = e;
+  (window as any).__diagLog?.(
+    `TEMP DEBUG unhandledrejection: ${reason instanceof Error ? reason.message : String(reason)}`,
+  );
+});
+
 // --- Diagnostic error visibility -----------------------------------------
 //
 // Added to debug a blank-screen failure in the Cordova/Android WebView build
@@ -107,6 +126,16 @@ try {
   root.render(<App />);
   // TEMP DEBUG - remove after diagnosis
   (window as any).__diagLog?.('App rendered');
+
+  // TEMP DEBUG - remove after diagnosis: if SplashScreen's fade-in never
+  // completes, say so explicitly instead of leaving the timeline silent --
+  // distinguishes "truly stuck" from "just slow". The flag is set by
+  // SplashScreen's onAnimationComplete callback (see SplashScreen.tsx).
+  setTimeout(() => {
+    if (!(window as any).__splashAnimComplete) {
+      (window as any).__diagLog?.('TIMEOUT: animation did not complete within 3s');
+    }
+  }, 3000);
 
   // TEMP DEBUG - remove after diagnosis: deeper on-screen layout diagnostics
   // for the "React renders but nothing is visible" Cordova blank-screen
