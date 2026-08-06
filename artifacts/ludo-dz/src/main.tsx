@@ -4,6 +4,11 @@ import App from './App';
 
 import './index.css';
 
+// TEMP DEBUG - remove after diagnosis: progressive load-stage logging. Appends to the
+// on-screen overlay created in index.html (stage 1, "HTML parsed") so we can see exactly
+// which stage the app reaches on a device with no console access.
+(window as any).__diagLog?.('main.tsx started');
+
 // --- Diagnostic error visibility -----------------------------------------
 //
 // Added to debug a blank-screen failure in the Cordova/Android WebView build
@@ -96,7 +101,12 @@ window.addEventListener(
 );
 
 try {
-  createRoot(document.getElementById('root')!).render(<App />);
+  const root = createRoot(document.getElementById('root')!);
+  // TEMP DEBUG - remove after diagnosis
+  (window as any).__diagLog?.('React root created');
+  root.render(<App />);
+  // TEMP DEBUG - remove after diagnosis
+  (window as any).__diagLog?.('App rendered');
 } catch (error) {
   showFatalError(
     'Error during initial render',

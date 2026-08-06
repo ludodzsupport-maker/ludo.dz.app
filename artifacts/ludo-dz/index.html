@@ -2,6 +2,41 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- TEMP DEBUG - remove after diagnosis: on-screen progressive load-stage overlay.
+         Runs as early as possible (before anything else in <head>) so we can see how far
+         the page gets loading on a device with no console access. Exposes window.__diagLog
+         so main.tsx can append later stages to the same overlay. -->
+    <script>
+      (function () {
+        var box = document.createElement('div');
+        box.id = '__diag_overlay__';
+        box.style.cssText = [
+          'position:fixed',
+          'top:0',
+          'left:0',
+          'right:0',
+          'z-index:2147483647',
+          'background:#000000',
+          'color:#ffff00',
+          'font-family:monospace',
+          'font-size:12px',
+          'line-height:1.5',
+          'padding:6px 8px',
+          'white-space:pre-wrap',
+          'word-break:break-word',
+          'pointer-events:none',
+        ].join(';');
+        document.documentElement.appendChild(box);
+
+        window.__diagLog = function (msg) {
+          var line = document.createElement('div');
+          line.textContent = msg;
+          box.appendChild(line);
+        };
+
+        window.__diagLog('HTML parsed');
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>Ludo DZ</title>
     <meta name="description" content="Ludo DZ — built on Replit. Update this description to reflect the app." />
