@@ -38,7 +38,6 @@ workflows:
         script: |
           cd cordova
           rm -rf platforms
-          rm -rf www
           cordova platform add android
 
       - name: Build debug APK
