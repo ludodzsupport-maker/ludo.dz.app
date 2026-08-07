@@ -34,7 +34,7 @@ workflows:
       - name: Install Cordova CLI
         script: |
           npm install -g cordova
-- name: Add Android platform
+      - name: Add Android platform
         script: |
           cd cordova
           rm -rf platforms
