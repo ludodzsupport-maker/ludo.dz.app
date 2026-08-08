@@ -6,8 +6,8 @@ import express, {
 } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
-import router from "./routes";
-import { logger } from "./lib/logger";
+import router from "./routes/index.js";
+import { logger } from "./lib/logger.js";
 
 type PinoHttpRequest = Request & { id?: unknown };
 
@@ -53,6 +53,12 @@ function createPinoHttpMiddleware(): RequestHandler {
 const app: Express = express();
 
 app.use(createPinoHttpMiddleware());
+app.get("/", (_req, res) => {
+  res.status(200).json({ status: "ok", service: "api-server" });
+});
+app.get("/favicon.ico", (_req, res) => {
+  res.status(204).end();
+});
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
