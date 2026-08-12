@@ -62,3 +62,14 @@ matches the animated SVG line-art design without committing binary PNGs. If an
 older splash mechanism is reintroduced that only accepts PNG files, rasterize the
 SVG outside the repository into the required ldpi, mdpi, hdpi, xhdpi, xxhdpi, and
 xxxhdpi assets and upload those binary files separately.
+The Android splash screen is configured with Cordova Android's built-in AndroidX
+SplashScreen integration rather than `cordova-plugin-splashscreen` raster
+assets. `config.xml` points `AndroidWindowSplashScreenAnimatedIcon` at
+`res/splash/android/ludo_dz_splash.xml`, an Android vector drawable generated
+from the source SVG in `res/splash/ludo-dz-splash.svg`.
+
+This keeps the committed splash setup text-based and scalable. No density PNGs
+are committed. If an older Cordova/Android splash mechanism is reintroduced that
+only accepts PNG files, rasterize the SVG outside the repository into the
+required ldpi, mdpi, hdpi, xhdpi, xxhdpi, and xxxhdpi assets and upload those
+binary files separately.
