@@ -46,3 +46,17 @@ plus `cordova platform add android`, which generates `package.json`,
   and `npx cordova build android` from within this directory. A full
   `cordova build android` needs a JDK + Android SDK, which aren't part of
   this Replit container — Codemagic's build machine provides those.
+
+## Android splash artwork
+
+The Android splash screen is configured with Cordova Android's built-in AndroidX
+SplashScreen integration rather than `cordova-plugin-splashscreen` raster
+assets. `config.xml` points `AndroidWindowSplashScreenAnimatedIcon` at
+`res/splash/android/ludo_dz_splash.xml`, an Android vector drawable generated
+from the source SVG in `res/splash/ludo-dz-splash.svg`.
+
+This keeps the committed splash setup text-based and scalable. No density PNGs
+are committed. If an older Cordova/Android splash mechanism is reintroduced that
+only accepts PNG files, rasterize the SVG outside the repository into the
+required ldpi, mdpi, hdpi, xhdpi, xxhdpi, and xxxhdpi assets and upload those
+binary files separately.
