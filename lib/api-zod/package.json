@@ -7,9 +7,16 @@
     "build": "tsc -p tsconfig.json"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "workspace": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
   },
   "dependencies": {
     "zod": "catalog:"
-  }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts"
 }
