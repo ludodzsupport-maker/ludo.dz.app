@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SplashScreen } from '@/components/SplashScreen';
@@ -22,20 +21,6 @@ const MAX_SPLASH_MS = 4200;
 const PREPARING_MATCH_MS = 800;
 
 function AppContent() {
-  // TEMP DEBUG - remove after diagnosis: confirms the Route actually
-  // matched and this component's function body executes at all. Added
-  // alongside the App()-level location log below because on-device the
-  // SplashScreen component function was never called while "App rendered"
-  // still fired -- this narrows down whether AppContent itself ever ran.
-  (window as any).__diagLog?.('AppContent: component function called');
-  // TEMP DEBUG - remove after diagnosis: confirms which pathname the
-  // now-unconditional <Route> (see App() below) matched on for this
-  // render, to verify the routing fix actually took effect on the next
-  // device test.
-  (window as any).__diagLog?.(
-    `AppContent: rendering (matched unconditional route) for pathname=${window.location.pathname}`,
-  );
-
   const [showSplash, setShowSplash]   = useState(true);
   const [screen, setScreen]           = useState<Screen>('welcome');
   const [lang, setLang]               = useState<'fr' | 'ar'>('fr');
@@ -49,46 +34,25 @@ function AppContent() {
   useEffect(() => {
     let cancelled = false;
     const start = Date.now();
-    // TEMP DEBUG - remove after diagnosis
-    (window as any).__diagLog?.('App: splash-gating effect started');
 
     const logoReady = new Promise<void>((resolve) => {
       const img = new Image();
-      img.onload = () => {
-        // TEMP DEBUG - remove after diagnosis
-        (window as any).__diagLog?.('App: hero logo loaded');
-        resolve();
-      };
-      img.onerror = () => {
-        // TEMP DEBUG - remove after diagnosis
-        (window as any).__diagLog?.('App: hero logo failed to load (resolving anyway)');
-        resolve();
-      };
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
       img.src = import.meta.env.BASE_URL + 'ludo-logo.png';
     });
     const fontsReady = typeof document !== 'undefined' && document.fonts
       ? document.fonts.ready
       : Promise.resolve();
-    // TEMP DEBUG - remove after diagnosis: tap the promise for logging only,
-    // does not consume or alter it -- fontsReady is still passed to
-    // Promise.all below exactly as before.
-    fontsReady.then(() => (window as any).__diagLog?.('App: fonts ready resolved'));
 
     const readiness = Promise.all([logoReady, fontsReady]);
-    // TEMP DEBUG - remove after diagnosis
-    readiness.then(() => (window as any).__diagLog?.('App: readiness (logo+fonts) resolved'));
-
     const maxWait = new Promise<void>((resolve) => setTimeout(resolve, MAX_SPLASH_MS));
-    // TEMP DEBUG - remove after diagnosis
-    maxWait.then(() => (window as any).__diagLog?.('App: max-wait timer (4200ms) elapsed'));
 
     Promise.race([readiness, maxWait]).then(() => {
       if (cancelled) return;
       const remaining = Math.max(0, MIN_SPLASH_MS - (Date.now() - start));
       setTimeout(() => {
         if (!cancelled) {
-          // TEMP DEBUG - remove after diagnosis
-          (window as any).__diagLog?.('App: calling setShowSplash(false)');
           setShowSplash(false);
         }
       }, remaining);
@@ -109,19 +73,6 @@ function AppContent() {
   const handleStartGame = (config: GameConfig) => {
     setGameConfig(config);
     setScreen('preparing-match');
-  };
-
-  // TEMP DEBUG - remove after diagnosis: main.tsx has no direct access to
-  // this component's local state, so expose the values that determine what
-  // gets rendered on `window` and read them from main.tsx right after
-  // 'App rendered' logs. Runs on every render, so it always reflects the
-  // latest values.
-  (window as any).__appDebugState = {
-    showSplash,
-    screen,
-    lang,
-    hasGameConfig: gameConfig !== null,
-    boardStyle,
   };
 
   return (
@@ -180,36 +131,17 @@ function AppContent() {
 }
 
 function App() {
-  // TEMP DEBUG - remove after diagnosis: confirms the exact location/base
-  // wouter matches routes against. On-device, SplashScreen's component
-  // function was never called even though "App rendered" fired -- if
-  // location.pathname doesn't match "/" under this base, <Route path="/">
-  // silently falls through to the catch-all NotFound route instead of
-  // AppContent, which would explain that without any thrown error.
-  (window as any).__diagLog?.(
-    `App: location.href=${window.location.href} pathname=${window.location.pathname} base="${import.meta.env.BASE_URL}"`
-  );
-
   return (
     <TooltipProvider>
-      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-        <Switch>
-          {/* Root cause confirmed on-device: the Cordova Android WebView
-              reports location.pathname as "/index.html", not "/", so the
-              previous path-gated <Route path="/"> never matched and
-              AppContent silently never rendered (no thrown error -- just
-              an empty #root). Wouter has no other Route anywhere in this
-              codebase and the app has no real multi-page navigation (all
-              screens are internal React state in AppContent), so instead
-              of hardcoding every pathname a WebView build might report,
-              the robust fix is to make this one meaningful route match
-              unconditionally (no `path` prop matches any location -- see
-              wouter's Route/matchRoute implementation). The former
-              catch-all NotFound route is now unreachable by construction
-              and has been removed along with its import. */}
-          <Route component={AppContent} />
-        </Switch>
-      </WouterRouter>
+      {/*
+        The game is a single-screen state machine. Previously AppContent was
+        behind a wouter <Route path="/"> with a catch-all NotFound route. Any
+        deployment that served the app at another path (for example
+        /index.html in an Android WebView or a Vercel preview/deep link) missed
+        that route before SplashScreen mounted, leaving #root empty. Render the
+        app shell directly so boot is not gated by the browser pathname.
+      */}
+      <AppContent />
       <Toaster />
     </TooltipProvider>
   );
