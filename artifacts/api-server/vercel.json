@@ -7,10 +7,10 @@
       "use": "@vercel/node@5.3.0"
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "/dist/index.mjs"
+      "source": "/(.*)",
+      "destination": "/"
     }
   ]
 }
