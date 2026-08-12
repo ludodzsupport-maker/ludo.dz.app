@@ -1,0 +1,45 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#F7FCFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="6"
+        android:pathData="M72,144c0,-40 32,-72 72,-72s72,32 72,72 -32,72 -72,72 -72,-32 -72,-72z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#BFF4FF"
+        android:strokeAlpha="0.72"
+        android:strokeLineCap="round"
+        android:strokeWidth="3.5"
+        android:pathData="M103,83v122M185,83v122M83,103h122M83,185h122" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#F7FCFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="6"
+        android:pathData="M112,100h64c7,0 12,5 12,12v64c0,7 -5,12 -12,12h-64c-7,0 -12,-5 -12,-12v-64c0,-7 5,-12 12,-12z" />
+    <path
+        android:fillColor="#F7FCFF"
+        android:pathData="M124,124a4.5,4.5 0,1 0,9 0a4.5,4.5 0,1 0,-9 0M155,124a4.5,4.5 0,1 0,9 0a4.5,4.5 0,1 0,-9 0M139.5,144a4.5,4.5 0,1 0,9 0a4.5,4.5 0,1 0,-9 0M124,164a4.5,4.5 0,1 0,9 0a4.5,4.5 0,1 0,-9 0M155,164a4.5,4.5 0,1 0,9 0a4.5,4.5 0,1 0,-9 0" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#BFF4FF"
+        android:strokeAlpha="0.82"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="3.5"
+        android:pathData="M108,218c-18,0 -32,-9 -32,-21s14,-21 32,-21 32,9 32,21 -14,21 -32,21zM181,115c0,-18 9,-32 21,-32s21,14 21,32 -9,32 -21,32 -21,-14 -21,-32z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#F7FCFF"
+        android:strokeAlpha="0.86"
+        android:strokeLineCap="round"
+        android:strokeWidth="3.5"
+        android:pathData="M93,70c15,-11 34,-17 56,-17 50,0 91,41 91,91 0,21 -7,40 -19,56" />
+</vector>

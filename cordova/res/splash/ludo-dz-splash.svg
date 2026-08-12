@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 432 432" role="img" aria-labelledby="title desc">
+  <title id="title">Ludo DZ animated line-art splash</title>
+  <desc id="desc">A minimal animated splash with premium line art: orbiting board path, dice outline, and abstract game-piece rings drawn over a blue gradient.</desc>
+  <defs>
+    <linearGradient id="bg" x1="64" y1="24" x2="368" y2="408" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#37D7FF"/>
+      <stop offset="0.5" stop-color="#2EB9F0"/>
+      <stop offset="1" stop-color="#1D57C9"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .draw {
+        fill: none;
+        stroke: #F7FCFF;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 620;
+        stroke-dashoffset: 620;
+        animation: drawLine 760ms cubic-bezier(.22,.8,.24,1) forwards;
+      }
+
+      .accent {
+        stroke: #BFF4FF;
+      }
+
+      .fine {
+        stroke-width: 3.5;
+      }
+
+      .medium {
+        stroke-width: 6;
+      }
+
+      .delay-1 { animation-delay: 90ms; }
+      .delay-2 { animation-delay: 180ms; }
+      .delay-3 { animation-delay: 270ms; }
+      .delay-4 { animation-delay: 360ms; }
+
+      .mark {
+        fill: #F7FCFF;
+        opacity: 0;
+        transform-origin: center;
+        animation: pop 360ms cubic-bezier(.2,.9,.2,1.25) forwards;
+      }
+
+      .dot-1 { animation-delay: 620ms; }
+      .dot-2 { animation-delay: 690ms; }
+      .dot-3 { animation-delay: 760ms; }
+      .dot-4 { animation-delay: 830ms; }
+
+      .wordmark {
+        fill: #F7FCFF;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 38px;
+        font-weight: 700;
+        letter-spacing: 1.8px;
+        opacity: 0;
+        animation: fadeUp 420ms ease-out 760ms forwards;
+      }
+
+      @keyframes drawLine {
+        to { stroke-dashoffset: 0; }
+      }
+
+      @keyframes pop {
+        0% { opacity: 0; transform: scale(.5); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes fadeUp {
+        0% { opacity: 0; transform: translateY(10px); }
+        100% { opacity: .96; transform: translateY(0); }
+      }
+    </style>
+  </defs>
+
+  <rect width="432" height="432" rx="96" fill="url(#bg)"/>
+  <path d="M58 302C92 238 73 131 154 83c76-45 168-17 207 52 42 74 16 169-55 209-81 46-171 14-211-41" fill="none" stroke="#FFFFFF" stroke-opacity=".08" stroke-width="34"/>
+  <path d="M339 73c26 20 43 46 53 78" fill="none" stroke="#BFF4FF" stroke-opacity=".22" stroke-width="4" stroke-linecap="round"/>
+
+  <g filter="url(#glow)">
+    <path class="draw medium" d="M110 216c0-58 47-105 105-105s105 47 105 105-47 105-105 105-105-47-105-105Z"/>
+    <path class="draw fine accent delay-1" d="M156 126v180M274 126v180M125 157h180M125 275h180" opacity=".72"/>
+    <path class="draw medium delay-2" d="M170 151h92c10 0 19 9 19 19v92c0 10-9 19-19 19h-92c-10 0-19-9-19-19v-92c0-10 9-19 19-19Z"/>
+    <path class="draw fine accent delay-3" d="M165 323c-26 0-47-14-47-31s21-31 47-31 47 14 47 31-21 31-47 31Zm102-153c0-26 14-47 31-47s31 21 31 47-14 47-31 47-31-21-31-47Z" opacity=".82"/>
+    <path class="draw fine delay-4" d="M134 107c22-16 49-25 81-25 74 0 134 60 134 134 0 31-10 59-28 82" opacity=".86"/>
+  </g>
+
+  <circle class="mark dot-1" cx="186" cy="186" r="6"/>
+  <circle class="mark dot-2" cx="246" cy="186" r="6"/>
+  <circle class="mark dot-3" cx="216" cy="216" r="6"/>
+  <circle class="mark dot-4" cx="186" cy="246" r="6"/>
+  <circle class="mark dot-4" cx="246" cy="246" r="6"/>
+
+  <text class="wordmark" x="216" y="370" text-anchor="middle">Ludo DZ</text>
+</svg>
