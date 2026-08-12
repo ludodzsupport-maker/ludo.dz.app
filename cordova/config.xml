@@ -7,5 +7,12 @@
     <preference name="AndroidXEnabled" value="true" />
     <platform name="android">
         <preference name="android-minSdkVersion" value="24" />
+        <preference name="SplashScreenBackgroundColor" value="0xFF2EB9F0" />
+        <icon density="ldpi" src="res/icon/android/ic_launcher-ldpi.png" />
+        <icon density="mdpi" src="res/icon/android/ic_launcher-mdpi.png" />
+        <icon density="hdpi" src="res/icon/android/ic_launcher-hdpi.png" />
+        <icon density="xhdpi" src="res/icon/android/ic_launcher-xhdpi.png" />
+        <icon density="xxhdpi" src="res/icon/android/ic_launcher-xxhdpi.png" />
+        <icon density="xxxhdpi" src="res/icon/android/ic_launcher-xxxhdpi.png" />
     </platform>
 </widget>
