@@ -108,11 +108,6 @@ function TumblingDie({ reduced }: { reduced: boolean }) {
     if (reduced) { controls.set({ rotateX: -20, rotateY: 32 }); return; }
     let alive = true;
     (async () => {
-      // TEMP DEBUG - remove after diagnosis: this is the first imperative
-      // Framer Motion animation SplashScreen kicks off (useAnimationControls,
-      // not the declarative `animate` prop) — if this line never appears,
-      // the effect itself never ran or threw before reaching here.
-      (window as any).__diagLog?.('SplashScreen: animation triggered');
       await controls.start({
         rotateX: [-60, 250, 490, -20 + 720],
         rotateY: [-40, 320, 640, 32 + 1080],
@@ -321,19 +316,9 @@ const TITLE: { ch: string; gold: boolean }[] = [
 interface SplashScreenProps { lang: "fr" | "ar"; }
 
 export function SplashScreen({ lang }: SplashScreenProps) {
-  // TEMP DEBUG - remove after diagnosis: fires the instant this function body
-  // runs, before any hooks — the earliest possible signal that React actually
-  // reached this component (vs. e.g. AnimatePresence never mounting it).
-  (window as any).__diagLog?.('SplashScreen: component function called');
-
   const reduced    = useReducedMotion() ?? false;
   const subtitle   = lang === "fr" ? "Le Ludo Algérien"    : "لودو جزائري";
   const loadingTxt = lang === "fr" ? "Chargement en cours" : "جارٍ التحميل";
-
-  // TEMP DEBUG - remove after diagnosis
-  useEffect(() => {
-    (window as any).__diagLog?.('SplashScreen: mounted');
-  }, []);
 
   return (
     <motion.div
@@ -350,16 +335,6 @@ export function SplashScreen({ lang }: SplashScreenProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 1.05, filter: "blur(10px)" }}
       transition={{ duration: 0.55, ease: "easeInOut" }}
-      // TEMP DEBUG - remove after diagnosis: confirms whether this root
-      // fade-in ever completes on-device (or never fires at all, which
-      // would point at Framer Motion never resolving the animation rather
-      // than a pure CSS layout collapse).
-      onAnimationComplete={() => {
-        (window as any).__diagLog?.('SplashScreen fade-in animation complete');
-        // TEMP DEBUG - remove after diagnosis: lets main.tsx's timeout check
-        // know this actually fired, without importing across files.
-        (window as any).__splashAnimComplete = true;
-      }}
     >
       {/* ── Ambient depth ─────────────────────────────────────────────── */}
       <BokehField reduced={reduced} />
