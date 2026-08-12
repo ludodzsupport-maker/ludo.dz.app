@@ -1,16 +1,8 @@
 {
-  "version": 2,
-  "buildCommand": "pnpm run build",
-  "builds": [
-    {
-      "src": "dist/index.mjs",
-      "use": "@vercel/node@5.3.0"
-    }
-  ],
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/"
+      "destination": "/api"
     }
   ]
 }
