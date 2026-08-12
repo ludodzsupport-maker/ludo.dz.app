@@ -7,7 +7,7 @@
   "scripts": {
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm --filter @workspace/ludo-dz run typecheck && pnpm --filter @workspace/api-server run typecheck",
-    "build": "pnpm --filter @workspace/ludo-dz run build && pnpm --filter @workspace/api-server run build"
+    "build": "pnpm --filter @workspace/api-zod run build && pnpm --filter @workspace/ludo-dz run build && pnpm --filter @workspace/api-server run build"
   },
   "dependencies": {
     "@replit/connectors-sdk": "^0.4.1"
@@ -18,8 +18,15 @@
   },
   "pnpm": {
     "supportedArchitectures": {
-      "os": ["current", "darwin"],
-      "cpu": ["current", "arm64", "x64"]
+      "os": [
+        "current",
+        "darwin"
+      ],
+      "cpu": [
+        "current",
+        "arm64",
+        "x64"
+      ]
     }
   }
 }
