@@ -10,6 +10,7 @@
         <preference name="GradleVersion" value="8.13" />
         <preference name="AndroidWindowSplashScreenBackground" value="#2EB9F0" />
         <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/splash/android/ludo_dz_splash.xml" />
+        <preference name="AndroidWindowSplashScreenAnimationDuration" value="120" />
         <preference name="AndroidWindowSplashScreenAnimationDuration" value="200" />
         <icon density="ldpi" src="res/icon/android/ldpi.png" />
         <icon density="mdpi" src="res/icon/android/mdpi.png" />
