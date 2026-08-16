@@ -4,7 +4,7 @@
 // • Middle lane only colored; outer strips neutral
 // • Animation speed setting (Fast / Normal / Slow)
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { ArrowLeft, Bot, Settings, X, Zap } from 'lucide-react';
 import { GamePiece } from './GamePiece';
@@ -1918,7 +1918,7 @@ interface BoardSVGProps {
   boardStyle?: BoardStyle;
 }
 
-function BoardSVG({
+const BoardSVG = memo(function BoardSVG({
   game, onPieceClick, springCfg, hopMs,
   pieceAnims, shockwave, onShockwaveDone,
   homeImpact, homeFinishVFX, onHomeFinishDone,
@@ -3518,7 +3518,7 @@ function BoardSVG({
       })}
     </svg>
   );
-}
+});
 
 // ─── Settings overlay ─────────────────────────────────────────────────────────
 function SettingsOverlay({ lang, animSpeed, isNeon, isClassic, isDz, onSpeed, onClose }: {
@@ -3632,7 +3632,7 @@ function SettingsOverlay({ lang, animSpeed, isNeon, isClassic, isDz, onSpeed, on
 
 // ─── Main GameBoardScreen ─────────────────────────────────────────────────────
 export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
-  const playerSlots = config.players === 2 ? [0, 2] : Array.from({ length: config.players }, (_, i) => i);
+  const playerSlots = useMemo(() => config.players === 2 ? [0, 2] : Array.from({ length: config.players }, (_, i) => i), [config.players]);
   const [game, setGame]             = useState<E.GameState>(() => E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
   const [rolling, setRolling]       = useState(false);
   const [animDice, setAnimDice]     = useState(1);
@@ -3692,6 +3692,8 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const removeDzSparkle = useCallback((id: number) => {
     setDzSparkles(prev => prev.filter(sparkle => sparkle.id !== id));
   }, []);
+  const clearShockwave = useCallback(() => setShockwave(null), []);
+  const clearHomeFinishVFX = useCallback(() => setHomeFinishVFX(null), []);
 
   // Stable refs so triggerMove closures always see the latest values
   // without needing to be recreated on every render.
@@ -3709,7 +3711,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const isHumanTurn = !isComputer || game.activePlayer === 0;
   const canRoll     = isHumanTurn && game.phase === 'rolling' && !rolling && !game.winner;
   const cfg         = ANIM[animSpeed];
-  const springCfg   = { stiffness: cfg.stiffness, damping: cfg.damping, mass: cfg.mass };
+  const springCfg   = useMemo(() => ({ stiffness: cfg.stiffness, damping: cfg.damping, mass: cfg.mass }), [cfg.stiffness, cfg.damping, cfg.mass]);
 
   // ── Panel layout — proportionally scaled to actual board width ──────────────
   // Board width ≈ 100vw − 2×BOARD_MARGIN. Reference point: 362 px board (390 px
@@ -4079,7 +4081,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     setCaptureCounts([0, 0, 0, 0]);
     setMatchDurationMs(0);
     matchStartRef.current = Date.now();
-  }, [config.players, config.rule]);
+  }, [config.players, config.rule, playerSlots]);
 
   // ── Status text ───────────────────────────────────────────────────────────
   const statusMsg =
@@ -4242,10 +4244,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
               hopMs={cfg.hopMs}
               pieceAnims={pieceAnims}
               shockwave={shockwave}
-              onShockwaveDone={() => setShockwave(null)}
+              onShockwaveDone={clearShockwave}
               homeImpact={homeImpact}
               homeFinishVFX={homeFinishVFX}
-              onHomeFinishDone={() => setHomeFinishVFX(null)}
+              onHomeFinishDone={clearHomeFinishVFX}
               hopBursts={hopBursts}
               onHopBurstDone={removeHopBurst}
               onHopStepLand={handleNeonHopLand}

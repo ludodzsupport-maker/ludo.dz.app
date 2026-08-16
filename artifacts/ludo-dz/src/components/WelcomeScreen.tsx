@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { memo, useId } from "react";
 import { motion } from "framer-motion";
 import { GamePiece } from "./GamePiece";
 import { Settings, Trophy, Info } from "lucide-react";
@@ -8,10 +8,11 @@ interface WelcomeScreenProps {
   lang: "fr" | "ar";
   onPlay?: () => void;
   onSettings?: () => void;
+  onAbout?: () => void;
 }
 
 // ─── Board watermark (identical to Settings / GameMode) ───────────────────────
-function BoardWatermark() {
+const BoardWatermark = memo(function BoardWatermark() {
   return (
     <div className="absolute inset-0 opacity-5 pointer-events-none flex flex-col">
       {Array.from({ length: 15 }).map((_, i) => (
@@ -30,7 +31,7 @@ function BoardWatermark() {
       ))}
     </div>
   );
-}
+});
 
 // ─── Screen variants — same curve as Settings & GameMode ──────────────────────
 const screenVariants = {
@@ -72,7 +73,7 @@ function Shimmer() {
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) {
+export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScreenProps) {
   const logoPath = import.meta.env.BASE_URL + "ludo-logo.png";
   const clipId   = useId();
   const pfxId    = useId();
@@ -109,7 +110,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) 
       label:   t.about,
       neon:    "#00A550",
       cardBg:  "linear-gradient(145deg,#001408 0%,#002210 100%)",
-      onClick: undefined as (() => void) | undefined,
+      onClick: onAbout ? () => { playIconTap(); onAbout(); } : undefined,
     },
   ];
 

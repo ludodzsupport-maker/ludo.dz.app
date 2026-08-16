@@ -5,12 +5,13 @@ import { SplashScreen } from '@/components/SplashScreen';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { GameModeScreen } from '@/components/GameModeScreen';
 import { SettingsScreen } from '@/components/SettingsScreen';
+import { AboutScreen } from '@/components/AboutScreen';
 import { GameBoardScreen } from '@/components/GameBoardScreen';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { AnimatePresence } from 'framer-motion';
 import type { GameConfig } from '@/components/GameConfigOverlay';
 
-type Screen = 'welcome' | 'mode-select' | 'settings' | 'preparing-match' | 'game';
+type Screen = 'welcome' | 'mode-select' | 'settings' | 'about' | 'preparing-match' | 'game';
 export type BoardStyle = 'neon' | 'classic' | 'dz';
 
 // Splash stays on screen at least this long so its tumble-and-impact
@@ -90,6 +91,7 @@ function AppContent() {
               lang={lang}
               onPlay={() => setScreen('mode-select')}
               onSettings={() => setScreen('settings')}
+              onAbout={() => setScreen('about')}
             />
           ) : screen === 'mode-select' ? (
             <GameModeScreen
@@ -105,6 +107,13 @@ function AppContent() {
               setLang={setLang}
               boardStyle={boardStyle}
               setBoardStyle={setBoardStyle}
+              onBack={() => setScreen('welcome')}
+              onAbout={() => setScreen('about')}
+            />
+          ) : screen === 'about' ? (
+            <AboutScreen
+              key="about"
+              lang={lang}
               onBack={() => setScreen('welcome')}
             />
           ) : screen === 'preparing-match' ? (
