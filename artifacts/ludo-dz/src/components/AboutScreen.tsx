@@ -266,28 +266,58 @@ export function AboutScreen({ lang, onBack }: AboutScreenProps) {
           </motion.section>
 
           <SectionLabel label={t.featuresTitle} />
-          <div className="grid grid-cols-1 gap-3">
-            {featureItems.map(({ Icon, title, body, neon }) => (
-              <motion.div
-                key={title}
-                variants={itemVariants}
-                className="rounded-2xl px-4 py-4 flex items-center gap-4"
-                style={{
-                  background: "linear-gradient(145deg, rgba(4,13,34,0.92) 0%, rgba(7,26,69,0.82) 100%)",
-                  border: `1px solid ${neon}35`,
-                  boxShadow: `0 6px 22px rgba(0,0,0,0.38), 0 0 18px ${neon}12`,
-                }}
-              >
-                <div className="h-11 w-11 rounded-xl flex flex-shrink-0 items-center justify-center" style={{ background: `${neon}20`, boxShadow: `0 0 14px ${neon}25` }}>
-                  <Icon className="h-5 w-5" style={{ color: neon }} aria-hidden="true" />
-                </div>
-                <div className="min-w-0 flex-1 text-start">
-                  <h3 className="font-heading font-bold text-white" style={{ fontSize: "14px", letterSpacing: "0.05em" }}>{title}</h3>
-                  <p className="mt-1 text-[11px] leading-5 text-white/48">{body}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+          <motion.section
+            variants={itemVariants}
+            className="relative overflow-hidden rounded-[26px] px-0 py-4"
+            style={{
+              background: "linear-gradient(135deg, rgba(4,13,34,0.72), rgba(0,20,8,0.54))",
+              border: "1px solid rgba(255,215,0,0.20)",
+              boxShadow: "0 12px 34px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.08)",
+              backdropFilter: "blur(14px)",
+            }}
+          >
+            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-[#06101e]/95 to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-[#06101e]/95 to-transparent" />
+            <motion.div
+              className="flex w-max cursor-grab gap-3 px-4 active:cursor-grabbing"
+              animate={shouldReduceMotion ? undefined : { x: dir === "rtl" ? ["-50%", "0%"] : ["0%", "-50%"] }}
+              transition={shouldReduceMotion ? undefined : { duration: 16, repeat: Infinity, ease: "linear" }}
+              drag="x"
+              dragElastic={0.16}
+              dragMomentum
+            >
+              {[...featureItems, ...featureItems].map(({ Icon, title, body, neon }, index) => (
+                <motion.article
+                  key={`${title}-${index}`}
+                  aria-hidden={index >= featureItems.length}
+                  whileHover={shouldReduceMotion ? undefined : { y: -4, scale: 1.025 }}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
+                  className="relative min-h-[138px] w-[236px] overflow-hidden rounded-[24px] p-4 text-start"
+                  style={{
+                    background: "linear-gradient(145deg, rgba(255,255,255,0.13), rgba(255,255,255,0.045))",
+                    border: `1px solid ${neon}58`,
+                    boxShadow: `0 10px 28px rgba(0,0,0,0.42), 0 0 24px ${neon}18, inset 0 1px 0 rgba(255,255,255,0.14)`,
+                    backdropFilter: "blur(16px)",
+                  }}
+                >
+                  <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full blur-xl" style={{ background: `${neon}28` }} />
+                  <div className="absolute bottom-0 left-5 right-5 h-px" style={{ background: `linear-gradient(90deg, transparent, ${neon}80, transparent)` }} />
+                  <div className="relative z-10 flex h-full flex-col justify-between gap-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-2xl" style={{ background: `${neon}20`, boxShadow: `0 0 18px ${neon}32` }}>
+                        <Icon className="h-[22px] w-[22px]" style={{ color: neon }} aria-hidden="true" />
+                      </div>
+                      <span className="h-2 w-2 rounded-full" style={{ background: neon, boxShadow: `0 0 14px ${neon}` }} />
+                    </div>
+                    <div>
+                      <h3 className="font-heading text-[16px] font-black leading-none text-white" style={{ letterSpacing: "0.06em", textShadow: `0 0 18px ${neon}35` }}>{title}</h3>
+                      <p className="mt-2 text-[12px] leading-5 text-white/62">{body}</p>
+                    </div>
+                  </div>
+                </motion.article>
+              ))}
+            </motion.div>
+          </motion.section>
 
           <SectionLabel label={t.creditsTitle} />
           <motion.section
