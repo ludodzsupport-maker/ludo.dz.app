@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useTransition } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SplashScreen } from '@/components/SplashScreen';
@@ -21,12 +21,25 @@ const MIN_SPLASH_MS = 2700;
 const MAX_SPLASH_MS = 4200;
 const PREPARING_MATCH_MS = 800;
 
+const SCREEN_LAYER_STYLE = {
+  transform: 'translateZ(0)',
+  backfaceVisibility: 'hidden',
+  willChange: 'transform, opacity',
+} as const;
+
 function AppContent() {
   const [showSplash, setShowSplash]   = useState(true);
   const [screen, setScreen]           = useState<Screen>('welcome');
   const [lang, setLang]               = useState<'fr' | 'ar'>('fr');
   const [gameConfig, setGameConfig]   = useState<GameConfig | null>(null);
   const [boardStyle, setBoardStyle]   = useState<BoardStyle>('classic');
+  const [, startScreenTransition]      = useTransition();
+
+  const navigate = useCallback((nextScreen: Screen) => {
+    startScreenTransition(() => {
+      setScreen(nextScreen);
+    });
+  }, [startScreenTransition]);
 
   // Gate the splash on real readiness (fonts + hero logo decoded) instead of
   // a blind timer, so the welcome screen never flashes in with un-swapped
@@ -67,37 +80,37 @@ function AppContent() {
   // an abrupt cut.
   useEffect(() => {
     if (screen !== 'preparing-match') return;
-    const timer = setTimeout(() => setScreen('game'), PREPARING_MATCH_MS);
+    const timer = setTimeout(() => navigate('game'), PREPARING_MATCH_MS);
     return () => clearTimeout(timer);
-  }, [screen]);
+  }, [navigate, screen]);
 
-  const handleStartGame = (config: GameConfig) => {
+  const handleStartGame = useCallback((config: GameConfig) => {
     setGameConfig(config);
-    setScreen('preparing-match');
-  };
+    navigate('preparing-match');
+  }, [navigate]);
 
   return (
     <div
       className={`min-h-viewport-full w-full flex items-center justify-center bg-black overflow-hidden select-none ${lang === 'ar' ? 'rtl' : 'ltr'}`}
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
-      <div className="w-full max-w-[430px] h-viewport-full h-viewport-capped-sm relative bg-deep-blue shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden text-white sm:rounded-[2rem] sm:border-[8px] sm:border-gray-900 mx-auto">
-        <AnimatePresence mode="wait">
+      <div className="w-full max-w-[430px] h-viewport-full h-viewport-capped-sm relative bg-deep-blue shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden text-white sm:rounded-[2rem] sm:border-[8px] sm:border-gray-900 mx-auto" style={SCREEN_LAYER_STYLE}>
+        <AnimatePresence mode="wait" presenceAffectsLayout={false}>
           {showSplash ? (
             <SplashScreen key="splash" lang={lang} />
           ) : screen === 'welcome' ? (
             <WelcomeScreen
               key="welcome"
               lang={lang}
-              onPlay={() => setScreen('mode-select')}
-              onSettings={() => setScreen('settings')}
-              onAbout={() => setScreen('about')}
+              onPlay={() => navigate('mode-select')}
+              onSettings={() => navigate('settings')}
+              onAbout={() => navigate('about')}
             />
           ) : screen === 'mode-select' ? (
             <GameModeScreen
               key="mode-select"
               lang={lang}
-              onBack={() => setScreen('welcome')}
+              onBack={() => navigate('welcome')}
               onStart={handleStartGame}
             />
           ) : screen === 'settings' ? (
@@ -107,14 +120,14 @@ function AppContent() {
               setLang={setLang}
               boardStyle={boardStyle}
               setBoardStyle={setBoardStyle}
-              onBack={() => setScreen('welcome')}
-              onAbout={() => setScreen('about')}
+              onBack={() => navigate('welcome')}
+              onAbout={() => navigate('about')}
             />
           ) : screen === 'about' ? (
             <AboutScreen
               key="about"
               lang={lang}
-              onBack={() => setScreen('welcome')}
+              onBack={() => navigate('welcome')}
             />
           ) : screen === 'preparing-match' ? (
             <LoadingOverlay
@@ -130,7 +143,7 @@ function AppContent() {
               config={gameConfig}
               lang={lang}
               boardStyle={boardStyle}
-              onBack={() => setScreen('mode-select')}
+              onBack={() => navigate('mode-select')}
             />
           ) : null}
         </AnimatePresence>

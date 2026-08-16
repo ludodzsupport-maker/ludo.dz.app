@@ -1117,7 +1117,7 @@ function buildHopPath(
 // This separation lets X and Y-arc be animated independently, producing a true
 // parabolic flight path: piece traverses each cell with a smooth hop, peaks at
 // 45% of step duration, then descends and snaps to canonical stacking position.
-function PawnToken({
+const PawnToken = memo(function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
   onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand, onDustStep, onDzSparkleStep,
   stackScale, showSafeStar,
@@ -1130,7 +1130,7 @@ function PawnToken({
   hopMs: number;
   springCfg: { stiffness: number; damping: number; mass: number };
   isMovable: boolean;
-  onPieceClick: () => void;
+  onPieceClick: (pid: string) => void;
   onLastHopLand?: () => void;   // fires when captor's final hop lands → shockwave
   onDefeatArrived?: () => void; // fires when defeated piece reaches home → impact flash
   isClassic?: boolean; // Classic Board theme only — swaps hex/neon body for a 3D dome token
@@ -1332,6 +1332,9 @@ function PawnToken({
       await baseCtrl.start({ x, y, transition: LAND_SPRING });
       if (!stale()) setIsHopping(false);
     })();
+    return () => {
+      seqKeyRef.current++;
+    };
   }, [hopSteps]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Effect 2: non-hop position updates ─────────────────────────────────────
@@ -1340,6 +1343,13 @@ function PawnToken({
     baseCtrl.start({ x: finalX, y: finalY,
       transition: { type: 'spring', ...springCfgRef.current } });
   }, [finalX, finalY, hopSteps]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => {
+    seqKeyRef.current++;
+    baseCtrl.stop();
+    arcCtrl.stop();
+    scaleCtrl.stop();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Visual geometry (unchanged) ──────────────────────────────────────────────
   const neon     = E.PLAYER_NEONS[player];
@@ -1380,7 +1390,7 @@ function PawnToken({
     <motion.g
       animate={baseCtrl}
       initial={{ x: finalX, y: finalY }}
-      onClick={() => !isHopping && onPieceClick()}
+      onClick={() => !isHopping && onPieceClick(pid)}
       style={{ cursor: isMovable && !isHopping ? 'pointer' : 'default', willChange: 'transform' }}>
 
       {/* Stack-scale group: Neon premium multi-pawn shrink (1 → 0.70 → 0.55).
@@ -1592,7 +1602,7 @@ function PawnToken({
       </motion.g>
     </motion.g>
   );
-}
+});
 
 // ─── Shockwave burst — neon ripple rings that emanate from the capture tile ────
 function ShockwaveEffect({
@@ -3503,7 +3513,7 @@ const BoardSVG = memo(function BoardSVG({
             hopMs={hopMs}
             springCfg={springCfg}
             isMovable={game.movable.includes(pid)}
-            onPieceClick={() => onPieceClick(pid)}
+            onPieceClick={onPieceClick}
             onLastHopLand={anim.onLastHop}
             onDefeatArrived={anim.onArrival}
             isClassic={isClassic}
