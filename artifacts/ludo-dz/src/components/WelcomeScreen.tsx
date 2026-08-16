@@ -1,5 +1,5 @@
 import { memo, useId } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { GamePiece } from "./GamePiece";
 import { Settings, Trophy, Info } from "lucide-react";
 import { playIconTap, playPrimaryAction } from "../lib/sound-manager";
@@ -9,6 +9,73 @@ interface WelcomeScreenProps {
   onPlay?: () => void;
   onSettings?: () => void;
   onAbout?: () => void;
+}
+
+export function StartupWelcomeScreen() {
+  const reduced = useReducedMotion();
+
+  return (
+    <motion.div
+      className="absolute inset-0 z-30 grid min-h-[100dvh] place-items-center overflow-hidden bg-[#03040b]"
+      initial={{ opacity: 1 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, scale: reduced ? 1 : 1.018 }}
+      transition={{ duration: reduced ? 0.12 : 0.32, ease: [0.22, 1, 0.36, 1] }}
+      aria-label="LUDO DZ"
+    >
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(circle at 50% 42%, rgba(0,166,81,0.24), transparent 34%), radial-gradient(circle at 24% 28%, rgba(220,20,60,0.16), transparent 30%), radial-gradient(circle at 76% 68%, rgba(30,144,255,0.18), transparent 32%), linear-gradient(180deg, #04050d 0%, #070a17 48%, #020307 100%)",
+        }}
+      />
+      <motion.div
+        className="absolute h-[52vmax] w-[52vmax] rounded-full border border-[#ffd700]/15"
+        initial={{ opacity: 0, scale: 0.74, rotate: -8 }}
+        animate={
+          reduced
+            ? { opacity: 0.4, scale: 0.9, rotate: 0 }
+            : { opacity: [0, 0.42, 0.18], scale: [0.74, 0.96, 1.02], rotate: [-8, 4, 8] }
+        }
+        transition={{ duration: reduced ? 0.18 : 0.5, ease: "easeOut" }}
+      />
+      <motion.div
+        className="absolute left-1/2 top-1/2 h-px w-[74%] max-w-[320px] -translate-x-1/2 bg-gradient-to-r from-transparent via-[#ffd700]/55 to-transparent"
+        initial={{ opacity: 0, scaleX: 0.35 }}
+        animate={{ opacity: reduced ? 0.42 : [0, 0.85, 0.34], scaleX: reduced ? 0.85 : [0.35, 1, 0.92] }}
+        transition={{ duration: reduced ? 0.18 : 0.44, ease: [0.22, 1, 0.36, 1] }}
+      />
+      <div className="relative z-10 grid place-items-center px-8 text-center">
+        <motion.p
+          className="font-heading text-[11px] font-bold uppercase tracking-[0.52em] text-[#ffd700]/75"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: reduced ? 0.1 : 0.24, ease: "easeOut" }}
+        >
+          Bienvenue
+        </motion.p>
+        <motion.h1
+          className="mt-3 font-heading text-[clamp(3.4rem,18vw,5.6rem)] font-black leading-none tracking-[-0.08em] text-white"
+          style={{
+            textShadow:
+              "0 0 18px rgba(255,215,0,0.26), 0 0 44px rgba(0,166,81,0.22), 0 10px 34px rgba(0,0,0,0.72)",
+          }}
+          initial={{ opacity: 0, letterSpacing: "-0.16em", filter: "blur(10px)" }}
+          animate={{ opacity: 1, letterSpacing: "-0.08em", filter: "blur(0px)" }}
+          transition={{ duration: reduced ? 0.1 : 0.32, ease: [0.16, 1, 0.3, 1] }}
+        >
+          LUDO DZ
+        </motion.h1>
+        <motion.div
+          className="mt-4 h-1 w-28 rounded-full bg-gradient-to-r from-[#dc143c] via-[#ffd700] to-[#00a651] shadow-[0_0_24px_rgba(255,215,0,0.28)]"
+          initial={{ opacity: 0, scaleX: 0.2 }}
+          animate={{ opacity: 1, scaleX: 1 }}
+          transition={{ duration: reduced ? 0.1 : 0.28, delay: reduced ? 0 : 0.08, ease: "easeOut" }}
+        />
+      </div>
+    </motion.div>
+  );
 }
 
 // ─── Board watermark (identical to Settings / GameMode) ───────────────────────
