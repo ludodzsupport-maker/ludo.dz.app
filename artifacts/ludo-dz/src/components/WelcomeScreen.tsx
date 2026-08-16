@@ -8,6 +8,7 @@ interface WelcomeScreenProps {
   lang: "fr" | "ar";
   onPlay?: () => void;
   onSettings?: () => void;
+  onAbout?: () => void;
 }
 
 // ─── Board watermark (identical to Settings / GameMode) ───────────────────────
@@ -72,7 +73,7 @@ function Shimmer() {
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) {
+export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScreenProps) {
   const logoPath = import.meta.env.BASE_URL + "ludo-logo.png";
   const clipId   = useId();
   const pfxId    = useId();
@@ -109,7 +110,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings }: WelcomeScreenProps) 
       label:   t.about,
       neon:    "#00A550",
       cardBg:  "linear-gradient(145deg,#001408 0%,#002210 100%)",
-      onClick: undefined as (() => void) | undefined,
+      onClick: onAbout ? () => { playIconTap(); onAbout(); } : undefined,
     },
   ];
 

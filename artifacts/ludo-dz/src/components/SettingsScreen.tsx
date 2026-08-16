@@ -23,6 +23,7 @@ interface SettingsScreenProps {
   boardStyle: BoardStyle;
   setBoardStyle: (style: BoardStyle) => void;
   onBack: () => void;
+  onAbout?: () => void;
 }
 
 // ─── Translations ──────────────────────────────────────────────────────────────
@@ -171,7 +172,7 @@ const containerVariants = {
 };
 
 // ─── Main Screen ───────────────────────────────────────────────────────────────
-export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBack }: SettingsScreenProps) {
+export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBack, onAbout }: SettingsScreenProps) {
   const t   = T[lang];
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
   const [sound,      setSound]      = useState(isSoundEnabled());
@@ -830,9 +831,13 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
           {/* ── About Section ── */}
           <SectionLabel label={t.sectionAbout} />
 
-          <motion.div
+          <motion.button
+            type="button"
             variants={itemVariants}
-            className="rounded-2xl flex items-center gap-4 px-4 py-4 mb-6"
+            whileHover={{ scale: 1.015, y: -2 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => { playSelection(); onAbout?.(); }}
+            className="w-full rounded-2xl flex items-center gap-4 px-4 py-4 mb-6 text-start"
             style={{
               background: "linear-gradient(145deg, #001408 0%, #002210 100%)",
               border: "1px solid rgba(0,165,80,0.25)",
@@ -881,7 +886,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                 />
               </g>
             </svg>
-          </motion.div>
+          </motion.button>
 
         </motion.div>
       </div>
