@@ -14,11 +14,10 @@ import type { GameConfig } from '@/components/GameConfigOverlay';
 type Screen = 'welcome' | 'mode-select' | 'settings' | 'about' | 'preparing-match' | 'game';
 export type BoardStyle = 'neon' | 'classic' | 'dz';
 
-// Splash stays on screen at least this long so its tumble-and-impact
-// choreography always finishes before it's dismissed, but never longer than
-// MAX_SPLASH_MS even if fonts/assets are unusually slow to settle.
-const MIN_SPLASH_MS = 2700;
-const MAX_SPLASH_MS = 4200;
+// Splash is intentionally a fast cinematic title card: it gives the brand
+// a premium opening beat, then clears quickly so the menu feels instant.
+const MIN_SPLASH_MS = 620;
+const MAX_SPLASH_MS = 950;
 const PREPARING_MATCH_MS = 800;
 
 const SCREEN_LAYER_STYLE = {
