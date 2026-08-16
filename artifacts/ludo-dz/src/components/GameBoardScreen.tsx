@@ -3813,6 +3813,8 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [restartKey, setRestartKey] = useState(0);
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
+  const moveRecoveryTimer = useRef<NodeJS.Timeout | null>(null);
+  const moveSequenceRef = useRef(0);
 
   // ── Match stats (additive, local to this screen) — feeds VictoryScreen ────
   // Tracked here rather than in ludo-engine.ts so the pure engine stays
@@ -3872,6 +3874,18 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const isAnimatingRef = useRef(isAnimating);
   gameRef.current        = game;
   isAnimatingRef.current = isAnimating;
+
+  const clearMoveRecoveryTimer = useCallback(() => {
+    if (!moveRecoveryTimer.current) return;
+    clearTimeout(moveRecoveryTimer.current);
+    moveRecoveryTimer.current = null;
+  }, []);
+
+  const unlockMoveInteraction = useCallback(() => {
+    clearMoveRecoveryTimer();
+    isAnimatingRef.current = false;
+    setIsAnimating(false);
+  }, [clearMoveRecoveryTimer]);
 
   const isComputer  = config.modeId === 'computer';
   const isClassic   = boardStyle === 'classic';
@@ -4033,6 +4047,8 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       return;
     }
 
+    const moveSeq = ++moveSequenceRef.current;
+
     // Pre-compute the logical outcome WITHOUT applying it to React state yet.
     // Game state is only committed once the captor's last animation step lands.
     const nextState = E.doMove(currentGame, pid);
@@ -4083,16 +4099,26 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
         setHomeFinishVFX({ x: 7.5, y: 7.5, neon: captorNeon, id: Date.now() });
       }
       setGame(nextState);
-      setIsAnimating(false);
-      isAnimatingRef.current = false;
+      unlockMoveInteraction();
       return;
     }
 
     setIsAnimating(true);
 
+    const recoveryMs = Math.max(3500, steps.length * (cfg.hopMs + INTER_MS + SQUASH_MS) + Math.max(cfg.hopMs * 3, 500) + 2500);
+    clearMoveRecoveryTimer();
+    moveRecoveryTimer.current = setTimeout(() => {
+      if (moveSequenceRef.current !== moveSeq) return;
+      setGame(nextState);
+      setPieceAnims({});
+      setHomeImpact(null);
+      unlockMoveInteraction();
+    }, recoveryMs);
+
     // onLastHop fires when the captor's FINAL step physically lands on the tile.
     // This is the earliest safe moment to resolve captures and pass the turn.
     const onLastHop = () => {
+      if (moveSequenceRef.current !== moveSeq) return;
       // Trigger shockwave / home-finish VFX at the landing tile
       if (capturedPid && lastStep) {
         setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() });
@@ -4118,18 +4144,17 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           [capturedPid]: {
             steps: 'defeat',
             onArrival: () => {
+              if (moveSequenceRef.current !== moveSeq) return;
               setHomeImpact({ player: cp.player, index: cp.index, id: Date.now() });
               setTimeout(() => setHomeImpact(null), 750);
-              setIsAnimating(false);
-              isAnimatingRef.current = false;
+              unlockMoveInteraction();
               setPieceAnims({});
             },
           },
         }));
       } else {
         // No capture — animation sequence is complete
-        setIsAnimating(false);
-        isAnimatingRef.current = false;
+        unlockMoveInteraction();
         setPieceAnims({});
       }
     };
@@ -4146,7 +4171,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     initAnims[pid] = { steps, startX, startY, onLastHop };
     // Do NOT set capturedPid to 'defeat' here — it waits for onLastHop
     setPieceAnims(initAnims);
-  }, []); // stable — reads game/isAnimating via refs
+  }, [clearMoveRecoveryTimer, cfg.hopMs, isClassic, unlockMoveInteraction]); // stable — reads game/isAnimating via refs
 
   // ── Piece click ───────────────────────────────────────────────────────────
   // Non-movable pawns no longer swallow the tap — their onClick now calls here
@@ -4254,7 +4279,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   }, [showExitConfirm, isHumanTurn, game.activePlayer, game.phase, game.movable.length, game.winner, isAnimating, triggerMove]);
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
-  useEffect(() => () => { rollTimers.current.forEach(clearTimeout); }, []);
+  useEffect(() => () => {
+    rollTimers.current.forEach(clearTimeout);
+    clearMoveRecoveryTimer();
+  }, [clearMoveRecoveryTimer]);
 
   // ── Restart ───────────────────────────────────────────────────────────────
   const handleRestart = useCallback(() => {
@@ -4264,7 +4292,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     setAnimDice(1);
     setJustLanded(false);
     setLastDice([0,0,0,0]);
-    setIsAnimating(false);
+    unlockMoveInteraction();
     setPieceAnims({});
     setShockwave(null);
     setHomeImpact(null);
@@ -4277,7 +4305,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     setCaptureCounts([0, 0, 0, 0]);
     setMatchDurationMs(0);
     matchStartRef.current = Date.now();
-  }, [config.players, config.rule, playerSlots]);
+  }, [config.players, config.rule, playerSlots, unlockMoveInteraction]);
 
   // ── Status text ───────────────────────────────────────────────────────────
   const statusMsg =
