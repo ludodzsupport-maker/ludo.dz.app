@@ -6,7 +6,7 @@
 
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
-import { ArrowLeft, Bot, Settings, X, Zap } from 'lucide-react';
+import { ArrowLeft, Bot, Save, Settings, Trash2, X, Zap } from 'lucide-react';
 import { GamePiece } from './GamePiece';
 import { VictoryScreen } from './VictoryScreen';
 import * as E from '../lib/ludo-engine';
@@ -40,6 +40,7 @@ import { vibrateDiceRoll, vibratePawnStep, vibrateCaptureOrWin } from '../lib/ha
 import type { BoardStyle } from '../App';
 interface Props { config: GameConfig; lang: 'fr' | 'ar'; boardStyle?: BoardStyle; onBack: () => void; }
 type AnimSpeed = 'fast' | 'normal' | 'slow';
+const SAVED_GAME_STORAGE_KEY = 'ludo-dz:saved-game';
 
 // ─── Animation speed presets ──────────────────────────────────────────────────
 const ANIM = {
@@ -3640,6 +3641,105 @@ function SettingsOverlay({ lang, animSpeed, isNeon, isClassic, isDz, onSpeed, on
   );
 }
 
+
+// ─── Exit confirmation overlay ───────────────────────────────────────────────
+function ExitConfirmationModal({ lang, isNeon, isClassic, isDz, onSaveExit, onDiscardExit, onCancel }: {
+  lang: 'fr'|'ar';
+  isNeon: boolean;
+  isClassic: boolean;
+  isDz: boolean;
+  onSaveExit: () => void;
+  onDiscardExit: () => void;
+  onCancel: () => void;
+}) {
+  const copy = lang === 'ar'
+    ? {
+        title: 'حفظ قبل الخروج؟',
+        message: 'يمكنك حفظ تقدم المباراة الحالية أو مغادرة اللوحة بدون حفظ.',
+        save: 'احفظ واخرج',
+        discard: 'اخرج دون حفظ',
+        cancel: 'إلغاء',
+      }
+    : {
+        title: 'Sauvegarder avant de quitter ?',
+        message: 'Vous pouvez conserver cette partie ou revenir au menu sans sauvegarder.',
+        save: 'Sauvegarder et quitter',
+        discard: 'Quitter sans sauvegarder',
+        cancel: 'Annuler',
+      };
+
+  const playClick = () => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playIconTap(); };
+
+  return (
+    <motion.div
+      className="absolute inset-0 z-50 flex items-center justify-center px-5"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{ backdropFilter: 'blur(18px)', background: 'rgba(2,4,12,0.72)' }}
+      onClick={() => { playClick(); onCancel(); }}>
+      <motion.div
+        initial={{ y: 18, scale: 0.96, opacity: 0 }}
+        animate={{ y: 0, scale: 1, opacity: 1 }}
+        exit={{ y: 12, scale: 0.97, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exit-confirm-title"
+        style={{
+          width: '100%', maxWidth: 360, borderRadius: 28, overflow: 'hidden',
+          background: 'linear-gradient(155deg, rgba(14,22,46,0.92) 0%, rgba(7,10,24,0.88) 100%)',
+          border: '1px solid rgba(255,255,255,0.16)',
+          boxShadow: '0 26px 80px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.10)',
+        }}>
+        <div style={{ padding: '24px 22px 20px', textAlign: lang === 'ar' ? 'right' : 'left' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 14 }}>
+            <h2 id="exit-confirm-title" style={{
+              fontFamily: 'Rajdhani, Cairo, sans-serif', fontSize: 22, lineHeight: 1.05,
+              fontWeight: 800, color: '#F8F3FF', letterSpacing: lang === 'ar' ? '0' : '0.02em',
+              margin: 0,
+            }}>{copy.title}</h2>
+            <button
+              onClick={() => { playClick(); onCancel(); }}
+              aria-label={copy.cancel}
+              style={{
+                width: 34, height: 34, borderRadius: 999, border: '1px solid rgba(255,255,255,0.10)',
+                background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0,
+              }}>
+              <X size={16} color="rgba(255,255,255,0.66)" />
+            </button>
+          </div>
+          <p style={{
+            fontFamily: 'Cairo, sans-serif', fontSize: 13, lineHeight: 1.55,
+            color: 'rgba(255,255,255,0.64)', margin: '0 0 20px',
+          }}>{copy.message}</p>
+
+          <div style={{ display: 'grid', gap: 10 }}>
+            <button onClick={() => { playClick(); onSaveExit(); }} style={{
+              minHeight: 46, borderRadius: 16, border: '1px solid rgba(255,215,0,0.42)',
+              background: 'linear-gradient(135deg, rgba(255,215,0,0.95), rgba(255,171,0,0.86))',
+              color: '#1b1300', fontFamily: 'Rajdhani, Cairo, sans-serif', fontWeight: 800,
+              fontSize: 15, letterSpacing: '0.02em', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+              boxShadow: '0 10px 26px rgba(255,188,0,0.22)',
+            }}><Save size={17}/>{copy.save}</button>
+
+            <button onClick={() => { playClick(); onDiscardExit(); }} style={{
+              minHeight: 44, borderRadius: 16, border: '1px solid rgba(255,255,255,0.13)',
+              background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.86)',
+              fontFamily: 'Rajdhani, Cairo, sans-serif', fontWeight: 750, fontSize: 14, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+            }}><Trash2 size={16}/>{copy.discard}</button>
+
+            <button onClick={() => { playClick(); onCancel(); }} style={{
+              minHeight: 42, borderRadius: 14, border: 'none', background: 'transparent',
+              color: 'rgba(255,255,255,0.56)', fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+            }}>{copy.cancel}</button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ─── Main GameBoardScreen ─────────────────────────────────────────────────────
 export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const playerSlots = useMemo(() => config.players === 2 ? [0, 2] : Array.from({ length: config.players }, (_, i) => i), [config.players]);
@@ -3650,6 +3750,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const [lastDice, setLastDice]     = useState<number[]>([0, 0, 0, 0]);
   const [animSpeed, setAnimSpeed]   = useState<AnimSpeed>('normal');
   const [showSettings, setShowSettings] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [restartKey, setRestartKey] = useState(0);
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
 
@@ -3722,6 +3823,31 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   const canRoll     = isHumanTurn && game.phase === 'rolling' && !rolling && !game.winner;
   const cfg         = ANIM[animSpeed];
   const springCfg   = useMemo(() => ({ stiffness: cfg.stiffness, damping: cfg.damping, mass: cfg.mass }), [cfg.stiffness, cfg.damping, cfg.mass]);
+
+  const saveGameState = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const elapsedMs = Date.now() - matchStartRef.current;
+    const snapshot = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      config,
+      boardStyle,
+      game: gameRef.current,
+      lastDice,
+      animSpeed,
+      stats: { moveCount, captureCounts, matchDurationMs: elapsedMs },
+    };
+    window.localStorage.setItem(SAVED_GAME_STORAGE_KEY, JSON.stringify(snapshot));
+  }, [animSpeed, boardStyle, captureCounts, config, lastDice, moveCount]);
+
+  const handleSaveAndExit = useCallback(() => {
+    saveGameState();
+    onBack();
+  }, [onBack, saveGameState]);
+
+  const handleDiscardAndExit = useCallback(() => {
+    onBack();
+  }, [onBack]);
 
   // ── Panel layout — proportionally scaled to actual board width ──────────────
   // Board width ≈ 100vw − 2×BOARD_MARGIN. Reference point: 362 px board (390 px
@@ -4032,40 +4158,40 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
 
   // ── Auto-pass when no valid moves — blocked while animation is in flight ─
   useEffect(() => {
-    if (game.phase !== 'selecting' || game.movable.length > 0 || game.winner || isAnimating) return;
+    if (showExitConfirm || game.phase !== 'selecting' || game.movable.length > 0 || game.winner || isAnimating) return;
     const t = setTimeout(() => setGame(E.autoPassTurn), 1080);
     return () => clearTimeout(t);
-  }, [game.phase, game.movable.length, game.winner, isAnimating]);
+  }, [showExitConfirm, game.phase, game.movable.length, game.winner, isAnimating]);
 
   // ── AI roll ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isComputer || game.activePlayer === 0) return;
+    if (showExitConfirm || !isComputer || game.activePlayer === 0) return;
     if (game.phase !== 'rolling' || rolling || game.winner) return;
     const t = setTimeout(handleRoll, 620 + Math.random() * 320);
     return () => clearTimeout(t);
-  }, [isComputer, game.activePlayer, game.phase, rolling, game.winner, handleRoll]);
+  }, [showExitConfirm, isComputer, game.activePlayer, game.phase, rolling, game.winner, handleRoll]);
 
   // ── AI move — blocked while animation is in flight ────────────────────────
   useEffect(() => {
-    if (!isComputer || game.activePlayer === 0) return;
+    if (showExitConfirm || !isComputer || game.activePlayer === 0) return;
     if (game.phase !== 'selecting' || !game.movable.length || game.winner || isAnimating) return;
     const pid = E.aiPickMove(game);
     if (!pid) return;
     const t = setTimeout(() => triggerMove(pid), 480);
     return () => clearTimeout(t);
-  }, [isComputer, game.activePlayer, game.phase, game.movable.length, game.winner, isAnimating, triggerMove]);
+  }, [showExitConfirm, isComputer, game.activePlayer, game.phase, game.movable.length, game.winner, isAnimating, triggerMove]);
 
   // ── Auto-move: lone released pawn is the only legal move ─────────────────
   // Human turns only. If the player has exactly 3 pawns home + 1 pawn out,
   // and that released pawn is the sole legal move for the roll, skip manual
   // tap/select and move it directly — mirrors the AI-move effect above.
   useEffect(() => {
-    if (!isHumanTurn || game.phase !== 'selecting' || game.winner || isAnimating) return;
+    if (showExitConfirm || !isHumanTurn || game.phase !== 'selecting' || game.winner || isAnimating) return;
     const pid = E.getAutoMovePawn(game);
     if (!pid) return;
     const t = setTimeout(() => triggerMove(pid), 480);
     return () => clearTimeout(t);
-  }, [isHumanTurn, game.activePlayer, game.phase, game.movable.length, game.winner, isAnimating, triggerMove]);
+  }, [showExitConfirm, isHumanTurn, game.activePlayer, game.phase, game.movable.length, game.winner, isAnimating, triggerMove]);
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
   useEffect(() => () => { rollTimers.current.forEach(clearTimeout); }, []);
@@ -4178,7 +4304,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           paddingBottom: 8,
         }}>
         {/* Back — far left */}
-        <motion.button onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playNavBack(); onBack(); }}
+        <motion.button onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playNavBack(); setShowExitConfirm(true); }}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
           className="flex items-center justify-center w-11 h-11 rounded-full flex-shrink-0"
           style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
@@ -4315,6 +4441,21 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           )}
         </AnimatePresence>
       </div>
+
+      {/* ── Exit confirmation overlay ── */}
+      <AnimatePresence>
+        {showExitConfirm && (
+          <ExitConfirmationModal
+            lang={lang}
+            isNeon={isNeon}
+            isClassic={isClassic}
+            isDz={isDz}
+            onSaveExit={handleSaveAndExit}
+            onDiscardExit={handleDiscardAndExit}
+            onCancel={() => setShowExitConfirm(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── Settings overlay ── */}
       <AnimatePresence>
