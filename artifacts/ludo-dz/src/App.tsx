@@ -17,7 +17,7 @@ export type BoardStyle = 'neon' | 'classic' | 'dz';
 // Splash stays on screen at least this long so its tumble-and-impact
 // choreography always finishes before it's dismissed, but never longer than
 // MAX_SPLASH_MS even if fonts/assets are unusually slow to settle.
-const STARTUP_WELCOME_MS = 420;
+const STARTUP_WELCOME_MS = 1500;
 const MIN_SPLASH_MS = 2700;
 const MAX_SPLASH_MS = 4200;
 const PREPARING_MATCH_MS = 800;

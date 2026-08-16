@@ -16,62 +16,74 @@ export function StartupWelcomeScreen() {
 
   return (
     <motion.div
-      className="absolute inset-0 z-30 grid min-h-[100dvh] place-items-center overflow-hidden bg-[#03040b]"
+      className="absolute inset-0 z-30 grid min-h-[100dvh] place-items-center overflow-hidden bg-[#060410]"
       initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: reduced ? 1 : 1.018 }}
-      transition={{ duration: reduced ? 0.12 : 0.32, ease: [0.22, 1, 0.36, 1] }}
-      aria-label="LUDO DZ"
+      exit={{ opacity: 0, scale: reduced ? 1 : 1.012, filter: reduced ? "none" : "blur(6px)" }}
+      transition={{ duration: reduced ? 0.16 : 0.38, ease: [0.22, 1, 0.36, 1] }}
+      aria-label="Bienvenue LUDO DZ"
     >
-      <div
+      <motion.div
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(circle at 50% 42%, rgba(0,166,81,0.24), transparent 34%), radial-gradient(circle at 24% 28%, rgba(220,20,60,0.16), transparent 30%), radial-gradient(circle at 76% 68%, rgba(30,144,255,0.18), transparent 32%), linear-gradient(180deg, #04050d 0%, #070a17 48%, #020307 100%)",
+            "radial-gradient(ellipse 110% 78% at 50% 34%, rgba(52,36,84,0.72) 0%, rgba(23,13,38,0.88) 36%, rgba(6,4,16,1) 74%), linear-gradient(180deg, #060410 0%, #0b0718 50%, #020103 100%)",
         }}
-      />
-      <motion.div
-        className="absolute h-[52vmax] w-[52vmax] rounded-full border border-[#ffd700]/15"
-        initial={{ opacity: 0, scale: 0.74, rotate: -8 }}
         animate={
           reduced
-            ? { opacity: 0.4, scale: 0.9, rotate: 0 }
-            : { opacity: [0, 0.42, 0.18], scale: [0.74, 0.96, 1.02], rotate: [-8, 4, 8] }
+            ? { opacity: 1 }
+            : { backgroundPosition: ["50% 48%", "50% 40%", "50% 48%"] }
         }
-        transition={{ duration: reduced ? 0.18 : 0.5, ease: "easeOut" }}
+        transition={reduced ? {} : { duration: 1.45, ease: "easeInOut" }}
+      />
+
+      <motion.div
+        className="absolute h-[min(78vw,310px)] w-[min(78vw,310px)] rounded-full border border-[#ffd700]/12"
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: reduced ? 0.32 : [0, 0.38, 0.26], scale: reduced ? 1 : [0.92, 1.01, 1] }}
+        transition={{ duration: reduced ? 0.18 : 0.86, ease: [0.22, 1, 0.36, 1] }}
       />
       <motion.div
-        className="absolute left-1/2 top-1/2 h-px w-[74%] max-w-[320px] -translate-x-1/2 bg-gradient-to-r from-transparent via-[#ffd700]/55 to-transparent"
-        initial={{ opacity: 0, scaleX: 0.35 }}
-        animate={{ opacity: reduced ? 0.42 : [0, 0.85, 0.34], scaleX: reduced ? 0.85 : [0.35, 1, 0.92] }}
-        transition={{ duration: reduced ? 0.18 : 0.44, ease: [0.22, 1, 0.36, 1] }}
+        className="absolute h-[min(54vw,214px)] w-[min(54vw,214px)] rounded-full bg-[#ffd700]/[0.035] blur-2xl"
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: reduced ? 0.5 : [0, 0.75, 0.5], scale: reduced ? 1 : [0.8, 1.06, 1] }}
+        transition={{ duration: reduced ? 0.18 : 0.92, ease: "easeOut" }}
       />
+
       <div className="relative z-10 grid place-items-center px-8 text-center">
-        <motion.p
-          className="font-heading text-[11px] font-bold uppercase tracking-[0.52em] text-[#ffd700]/75"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: reduced ? 0.1 : 0.24, ease: "easeOut" }}
+        <motion.div
+          className="mb-6 grid h-16 w-16 place-items-center rounded-[1.35rem] border border-[#ffd700]/25 bg-white/[0.035] shadow-[0_18px_46px_rgba(0,0,0,0.38),0_0_34px_rgba(255,215,0,0.09)]"
+          initial={{ opacity: 0, y: 10, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: reduced ? 0.12 : 0.45, ease: [0.16, 1, 0.3, 1] }}
+          aria-hidden="true"
         >
-          Bienvenue
-        </motion.p>
+          <div className="grid h-9 w-9 grid-cols-2 grid-rows-2 gap-1.5">
+            <span className="rounded-full bg-[#dc143c] shadow-[0_0_12px_rgba(220,20,60,0.35)]" />
+            <span className="rounded-full bg-[#1e90ff] shadow-[0_0_12px_rgba(30,144,255,0.35)]" />
+            <span className="rounded-full bg-[#00a651] shadow-[0_0_12px_rgba(0,166,81,0.35)]" />
+            <span className="rounded-full bg-[#ffd700] shadow-[0_0_12px_rgba(255,215,0,0.35)]" />
+          </div>
+        </motion.div>
+
         <motion.h1
-          className="mt-3 font-heading text-[clamp(3.4rem,18vw,5.6rem)] font-black leading-none tracking-[-0.08em] text-white"
+          className="font-heading text-[clamp(3.35rem,17vw,5.2rem)] font-black leading-none tracking-[-0.075em] text-[#f8f3ff]"
           style={{
             textShadow:
-              "0 0 18px rgba(255,215,0,0.26), 0 0 44px rgba(0,166,81,0.22), 0 10px 34px rgba(0,0,0,0.72)",
+              "0 0 18px rgba(255,215,0,0.18), 0 16px 34px rgba(0,0,0,0.62)",
           }}
-          initial={{ opacity: 0, letterSpacing: "-0.16em", filter: "blur(10px)" }}
-          animate={{ opacity: 1, letterSpacing: "-0.08em", filter: "blur(0px)" }}
-          transition={{ duration: reduced ? 0.1 : 0.32, ease: [0.16, 1, 0.3, 1] }}
+          initial={{ opacity: 0, y: 12, scale: 0.985 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: reduced ? 0.12 : 0.48, delay: reduced ? 0 : 0.08, ease: [0.16, 1, 0.3, 1] }}
         >
           LUDO DZ
         </motion.h1>
+
         <motion.div
-          className="mt-4 h-1 w-28 rounded-full bg-gradient-to-r from-[#dc143c] via-[#ffd700] to-[#00a651] shadow-[0_0_24px_rgba(255,215,0,0.28)]"
-          initial={{ opacity: 0, scaleX: 0.2 }}
-          animate={{ opacity: 1, scaleX: 1 }}
-          transition={{ duration: reduced ? 0.1 : 0.28, delay: reduced ? 0 : 0.08, ease: "easeOut" }}
+          className="mt-5 h-px w-36 bg-gradient-to-r from-transparent via-[#ffd700]/70 to-transparent"
+          initial={{ opacity: 0, scaleX: 0.4 }}
+          animate={{ opacity: reduced ? 0.55 : [0, 0.82, 0.55], scaleX: reduced ? 1 : [0.4, 1.04, 1] }}
+          transition={{ duration: reduced ? 0.12 : 0.5, delay: reduced ? 0 : 0.18, ease: "easeOut" }}
         />
       </div>
     </motion.div>
