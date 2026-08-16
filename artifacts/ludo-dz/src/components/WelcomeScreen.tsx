@@ -1,5 +1,5 @@
 import { memo, useId } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { GamePiece } from "./GamePiece";
 import { Settings, Trophy, Info } from "lucide-react";
 import { playIconTap, playPrimaryAction } from "../lib/sound-manager";
@@ -9,85 +9,6 @@ interface WelcomeScreenProps {
   onPlay?: () => void;
   onSettings?: () => void;
   onAbout?: () => void;
-}
-
-export function StartupWelcomeScreen() {
-  const reduced = useReducedMotion();
-
-  return (
-    <motion.div
-      className="absolute inset-0 z-30 grid min-h-[100dvh] place-items-center overflow-hidden bg-[#060410]"
-      initial={{ opacity: 1 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, scale: reduced ? 1 : 1.012, filter: reduced ? "none" : "blur(6px)" }}
-      transition={{ duration: reduced ? 0.16 : 0.38, ease: [0.22, 1, 0.36, 1] }}
-      aria-label="Bienvenue LUDO DZ"
-    >
-      <motion.div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse 110% 78% at 50% 34%, rgba(52,36,84,0.72) 0%, rgba(23,13,38,0.88) 36%, rgba(6,4,16,1) 74%), linear-gradient(180deg, #060410 0%, #0b0718 50%, #020103 100%)",
-        }}
-        animate={
-          reduced
-            ? { opacity: 1 }
-            : { backgroundPosition: ["50% 48%", "50% 40%", "50% 48%"] }
-        }
-        transition={reduced ? {} : { duration: 1.45, ease: "easeInOut" }}
-      />
-
-      <motion.div
-        className="absolute h-[min(78vw,310px)] w-[min(78vw,310px)] rounded-full border border-[#ffd700]/12"
-        initial={{ opacity: 0, scale: 0.92 }}
-        animate={{ opacity: reduced ? 0.32 : [0, 0.38, 0.26], scale: reduced ? 1 : [0.92, 1.01, 1] }}
-        transition={{ duration: reduced ? 0.18 : 0.86, ease: [0.22, 1, 0.36, 1] }}
-      />
-      <motion.div
-        className="absolute h-[min(54vw,214px)] w-[min(54vw,214px)] rounded-full bg-[#ffd700]/[0.035] blur-2xl"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{ opacity: reduced ? 0.5 : [0, 0.75, 0.5], scale: reduced ? 1 : [0.8, 1.06, 1] }}
-        transition={{ duration: reduced ? 0.18 : 0.92, ease: "easeOut" }}
-      />
-
-      <div className="relative z-10 grid place-items-center px-8 text-center">
-        <motion.div
-          className="mb-6 grid h-16 w-16 place-items-center rounded-[1.35rem] border border-[#ffd700]/25 bg-white/[0.035] shadow-[0_18px_46px_rgba(0,0,0,0.38),0_0_34px_rgba(255,215,0,0.09)]"
-          initial={{ opacity: 0, y: 10, scale: 0.94 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: reduced ? 0.12 : 0.45, ease: [0.16, 1, 0.3, 1] }}
-          aria-hidden="true"
-        >
-          <div className="grid h-9 w-9 grid-cols-2 grid-rows-2 gap-1.5">
-            <span className="rounded-full bg-[#dc143c] shadow-[0_0_12px_rgba(220,20,60,0.35)]" />
-            <span className="rounded-full bg-[#1e90ff] shadow-[0_0_12px_rgba(30,144,255,0.35)]" />
-            <span className="rounded-full bg-[#00a651] shadow-[0_0_12px_rgba(0,166,81,0.35)]" />
-            <span className="rounded-full bg-[#ffd700] shadow-[0_0_12px_rgba(255,215,0,0.35)]" />
-          </div>
-        </motion.div>
-
-        <motion.h1
-          className="font-heading text-[clamp(3.35rem,17vw,5.2rem)] font-black leading-none tracking-[-0.075em] text-[#f8f3ff]"
-          style={{
-            textShadow:
-              "0 0 18px rgba(255,215,0,0.18), 0 16px 34px rgba(0,0,0,0.62)",
-          }}
-          initial={{ opacity: 0, y: 12, scale: 0.985 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: reduced ? 0.12 : 0.48, delay: reduced ? 0 : 0.08, ease: [0.16, 1, 0.3, 1] }}
-        >
-          LUDO DZ
-        </motion.h1>
-
-        <motion.div
-          className="mt-5 h-px w-36 bg-gradient-to-r from-transparent via-[#ffd700]/70 to-transparent"
-          initial={{ opacity: 0, scaleX: 0.4 }}
-          animate={{ opacity: reduced ? 0.55 : [0, 0.82, 0.55], scaleX: reduced ? 1 : [0.4, 1.04, 1] }}
-          transition={{ duration: reduced ? 0.12 : 0.5, delay: reduced ? 0 : 0.18, ease: "easeOut" }}
-        />
-      </div>
-    </motion.div>
-  );
 }
 
 // ─── Board watermark (identical to Settings / GameMode) ───────────────────────

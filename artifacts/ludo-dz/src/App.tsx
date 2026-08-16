@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useTransition } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SplashScreen } from '@/components/SplashScreen';
-import { StartupWelcomeScreen, WelcomeScreen } from '@/components/WelcomeScreen';
+import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { GameModeScreen } from '@/components/GameModeScreen';
 import { SettingsScreen } from '@/components/SettingsScreen';
 import { AboutScreen } from '@/components/AboutScreen';
@@ -17,7 +17,6 @@ export type BoardStyle = 'neon' | 'classic' | 'dz';
 // Splash stays on screen at least this long so its tumble-and-impact
 // choreography always finishes before it's dismissed, but never longer than
 // MAX_SPLASH_MS even if fonts/assets are unusually slow to settle.
-const STARTUP_WELCOME_MS = 1500;
 const MIN_SPLASH_MS = 2700;
 const MAX_SPLASH_MS = 4200;
 const PREPARING_MATCH_MS = 800;
@@ -29,7 +28,6 @@ const SCREEN_LAYER_STYLE = {
 } as const;
 
 function AppContent() {
-  const [showStartupWelcome, setShowStartupWelcome] = useState(true);
   const [showSplash, setShowSplash]   = useState(true);
   const [screen, setScreen]           = useState<Screen>('welcome');
   const [lang, setLang]               = useState<'fr' | 'ar'>('fr');
@@ -43,13 +41,8 @@ function AppContent() {
     });
   }, [startScreenTransition]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setShowStartupWelcome(false), STARTUP_WELCOME_MS);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Gate the splash on real readiness (fonts + hero logo decoded) instead of
-  // a blind timer, so the welcome screen never flashes in with un-swapped
+  // Gate the dice splash on real readiness (fonts + hero logo decoded) instead of
+  // a blind timer, so the main menu never flashes in with un-swapped
   // fonts or a popping-in logo — while keeping a min/max floor so it neither
   // flickers on a fast load nor hangs on a slow one.
   useEffect(() => {
@@ -103,9 +96,7 @@ function AppContent() {
     >
       <div className="w-full max-w-[430px] h-viewport-full h-viewport-capped-sm relative bg-deep-blue shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden text-white sm:rounded-[2rem] sm:border-[8px] sm:border-gray-900 mx-auto" style={SCREEN_LAYER_STYLE}>
         <AnimatePresence mode="wait" presenceAffectsLayout={false}>
-          {showStartupWelcome ? (
-            <StartupWelcomeScreen key="startup-welcome" />
-          ) : showSplash ? (
+          {showSplash ? (
             <SplashScreen key="splash" lang={lang} />
           ) : screen === 'welcome' ? (
             <WelcomeScreen
