@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { SplashScreen } from '@/components/SplashScreen';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { StartupWelcomeScreen } from '@/components/StartupWelcomeScreen';
+import { StartupWelcomeScreen, WelcomeScreen } from '@/components/WelcomeScreen';
 import { GameModeScreen } from '@/components/GameModeScreen';
 import { SettingsScreen } from '@/components/SettingsScreen';
 import { AboutScreen } from '@/components/AboutScreen';
@@ -19,6 +20,7 @@ export type BoardStyle = 'neon' | 'classic' | 'dz';
 // choreography always finishes before it's dismissed, but never longer than
 // MAX_SPLASH_MS even if fonts/assets are unusually slow to settle.
 const STARTUP_WELCOME_MS = 1500;
+const STARTUP_WELCOME_MS = 420;
 const MIN_SPLASH_MS = 2700;
 const MAX_SPLASH_MS = 4200;
 const PREPARING_MATCH_MS = 800;
