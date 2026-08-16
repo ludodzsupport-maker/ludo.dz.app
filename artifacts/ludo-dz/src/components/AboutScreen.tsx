@@ -266,58 +266,57 @@ export function AboutScreen({ lang, onBack }: AboutScreenProps) {
           </motion.section>
 
           <SectionLabel label={t.featuresTitle} />
-          <motion.section
-            variants={itemVariants}
-            className="relative overflow-hidden rounded-[26px] px-0 py-4"
-            style={{
-              background: "linear-gradient(135deg, rgba(4,13,34,0.72), rgba(0,20,8,0.54))",
-              border: "1px solid rgba(255,215,0,0.20)",
-              boxShadow: "0 12px 34px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.08)",
-              backdropFilter: "blur(14px)",
-            }}
-          >
-            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-gradient-to-r from-[#06101e]/95 to-transparent" />
-            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-12 bg-gradient-to-l from-[#06101e]/95 to-transparent" />
-            <motion.div
-              className="flex w-max cursor-grab gap-3 px-4 active:cursor-grabbing"
-              animate={shouldReduceMotion ? undefined : { x: dir === "rtl" ? ["-50%", "0%"] : ["0%", "-50%"] }}
-              transition={shouldReduceMotion ? undefined : { duration: 16, repeat: Infinity, ease: "linear" }}
-              drag="x"
-              dragElastic={0.16}
-              dragMomentum
-            >
-              {[...featureItems, ...featureItems].map(({ Icon, title, body, neon }, index) => (
+          <div className="relative h-[238px] overflow-visible py-2">
+            {featureItems.map(({ Icon, title, body, neon }, index) => {
+              const lateral = dir === "rtl" ? -18 : 18;
+              return (
                 <motion.article
-                  key={`${title}-${index}`}
-                  aria-hidden={index >= featureItems.length}
-                  whileHover={shouldReduceMotion ? undefined : { y: -4, scale: 1.025 }}
-                  whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-                  className="relative min-h-[138px] w-[236px] overflow-hidden rounded-[24px] p-4 text-start"
+                  key={title}
+                  variants={itemVariants}
+                  animate={shouldReduceMotion ? { opacity: 1, y: index * 14, scale: 1 - index * 0.045 } : {
+                    opacity: [1, 0.68, 0.42, 1],
+                    x: [0, lateral, lateral * 0.55, 0],
+                    y: [0, 22, 44, 0],
+                    scale: [1, 0.94, 0.88, 1],
+                    rotate: [0, dir === "rtl" ? -1.6 : 1.6, dir === "rtl" ? -3.2 : 3.2, 0],
+                  }}
+                  transition={shouldReduceMotion ? undefined : {
+                    duration: 8.4,
+                    repeat: Infinity,
+                    ease: [0.22, 1, 0.36, 1],
+                    delay: index * 2.8,
+                  }}
+                  whileHover={shouldReduceMotion ? undefined : { y: -8, scale: 1.025, rotate: 0 }}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+                  className="absolute left-0 right-0 min-h-[164px] overflow-hidden rounded-[30px] p-5 text-start"
                   style={{
-                    background: "linear-gradient(145deg, rgba(255,255,255,0.13), rgba(255,255,255,0.045))",
-                    border: `1px solid ${neon}58`,
-                    boxShadow: `0 10px 28px rgba(0,0,0,0.42), 0 0 24px ${neon}18, inset 0 1px 0 rgba(255,255,255,0.14)`,
-                    backdropFilter: "blur(16px)",
+                    top: index * 16,
+                    zIndex: featureItems.length - index,
+                    background: "linear-gradient(145deg, rgba(8,18,42,0.94), rgba(3,12,26,0.88) 52%, rgba(2,22,12,0.86))",
+                    border: `1px solid ${neon}70`,
+                    boxShadow: `0 18px 34px rgba(0,0,0,0.46), 0 0 30px ${neon}22, inset 0 1px 0 rgba(255,255,255,0.16)`,
+                    backdropFilter: "blur(18px) saturate(1.25)",
+                    transformOrigin: dir === "rtl" ? "35% 50%" : "65% 50%",
                   }}
                 >
-                  <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full blur-xl" style={{ background: `${neon}28` }} />
-                  <div className="absolute bottom-0 left-5 right-5 h-px" style={{ background: `linear-gradient(90deg, transparent, ${neon}80, transparent)` }} />
-                  <div className="relative z-10 flex h-full flex-col justify-between gap-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-2xl" style={{ background: `${neon}20`, boxShadow: `0 0 18px ${neon}32` }}>
-                        <Icon className="h-[22px] w-[22px]" style={{ color: neon }} aria-hidden="true" />
-                      </div>
-                      <span className="h-2 w-2 rounded-full" style={{ background: neon, boxShadow: `0 0 14px ${neon}` }} />
+                  <div className="absolute -top-14 h-32 w-32 rounded-full blur-2xl" style={{ insetInlineEnd: -26, background: `${neon}2f` }} />
+                  <div className="absolute -bottom-20 h-40 w-40 rounded-full blur-3xl" style={{ insetInlineStart: -42, background: "rgba(255,215,0,0.14)" }} />
+                  <div className="absolute inset-x-8 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${neon}, transparent)` }} />
+                  <div className="relative z-10 flex h-full items-center gap-4">
+                    <div className="relative grid h-[62px] w-[62px] flex-shrink-0 place-items-center rounded-[22px]" style={{ background: `linear-gradient(145deg, ${neon}2f, rgba(255,255,255,0.08))`, boxShadow: `0 0 24px ${neon}3a, inset 0 1px 0 rgba(255,255,255,0.16)` }}>
+                      <span className="absolute -right-1 -top-1 h-4 w-4 rounded-full border border-white/25" style={{ background: neon, boxShadow: `0 0 16px ${neon}` }} />
+                      <Icon className="h-7 w-7 drop-shadow-[0_0_12px_rgba(255,255,255,0.22)]" style={{ color: neon }} aria-hidden="true" />
                     </div>
-                    <div>
-                      <h3 className="font-heading text-[16px] font-black leading-none text-white" style={{ letterSpacing: "0.06em", textShadow: `0 0 18px ${neon}35` }}>{title}</h3>
-                      <p className="mt-2 text-[12px] leading-5 text-white/62">{body}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="mb-2 text-[10px] font-heading font-black uppercase text-white/35" style={{ letterSpacing: "0.16em" }}>0{index + 1}</p>
+                      <h3 className="font-heading text-[19px] font-black leading-none text-white" style={{ letterSpacing: "0.055em", textShadow: `0 0 20px ${neon}40` }}>{title}</h3>
+                      <p className="mt-3 text-[12.5px] leading-5 text-white/66">{body}</p>
                     </div>
                   </div>
                 </motion.article>
-              ))}
-            </motion.div>
-          </motion.section>
+              );
+            })}
+          </div>
 
           <SectionLabel label={t.creditsTitle} />
           <motion.section
