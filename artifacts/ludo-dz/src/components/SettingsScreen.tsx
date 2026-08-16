@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Globe, Volume2, Vibrate, Info, ChevronRight, Check } from "lucide-react";
 import { GamePiece } from "./GamePiece";
@@ -97,7 +97,7 @@ const T = {
 } as const;
 
 // ─── Board watermark ───────────────────────────────────────────────────────────
-function BoardWatermark() {
+const BoardWatermark = memo(function BoardWatermark() {
   return (
     <div className="absolute inset-0 opacity-5 pointer-events-none flex flex-col">
       {Array.from({ length: 15 }).map((_, i) => (
@@ -114,7 +114,7 @@ function BoardWatermark() {
       ))}
     </div>
   );
-}
+});
 
 // ─── Toggle Switch ─────────────────────────────────────────────────────────────
 function NeonToggle({ value, onChange, neon }: { value: boolean; onChange: (v: boolean) => void; neon: string }) {

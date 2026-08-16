@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { motion } from "framer-motion";
 
 interface GamePieceProps {
@@ -5,7 +6,7 @@ interface GamePieceProps {
   className?: string;
 }
 
-export function GamePiece({ color = "#DC143C", className = "" }: GamePieceProps) {
+export const GamePiece = memo(function GamePiece({ color = "#DC143C", className = "" }: GamePieceProps) {
   const id = color.replace('#', '');
   return (
     <motion.svg
@@ -119,4 +120,4 @@ export function GamePiece({ color = "#DC143C", className = "" }: GamePieceProps)
       <circle cx="22" cy="60" r="2.5" fill="white" opacity="0.45"/>
     </motion.svg>
   );
-}
+});

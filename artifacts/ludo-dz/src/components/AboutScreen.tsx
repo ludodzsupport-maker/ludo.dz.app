@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowLeft, Crown, LifeBuoy, Mail, Shield, Sparkles, Trophy, Users } from "lucide-react";
 import { GamePiece } from "./GamePiece";
@@ -61,6 +62,7 @@ const T = {
   },
 } as const;
 
+const BoardWatermark = memo(function BoardWatermark() {
 function BoardWatermark() {
   return (
     <div className="absolute inset-0 opacity-5 pointer-events-none flex flex-col">
@@ -78,6 +80,7 @@ function BoardWatermark() {
       ))}
     </div>
   );
+});
 }
 
 function AlgerianMark() {

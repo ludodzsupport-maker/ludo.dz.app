@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { memo, useId } from "react";
 import { motion } from "framer-motion";
 import { GamePiece } from "./GamePiece";
 import { Settings, Trophy, Info } from "lucide-react";
@@ -12,7 +12,7 @@ interface WelcomeScreenProps {
 }
 
 // ─── Board watermark (identical to Settings / GameMode) ───────────────────────
-function BoardWatermark() {
+const BoardWatermark = memo(function BoardWatermark() {
   return (
     <div className="absolute inset-0 opacity-5 pointer-events-none flex flex-col">
       {Array.from({ length: 15 }).map((_, i) => (
@@ -31,7 +31,7 @@ function BoardWatermark() {
       ))}
     </div>
   );
-}
+});
 
 // ─── Screen variants — same curve as Settings & GameMode ──────────────────────
 const screenVariants = {
