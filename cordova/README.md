@@ -49,27 +49,14 @@ plus `cordova platform add android`, which generates `package.json`,
 
 ## Android splash artwork
 
-The splash concept is a minimal premium line-art composition: a circular Ludo
-board path, dice outline, and abstract piece rings drawn over the brand blue
-background. The source artwork lives in `res/splash/ludo-dz-splash.svg` and uses
-SVG stroke-dash animations for a quick draw-in effect. The palette is limited to
-brand blue (`#2EB9F0`), soft white (`#F7FCFF`), and light cyan (`#BFF4FF`).
+The native Android splash is intentionally minimal so the system launch window
+can hand off to the web app as quickly and cleanly as possible. `config.xml` uses
+a near-black background (`#03040B`) that matches the first frame of the web
+startup welcome screen, sets the Android splash animation duration to `0`, and
+points `AndroidWindowSplashScreenAnimatedIcon` at
+`res/splash/android/ludo_dz_splash.xml`. That vector is a 1dp solid-color fill,
+not a branded illustration, to avoid the old blue/icon flash before the WebView
+content takes over.
 
-Cordova Android's native launch splash copies a single Android resource from
-`AndroidWindowSplashScreenAnimatedIcon`, so `config.xml` points at
-`res/splash/android/ludo_dz_splash.xml`, a static vector-drawable fallback that
-matches the animated SVG line-art design without committing binary PNGs. If an
-older splash mechanism is reintroduced that only accepts PNG files, rasterize the
-SVG outside the repository into the required ldpi, mdpi, hdpi, xhdpi, xxhdpi, and
-xxxhdpi assets and upload those binary files separately.
-The Android splash screen is configured with Cordova Android's built-in AndroidX
-SplashScreen integration rather than `cordova-plugin-splashscreen` raster
-assets. `config.xml` points `AndroidWindowSplashScreenAnimatedIcon` at
-`res/splash/android/ludo_dz_splash.xml`, an Android vector drawable generated
-from the source SVG in `res/splash/ludo-dz-splash.svg`.
-
-This keeps the committed splash setup text-based and scalable. No density PNGs
-are committed. If an older Cordova/Android splash mechanism is reintroduced that
-only accepts PNG files, rasterize the SVG outside the repository into the
-required ldpi, mdpi, hdpi, xhdpi, xxhdpi, and xxxhdpi assets and upload those
-binary files separately.
+The animated premium welcome treatment now lives in the React app and runs as
+the first WebView-rendered screen before the unchanged dice loading screen.

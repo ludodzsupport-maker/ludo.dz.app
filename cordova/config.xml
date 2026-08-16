@@ -8,10 +8,9 @@
     <platform name="android">
         <preference name="android-minSdkVersion" value="24" />
         <preference name="GradleVersion" value="8.13" />
-        <preference name="AndroidWindowSplashScreenBackground" value="#2EB9F0" />
+        <preference name="AndroidWindowSplashScreenBackground" value="#03040B" />
         <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/splash/android/ludo_dz_splash.xml" />
-        <preference name="AndroidWindowSplashScreenAnimationDuration" value="120" />
-        <preference name="AndroidWindowSplashScreenAnimationDuration" value="200" />
+        <preference name="AndroidWindowSplashScreenAnimationDuration" value="0" />
         <icon density="ldpi" src="res/icon/android/ldpi.png" />
         <icon density="mdpi" src="res/icon/android/mdpi.png" />
         <icon density="hdpi" src="res/icon/android/hdpi.png" />
