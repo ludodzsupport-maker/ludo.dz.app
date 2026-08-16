@@ -5,6 +5,7 @@
 // • Animation speed setting (Fast / Normal / Slow)
 
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { CSSProperties } from 'react';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { ArrowLeft, Bot, Settings, X, Zap } from 'lucide-react';
 import { GamePiece } from './GamePiece';
@@ -38,6 +39,25 @@ import { vibrateDiceRoll, vibratePawnStep, vibrateCaptureOrWin } from '../lib/ha
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 import type { BoardStyle } from '../App';
+
+const GPU_LAYER_STYLE: CSSProperties = {
+  backfaceVisibility: 'hidden',
+  WebkitBackfaceVisibility: 'hidden',
+  willChange: 'transform, opacity',
+};
+
+const GPU_TRANSLATE_Z_STYLE: CSSProperties = {
+  transform: 'translateZ(0)',
+  ...GPU_LAYER_STYLE,
+};
+
+const gpuTransformTemplate = (_: Record<string, string | number>, generated: string) =>
+  generated ? `${generated} translateZ(0)` : 'translateZ(0)';
+
+const TOUCH_ACTION_STYLE: CSSProperties = {
+  touchAction: 'manipulation',
+  WebkitTapHighlightColor: 'transparent',
+};
 interface Props { config: GameConfig; lang: 'fr' | 'ar'; boardStyle?: BoardStyle; onBack: () => void; }
 type AnimSpeed = 'fast' | 'normal' | 'slow';
 
@@ -527,7 +547,7 @@ function CornerDice({
   }
 
   return (
-    <div style={{ position: 'absolute', ...pos, width: PANEL_W, height: PANEL_H, zIndex: 12 }}>
+    <div style={{ position: 'absolute', ...pos, width: PANEL_W, height: PANEL_H, zIndex: 12, ...GPU_TRANSLATE_Z_STYLE }}>
       {/* Connector tail — visually anchors the panel to its board corner */}
       <div style={{
         position: 'absolute', left: '50%', transform: 'translateX(-50%)', ...tailPos,
@@ -540,6 +560,7 @@ function CornerDice({
         pointerEvents: 'none',
       }}/>
     <motion.div
+      transformTemplate={gpuTransformTemplate}
       onClick={canTap ? () => {
         // handleRoll supplies Neon's, Classic's, and DZ's dedicated dice
         // cues. Only a future, still-uncategorized board style would reach
@@ -616,6 +637,8 @@ function CornerDice({
         userSelect: 'none',
         // Scale grows toward the board corner so the active card "leans in" to the game
         transformOrigin: { tl: 'top left', tr: 'top right', bl: 'bottom left', br: 'bottom right' }[anchor],
+        ...GPU_LAYER_STYLE,
+        ...TOUCH_ACTION_STYLE,
       }}
     >
       {/* DZ — zellige diamond lattice texture + corner najma rivets */}
@@ -3536,11 +3559,13 @@ function SettingsOverlay({ lang, animSpeed, isNeon, isClassic, isDz, onSpeed, on
 
   return (
     <motion.div
+      transformTemplate={gpuTransformTemplate}
       className="absolute inset-0 z-40 flex items-end justify-center"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{ backdropFilter: 'blur(18px)', background: 'rgba(3,11,22,0.85)' }}
+      style={{ backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', background: 'rgba(3,11,22,0.85)', contain: 'paint', ...GPU_LAYER_STYLE }}
       onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playNavBack(); onClose(); }}>
       <motion.div
+        transformTemplate={gpuTransformTemplate}
         initial={{ y: 80, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 80, opacity: 0 }}
@@ -3552,6 +3577,8 @@ function SettingsOverlay({ lang, animSpeed, isNeon, isClassic, isDz, onSpeed, on
           borderRadius: '24px 24px 0 0',
           padding: '24px 20px 40px',
           width: '100%', maxWidth: 480,
+          contain: 'layout paint',
+          ...GPU_LAYER_STYLE,
         }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -4094,6 +4121,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
 
   return (
     <motion.div key={restartKey}
+      transformTemplate={gpuTransformTemplate}
       className="absolute inset-0 z-20 flex flex-col overflow-hidden select-none"
       style={{ background: isClassic
         ? [
@@ -4139,7 +4167,11 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
             // Green-and-ivory silk sweep — #006233 remains the prominent anchor.
             'linear-gradient(112deg, #003c1f 0%, #006233 34%, #0b6e3b 47%, #174a2d 62%, #062d18 100%)',
           ].join(', ')
-        : 'linear-gradient(175deg, #060f1d 0%, #09152a 55%, #050d18 100%)' }}
+        : 'linear-gradient(175deg, #060f1d 0%, #09152a 55%, #050d18 100%)',
+        contain: 'layout paint size',
+        ...GPU_LAYER_STYLE,
+        ...TOUCH_ACTION_STYLE,
+      }}
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.97 }}
@@ -4153,7 +4185,8 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           { color: '#FFD700', bottom: '4%',right: '-4%',  size: 45, delay: 9 },
         ].map(({ color, size, delay, ...pos }, i) => (
           <motion.div key={i} className="absolute opacity-[0.06]"
-            style={{ ...pos, width: size, height: size*1.5 }}
+            transformTemplate={gpuTransformTemplate}
+            style={{ ...pos, width: size, height: size*1.5, ...GPU_LAYER_STYLE }}
             animate={{ y: [0,16,0], rotate: [0,25,0] }}
             transition={{ duration: 13+i*3, repeat: Infinity, ease: 'easeInOut', delay }}>
             <GamePiece color={color}/>
@@ -4168,10 +4201,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           paddingBottom: 8,
         }}>
         {/* Back — far left */}
-        <motion.button onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playNavBack(); onBack(); }}
+        <motion.button transformTemplate={gpuTransformTemplate} onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playNavBack(); onBack(); }}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
           className="flex items-center justify-center w-11 h-11 rounded-full flex-shrink-0"
-          style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
+          style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', ...GPU_LAYER_STYLE, ...TOUCH_ACTION_STYLE }}>
           <ArrowLeft className="w-4 h-4 text-white"
             style={{ transform: lang === 'ar' ? 'scaleX(-1)' : undefined }}/>
         </motion.button>
@@ -4180,10 +4213,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
         <div style={{ flex: 1 }}/>
 
         {/* Settings — far right */}
-        <motion.button onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playIconTap(); setShowSettings(true); }}
+        <motion.button transformTemplate={gpuTransformTemplate} onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playIconTap(); setShowSettings(true); }}
           whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.91 }}
           className="flex items-center justify-center w-11 h-11 rounded-full flex-shrink-0"
-          style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}>
+          style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', ...GPU_LAYER_STYLE, ...TOUCH_ACTION_STYLE }}>
           <Settings className="w-4 h-4 text-white/50"/>
         </motion.button>
       </div>
@@ -4203,6 +4236,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
           paddingRight:  BOARD_MARGIN,
         }}>
         <motion.div
+          transformTemplate={gpuTransformTemplate}
           style={{
             position: 'relative',
             // min() ensures the board is always square and never overflows:
@@ -4217,18 +4251,30 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
               ? 'transparent'
               : 'radial-gradient(ellipse 120% 100% at 50% 50%, #0e2647 0%, #030b16 70%)',
             border: (isClassic || isDz) ? 'none' : '1px solid rgba(255,255,255,0.07)',
-          }}
-          animate={{
-            boxShadow: [
-              `0 0 28px ${activeColor}28, 0 0 60px rgba(0,0,0,0.65)`,
-              `0 0 48px ${activeColor}55, 0 0 80px rgba(0,0,0,0.65)`,
-              `0 0 28px ${activeColor}28, 0 0 60px rgba(0,0,0,0.65)`,
-            ],
-          }}
-          transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}>
+            boxShadow: `0 0 28px ${activeColor}28, 0 0 60px rgba(0,0,0,0.65)`,
+            contain: 'layout paint',
+            ...GPU_LAYER_STYLE,
+          }}>
+          <motion.div
+            aria-hidden="true"
+            transformTemplate={gpuTransformTemplate}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: 22,
+              pointerEvents: 'none',
+              boxShadow: `0 0 48px ${activeColor}55, 0 0 80px rgba(0,0,0,0.65)`,
+              ...GPU_LAYER_STYLE,
+            }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 1, 0] }}
+            transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+          />
 
           {/* Inner felt — live SVG board, clipped to the rounded frame */}
           <div style={{
+            position: 'relative',
+            zIndex: 1,
             width: '100%',
             height: '100%',
             borderRadius: 14,
