@@ -5,7 +5,7 @@
 // • Animation speed setting (Fast / Normal / Slow)
 
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
+import { motion, AnimatePresence, useAnimationControls, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, Bot, Save, Settings, Trash2, X, Zap } from 'lucide-react';
 import { GamePiece } from './GamePiece';
 import { VictoryScreen } from './VictoryScreen';
@@ -3652,6 +3652,7 @@ function ExitConfirmationModal({ lang, isNeon, isClassic, isDz, onSaveExit, onDi
   onDiscardExit: () => void;
   onCancel: () => void;
 }) {
+  const shouldReduceMotion = useReducedMotion();
   const copy = lang === 'ar'
     ? {
         title: 'حفظ قبل الخروج؟',
@@ -3669,70 +3670,129 @@ function ExitConfirmationModal({ lang, isNeon, isClassic, isDz, onSaveExit, onDi
       };
 
   const playClick = () => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playIconTap(); };
+  const isRtl = lang === 'ar';
+  const entrance = shouldReduceMotion
+    ? { opacity: 1, y: 0, scale: 1, rotate: 0 }
+    : { opacity: 1, y: 0, scale: 1, rotate: 0 };
+  const exit = shouldReduceMotion
+    ? { opacity: 0 }
+    : { opacity: 0, y: 22, scale: 0.9, rotate: isRtl ? 1.5 : -1.5 };
 
   return (
     <motion.div
       className="absolute inset-0 z-50 flex items-center justify-center px-5"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{ backdropFilter: 'blur(18px)', background: 'rgba(2,4,12,0.72)' }}
+      transition={{ duration: shouldReduceMotion ? 0.12 : 0.22, ease: 'easeOut' }}
+      style={{
+        backdropFilter: 'blur(22px) saturate(1.25)',
+        background: 'radial-gradient(circle at 50% 24%, rgba(255,214,64,0.18), transparent 32%), linear-gradient(180deg, rgba(1,5,18,0.72), rgba(4,7,18,0.88))',
+      }}
       onClick={() => { playClick(); onCancel(); }}>
       <motion.div
-        initial={{ y: 18, scale: 0.96, opacity: 0 }}
-        animate={{ y: 0, scale: 1, opacity: 1 }}
-        exit={{ y: 12, scale: 0.97, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+        initial={shouldReduceMotion ? { opacity: 0 } : { y: 42, scale: 0.82, opacity: 0, rotate: isRtl ? -3 : 3 }}
+        animate={entrance}
+        exit={exit}
+        transition={{ type: 'spring', stiffness: 420, damping: 24, mass: 0.72 }}
         onClick={e => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="exit-confirm-title"
+        dir={isRtl ? 'rtl' : 'ltr'}
         style={{
-          width: '100%', maxWidth: 360, borderRadius: 28, overflow: 'hidden',
-          background: 'linear-gradient(155deg, rgba(14,22,46,0.92) 0%, rgba(7,10,24,0.88) 100%)',
-          border: '1px solid rgba(255,255,255,0.16)',
-          boxShadow: '0 26px 80px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.10)',
+          position: 'relative', width: '100%', maxWidth: 390, borderRadius: 34, overflow: 'hidden',
+          background: 'linear-gradient(145deg, rgba(29,20,8,0.98) 0%, rgba(9,12,31,0.97) 48%, rgba(3,6,18,0.98) 100%)',
+          border: '1px solid rgba(255,214,74,0.38)',
+          boxShadow: '0 30px 90px rgba(0,0,0,0.68), 0 0 42px rgba(255,199,44,0.16), inset 0 1px 0 rgba(255,255,255,0.18)',
         }}>
-        <div style={{ padding: '24px 22px 20px', textAlign: lang === 'ar' ? 'right' : 'left' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 14 }}>
-            <h2 id="exit-confirm-title" style={{
-              fontFamily: 'Rajdhani, Cairo, sans-serif', fontSize: 22, lineHeight: 1.05,
-              fontWeight: 800, color: '#F8F3FF', letterSpacing: lang === 'ar' ? '0' : '0.02em',
-              margin: 0,
-            }}>{copy.title}</h2>
-            <button
-              onClick={() => { playClick(); onCancel(); }}
-              aria-label={copy.cancel}
+        <motion.div
+          aria-hidden="true"
+          animate={shouldReduceMotion ? undefined : { rotate: 360 }}
+          transition={{ duration: 14, repeat: Infinity, ease: 'linear' }}
+          style={{
+            position: 'absolute', top: -48, insetInlineEnd: -36, width: 146, height: 146, borderRadius: 999,
+            background: 'conic-gradient(from 30deg, rgba(255,216,62,0.0), rgba(255,216,62,0.62), rgba(255,119,0,0.22), rgba(255,216,62,0.0))',
+            filter: 'blur(0.2px)', opacity: 0.82,
+          }}
+        />
+        <motion.div
+          aria-hidden="true"
+          animate={shouldReduceMotion ? undefined : { y: [0, -8, 0], scale: [1, 1.08, 1], rotate: [0, -5, 5, 0] }}
+          transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+          style={{
+            position: 'absolute', top: 16, insetInlineEnd: 20, width: 58, height: 58, borderRadius: '20px 24px 18px 24px',
+            display: 'grid', placeItems: 'center', color: '#231600', fontFamily: 'Rajdhani, Cairo, sans-serif', fontSize: 38, fontWeight: 900,
+            background: 'linear-gradient(145deg, #fff4a8, #ffc21f 54%, #ff8a00)',
+            boxShadow: '0 12px 30px rgba(255,183,0,0.42), inset 0 2px 0 rgba(255,255,255,0.68)',
+            textShadow: '0 1px 0 rgba(255,255,255,0.42)',
+          }}>
+          ?
+        </motion.div>
+        {[0, 1, 2].map((dot) => (
+          <motion.span
+            key={dot}
+            aria-hidden="true"
+            animate={shouldReduceMotion ? undefined : { y: [0, -9 - dot * 2, 0], opacity: [0.56, 1, 0.56], scale: [0.9, 1.2, 0.9] }}
+            transition={{ duration: 1.45, repeat: Infinity, ease: 'easeInOut', delay: dot * 0.18 }}
+            style={{
+              position: 'absolute', top: 86 + dot * 2, insetInlineEnd: 58 - dot * 18, width: 8, height: 8, borderRadius: 999,
+              background: '#FFE76B', boxShadow: '0 0 16px rgba(255,231,107,0.85)',
+            }}
+          />
+        ))}
+
+        <div style={{ position: 'relative', padding: '30px 24px 22px', textAlign: isRtl ? 'right' : 'left' }}>
+          <div style={{ paddingInlineEnd: 84, marginBottom: 18 }}>
+            <motion.p
+              aria-hidden="true"
+              animate={shouldReduceMotion ? undefined : { opacity: [0.62, 1, 0.62] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
               style={{
-                width: 34, height: 34, borderRadius: 999, border: '1px solid rgba(255,255,255,0.10)',
-                background: 'rgba(255,255,255,0.06)', display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0,
+                fontFamily: 'Rajdhani, Cairo, sans-serif', fontSize: 11, fontWeight: 900, letterSpacing: isRtl ? 0 : '0.16em',
+                color: '#FFE76B', margin: '0 0 8px', textTransform: isRtl ? 'none' : 'uppercase',
               }}>
-              <X size={16} color="rgba(255,255,255,0.66)" />
-            </button>
+              LUDO DZ
+            </motion.p>
+            <h2 id="exit-confirm-title" style={{
+              fontFamily: 'Rajdhani, Cairo, sans-serif', fontSize: 25, lineHeight: 1.02,
+              fontWeight: 900, color: '#FFF8D7', letterSpacing: isRtl ? '0' : '0.01em', margin: 0,
+              textShadow: '0 3px 18px rgba(255,195,31,0.20)',
+            }}>{copy.title}</h2>
           </div>
+          <button
+            onClick={() => { playClick(); onCancel(); }}
+            aria-label={copy.cancel}
+            style={{
+              position: 'absolute', top: 22, insetInlineStart: isRtl ? 22 : 'auto', insetInlineEnd: isRtl ? 'auto' : 22,
+              width: 36, height: 36, borderRadius: 999, border: '1px solid rgba(255,231,107,0.25)',
+              background: 'rgba(255,255,255,0.08)', display: 'grid', placeItems: 'center', cursor: 'pointer',
+            }}>
+            <X size={17} color="rgba(255,255,255,0.76)" />
+          </button>
           <p style={{
-            fontFamily: 'Cairo, sans-serif', fontSize: 13, lineHeight: 1.55,
-            color: 'rgba(255,255,255,0.64)', margin: '0 0 20px',
+            fontFamily: 'Cairo, sans-serif', fontSize: 13.5, lineHeight: 1.6,
+            color: 'rgba(255,255,255,0.72)', margin: '0 0 22px', maxWidth: 310,
           }}>{copy.message}</p>
 
-          <div style={{ display: 'grid', gap: 10 }}>
-            <button onClick={() => { playClick(); onSaveExit(); }} style={{
-              minHeight: 46, borderRadius: 16, border: '1px solid rgba(255,215,0,0.42)',
-              background: 'linear-gradient(135deg, rgba(255,215,0,0.95), rgba(255,171,0,0.86))',
-              color: '#1b1300', fontFamily: 'Rajdhani, Cairo, sans-serif', fontWeight: 800,
-              fontSize: 15, letterSpacing: '0.02em', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
-              boxShadow: '0 10px 26px rgba(255,188,0,0.22)',
-            }}><Save size={17}/>{copy.save}</button>
+          <div style={{ display: 'grid', gap: 11 }}>
+            <motion.button whileHover={shouldReduceMotion ? undefined : { scale: 1.025, y: -2 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.97, y: 1 }} onClick={() => { playClick(); onSaveExit(); }} style={{
+              minHeight: 50, borderRadius: 19, border: '1px solid rgba(255,239,143,0.7)',
+              background: 'linear-gradient(135deg, #fff27a, #ffc41f 48%, #ff8d16)',
+              color: '#201200', fontFamily: 'Rajdhani, Cairo, sans-serif', fontWeight: 900,
+              fontSize: 15.5, letterSpacing: '0.02em', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
+              boxShadow: '0 14px 30px rgba(255,184,0,0.32), inset 0 2px 0 rgba(255,255,255,0.58)',
+            }}><Save size={17}/>{copy.save}</motion.button>
 
-            <button onClick={() => { playClick(); onDiscardExit(); }} style={{
-              minHeight: 44, borderRadius: 16, border: '1px solid rgba(255,255,255,0.13)',
-              background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.86)',
-              fontFamily: 'Rajdhani, Cairo, sans-serif', fontWeight: 750, fontSize: 14, cursor: 'pointer',
+            <motion.button whileHover={shouldReduceMotion ? undefined : { scale: 1.018, x: isRtl ? -2 : 2 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.975 }} onClick={() => { playClick(); onDiscardExit(); }} style={{
+              minHeight: 46, borderRadius: 18, border: '1px solid rgba(255,255,255,0.16)',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.045))', color: 'rgba(255,255,255,0.9)',
+              fontFamily: 'Rajdhani, Cairo, sans-serif', fontWeight: 800, fontSize: 14.5, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
-            }}><Trash2 size={16}/>{copy.discard}</button>
+            }}><Trash2 size={16}/>{copy.discard}</motion.button>
 
-            <button onClick={() => { playClick(); onCancel(); }} style={{
-              minHeight: 42, borderRadius: 14, border: 'none', background: 'transparent',
-              color: 'rgba(255,255,255,0.56)', fontFamily: 'Cairo, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-            }}>{copy.cancel}</button>
+            <motion.button whileHover={shouldReduceMotion ? undefined : { scale: 1.015 }} whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }} onClick={() => { playClick(); onCancel(); }} style={{
+              minHeight: 42, borderRadius: 15, border: '1px solid transparent', background: 'transparent',
+              color: 'rgba(255,244,197,0.68)', fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 13, cursor: 'pointer',
+            }}>{copy.cancel}</motion.button>
           </div>
         </div>
       </motion.div>
