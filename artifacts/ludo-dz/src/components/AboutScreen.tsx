@@ -266,52 +266,73 @@ export function AboutScreen({ lang, onBack }: AboutScreenProps) {
           </motion.section>
 
           <SectionLabel label={t.featuresTitle} />
-          <div className="relative h-[238px] overflow-visible py-2">
+          <div className="relative mx-auto h-[188px] w-full max-w-[360px] overflow-hidden py-2" aria-label={t.featuresTitle}>
+            <div
+              className="absolute inset-x-4 top-[86px] h-12 rounded-full blur-2xl"
+              style={{ background: "linear-gradient(90deg, rgba(30,144,255,0.18), rgba(0,165,80,0.18), rgba(255,215,0,0.16))" }}
+            />
             {featureItems.map(({ Icon, title, body, neon }, index) => {
-              const lateral = dir === "rtl" ? -18 : 18;
+              const xDirection = dir === "rtl" ? -1 : 1;
+              const offset = index - 1;
+              const staticTransform = `translateX(${offset * 22 * xDirection}px) translateY(${Math.abs(offset) * 12}px) scale(${1 - Math.abs(offset) * 0.075}) rotate(${offset * 2.2 * xDirection}deg)`;
+              const animatedX = [offset * 22 * xDirection, (offset + 1 > 1 ? -1 : offset + 1) * 22 * xDirection, (offset + 2 > 1 ? offset - 1 : offset + 2) * 22 * xDirection, offset * 22 * xDirection];
+              const animatedY = [Math.abs(offset) * 12, Math.abs(offset + 1 > 1 ? -1 : offset + 1) * 12, Math.abs(offset + 2 > 1 ? offset - 1 : offset + 2) * 12, Math.abs(offset) * 12];
+              const animatedScale = [1 - Math.abs(offset) * 0.075, 1 - Math.abs(offset + 1 > 1 ? -1 : offset + 1) * 0.075, 1 - Math.abs(offset + 2 > 1 ? offset - 1 : offset + 2) * 0.075, 1 - Math.abs(offset) * 0.075];
+              const animatedRotate = [offset * 2.2 * xDirection, (offset + 1 > 1 ? -1 : offset + 1) * 2.2 * xDirection, (offset + 2 > 1 ? offset - 1 : offset + 2) * 2.2 * xDirection, offset * 2.2 * xDirection];
+
               return (
                 <motion.article
                   key={title}
                   variants={itemVariants}
-                  animate={shouldReduceMotion ? { opacity: 1, y: index * 14, scale: 1 - index * 0.045 } : {
-                    opacity: [1, 0.68, 0.42, 1],
-                    x: [0, lateral, lateral * 0.55, 0],
-                    y: [0, 22, 44, 0],
-                    scale: [1, 0.94, 0.88, 1],
-                    rotate: [0, dir === "rtl" ? -1.6 : 1.6, dir === "rtl" ? -3.2 : 3.2, 0],
+                  animate={shouldReduceMotion ? { opacity: 1 } : {
+                    x: animatedX,
+                    y: animatedY,
+                    scale: animatedScale,
+                    rotate: animatedRotate,
+                    opacity: [offset === 0 ? 1 : 0.76, offset === -1 ? 1 : 0.76, offset === 1 ? 1 : 0.76, offset === 0 ? 1 : 0.76],
+                    zIndex: [offset === 0 ? 30 : 20, offset === -1 ? 30 : 20, offset === 1 ? 30 : 20, offset === 0 ? 30 : 20],
                   }}
                   transition={shouldReduceMotion ? undefined : {
-                    duration: 8.4,
+                    duration: 7.2,
                     repeat: Infinity,
-                    ease: [0.22, 1, 0.36, 1],
-                    delay: index * 2.8,
+                    ease: [0.45, 0, 0.2, 1],
+                    times: [0, 0.34, 0.68, 1],
+                    delay: index * 0.08,
                   }}
-                  whileHover={shouldReduceMotion ? undefined : { y: -8, scale: 1.025, rotate: 0 }}
-                  whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-                  className="absolute left-0 right-0 min-h-[164px] overflow-hidden rounded-[30px] p-5 text-start"
+                  whileHover={shouldReduceMotion ? undefined : { y: -6, scale: 1.025, rotate: 0 }}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.985 }}
+                  className="absolute inset-x-3 top-3 min-h-[134px] overflow-hidden rounded-[24px] p-4 text-start"
                   style={{
-                    top: index * 16,
-                    zIndex: featureItems.length - index,
-                    background: "linear-gradient(145deg, rgba(8,18,42,0.94), rgba(3,12,26,0.88) 52%, rgba(2,22,12,0.86))",
-                    border: `1px solid ${neon}70`,
-                    boxShadow: `0 18px 34px rgba(0,0,0,0.46), 0 0 30px ${neon}22, inset 0 1px 0 rgba(255,255,255,0.16)`,
-                    backdropFilter: "blur(18px) saturate(1.25)",
-                    transformOrigin: dir === "rtl" ? "35% 50%" : "65% 50%",
+                    zIndex: offset === 0 ? 30 : 20 - Math.abs(offset),
+                    background: "linear-gradient(145deg, rgba(7,15,34,0.96), rgba(3,10,24,0.92) 56%, rgba(0,23,13,0.9))",
+                    border: `1px solid ${neon}78`,
+                    boxShadow: `0 14px 28px rgba(0,0,0,0.46), 0 0 24px ${neon}24, inset 0 1px 0 rgba(255,255,255,0.17)`,
+                    backdropFilter: "blur(18px) saturate(1.2)",
+                    transform: shouldReduceMotion ? staticTransform : undefined,
+                    transformOrigin: "50% 70%",
                   }}
                 >
-                  <div className="absolute -top-14 h-32 w-32 rounded-full blur-2xl" style={{ insetInlineEnd: -26, background: `${neon}2f` }} />
-                  <div className="absolute -bottom-20 h-40 w-40 rounded-full blur-3xl" style={{ insetInlineStart: -42, background: "rgba(255,215,0,0.14)" }} />
-                  <div className="absolute inset-x-8 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${neon}, transparent)` }} />
-                  <div className="relative z-10 flex h-full items-center gap-4">
-                    <div className="relative grid h-[62px] w-[62px] flex-shrink-0 place-items-center rounded-[22px]" style={{ background: `linear-gradient(145deg, ${neon}2f, rgba(255,255,255,0.08))`, boxShadow: `0 0 24px ${neon}3a, inset 0 1px 0 rgba(255,255,255,0.16)` }}>
-                      <span className="absolute -right-1 -top-1 h-4 w-4 rounded-full border border-white/25" style={{ background: neon, boxShadow: `0 0 16px ${neon}` }} />
-                      <Icon className="h-7 w-7 drop-shadow-[0_0_12px_rgba(255,255,255,0.22)]" style={{ color: neon }} aria-hidden="true" />
+                  <div className="absolute -top-16 h-28 w-28 rounded-full blur-2xl" style={{ insetInlineEnd: -20, background: `${neon}35` }} />
+                  <div className="absolute -bottom-16 h-32 w-32 rounded-full blur-3xl" style={{ insetInlineStart: -36, background: "rgba(255,215,0,0.12)" }} />
+                  <div className="absolute inset-x-7 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${neon}, transparent)` }} />
+                  <div className="relative z-10 grid grid-cols-[52px_1fr] items-center gap-3">
+                    <div className="relative grid h-[52px] w-[52px] place-items-center rounded-[18px]" style={{ background: `linear-gradient(145deg, ${neon}32, rgba(255,255,255,0.08))`, boxShadow: `0 0 20px ${neon}38, inset 0 1px 0 rgba(255,255,255,0.16)` }}>
+                      <span className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full border border-white/25" style={{ background: neon, boxShadow: `0 0 14px ${neon}` }} />
+                      <Icon className="h-6 w-6 drop-shadow-[0_0_10px_rgba(255,255,255,0.22)]" style={{ color: neon }} aria-hidden="true" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="mb-2 text-[10px] font-heading font-black uppercase text-white/35" style={{ letterSpacing: "0.16em" }}>0{index + 1}</p>
-                      <h3 className="font-heading text-[19px] font-black leading-none text-white" style={{ letterSpacing: "0.055em", textShadow: `0 0 20px ${neon}40` }}>{title}</h3>
-                      <p className="mt-3 text-[12.5px] leading-5 text-white/66">{body}</p>
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[9px] font-heading font-black uppercase text-white/35" style={{ letterSpacing: "0.16em" }}>0{index + 1}</p>
+                      <h3 className="font-heading text-[17px] font-black leading-none text-white" style={{ letterSpacing: "0.052em", textShadow: `0 0 18px ${neon}40` }}>{title}</h3>
+                      <p className="mt-2 text-[11.5px] leading-5 text-white/68">{body}</p>
                     </div>
+                  </div>
+                  <div className="relative z-10 mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{ background: `linear-gradient(90deg, ${neon}, rgba(255,255,255,0.85))` }}
+                      animate={shouldReduceMotion ? { width: "42%" } : { width: ["18%", "100%", "18%"] }}
+                      transition={shouldReduceMotion ? undefined : { duration: 7.2, repeat: Infinity, ease: "easeInOut", delay: index * 0.08 }}
+                    />
                   </div>
                 </motion.article>
               );
