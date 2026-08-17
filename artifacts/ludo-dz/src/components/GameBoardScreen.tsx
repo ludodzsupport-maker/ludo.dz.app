@@ -38,9 +38,9 @@ import { vibrateDiceRoll, vibratePawnStep, vibrateCaptureOrWin } from '../lib/ha
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 import type { BoardStyle } from '../App';
-interface Props { config: GameConfig; lang: 'fr' | 'ar'; boardStyle?: BoardStyle; onBack: () => void; }
+import { SAVED_GAME_VERSION, clearSavedGame, writeSavedGame, type SavedGameSnapshot } from '../lib/saved-game';
+interface Props { config: GameConfig; lang: 'fr' | 'ar'; boardStyle?: BoardStyle; initialSnapshot?: SavedGameSnapshot | null; onBack: () => void; }
 type AnimSpeed = 'fast' | 'normal' | 'slow';
-const SAVED_GAME_STORAGE_KEY = 'ludo-dz:saved-game';
 
 // ─── Animation speed presets ──────────────────────────────────────────────────
 const ANIM = {
@@ -3803,14 +3803,14 @@ function ExitConfirmationModal({ lang, isNeon, isClassic, isDz, onSaveExit, onDi
 }
 
 // ─── Main GameBoardScreen ─────────────────────────────────────────────────────
-export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
+export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onBack }: Props) {
   const playerSlots = useMemo(() => config.players === 2 ? [0, 2] : Array.from({ length: config.players }, (_, i) => i), [config.players]);
-  const [game, setGame]             = useState<E.GameState>(() => E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
+  const [game, setGame]             = useState<E.GameState>(() => initialSnapshot?.game ?? E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
   const [rolling, setRolling]       = useState(false);
-  const [animDice, setAnimDice]     = useState(1);
+  const [animDice, setAnimDice]     = useState(() => initialSnapshot?.game.dice || 1);
   const [justLanded, setJustLanded] = useState(false);
-  const [lastDice, setLastDice]     = useState<number[]>([0, 0, 0, 0]);
-  const [animSpeed, setAnimSpeed]   = useState<AnimSpeed>('normal');
+  const [lastDice, setLastDice]     = useState<number[]>(() => initialSnapshot?.lastDice ?? [0, 0, 0, 0]);
+  const [animSpeed, setAnimSpeed]   = useState<AnimSpeed>(() => initialSnapshot?.animSpeed ?? 'normal');
   const [showSettings, setShowSettings] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [restartKey, setRestartKey] = useState(0);
@@ -3823,10 +3823,10 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
   // untouched. moveCount/captureCounts increment exactly once per real move,
   // at the single spot in triggerMove where a move is first resolved
   // (covers both the zero-step-commit and onLastHop-deferred-commit paths).
-  const [moveCount, setMoveCount] = useState(0);
-  const [captureCounts, setCaptureCounts] = useState<number[]>([0, 0, 0, 0]);
-  const [matchDurationMs, setMatchDurationMs] = useState(0);
-  const matchStartRef = useRef(Date.now());
+  const [moveCount, setMoveCount] = useState(() => initialSnapshot?.stats.moveCount ?? 0);
+  const [captureCounts, setCaptureCounts] = useState<number[]>(() => initialSnapshot?.stats.captureCounts ?? [0, 0, 0, 0]);
+  const [matchDurationMs, setMatchDurationMs] = useState(() => initialSnapshot?.stats.matchDurationMs ?? 0);
+  const matchStartRef = useRef(Date.now() - (initialSnapshot?.stats.matchDurationMs ?? 0));
 
   // ── Animation queue state (owned here, threaded down to BoardSVG) ─────────
   const [isAnimating,   setIsAnimating]   = useState(false);
@@ -3904,7 +3904,7 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
     if (typeof window === 'undefined') return;
     const elapsedMs = Date.now() - matchStartRef.current;
     const snapshot = {
-      version: 1,
+      version: SAVED_GAME_VERSION,
       savedAt: new Date().toISOString(),
       config,
       boardStyle,
@@ -3913,15 +3913,17 @@ export function GameBoardScreen({ config, lang, boardStyle, onBack }: Props) {
       animSpeed,
       stats: { moveCount, captureCounts, matchDurationMs: elapsedMs },
     };
-    window.localStorage.setItem(SAVED_GAME_STORAGE_KEY, JSON.stringify(snapshot));
+    writeSavedGame(snapshot);
   }, [animSpeed, boardStyle, captureCounts, config, lastDice, moveCount]);
 
   const handleSaveAndExit = useCallback(() => {
+    console.info('[saved-game] save-and-exit selected');
     saveGameState();
     onBack();
   }, [onBack, saveGameState]);
 
   const handleDiscardAndExit = useCallback(() => {
+    clearSavedGame();
     onBack();
   }, [onBack]);
 
