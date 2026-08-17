@@ -12,7 +12,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { GameConfig } from '@/components/GameConfigOverlay';
 import { clearSavedGame, readSavedGame, type SavedGameSnapshot } from '@/lib/saved-game';
 
-type Screen = 'welcome' | 'mode-select' | 'settings' | 'about' | 'preparing-match' | 'game';
+type Screen = 'welcome' | 'resume-choice' | 'mode-select' | 'settings' | 'about' | 'preparing-match' | 'game';
 export type BoardStyle = 'neon' | 'classic' | 'dz';
 
 // Splash stays on screen at least this long so its tumble-and-impact
@@ -35,7 +35,6 @@ function AppContent() {
   const [gameConfig, setGameConfig]   = useState<GameConfig | null>(null);
   const [boardStyle, setBoardStyle]   = useState<BoardStyle>('classic');
   const [savedGame, setSavedGame]     = useState<SavedGameSnapshot | null>(null);
-  const [showResumeChoice, setShowResumeChoice] = useState(false);
   const [resumingSnapshot, setResumingSnapshot] = useState<SavedGameSnapshot | null>(null);
   const [, startScreenTransition]      = useTransition();
 
@@ -83,7 +82,7 @@ function AppContent() {
     if (showSplash) return;
     const snapshot = readSavedGame();
     setSavedGame(snapshot);
-    setShowResumeChoice(Boolean(snapshot));
+    if (snapshot) navigate('resume-choice');
   }, [showSplash]);
 
   useEffect(() => {
@@ -103,12 +102,10 @@ function AppContent() {
   const handleContinueSavedGame = useCallback(() => {
     const snapshot = savedGame ?? readSavedGame();
     if (!snapshot) {
-      setShowResumeChoice(false);
       setSavedGame(null);
       navigate('mode-select');
       return;
     }
-    setShowResumeChoice(false);
     setResumingSnapshot(snapshot);
     setGameConfig(snapshot.config);
     setBoardStyle(snapshot.boardStyle ?? 'classic');
@@ -119,9 +116,23 @@ function AppContent() {
     clearSavedGame();
     setSavedGame(null);
     setResumingSnapshot(null);
-    setShowResumeChoice(false);
     navigate('mode-select');
   }, [navigate]);
+
+  useEffect(() => {
+    if (screen !== 'welcome' && screen !== 'mode-select') return;
+    const refreshSavedGameChoice = () => {
+      const snapshot = readSavedGame();
+      setSavedGame(snapshot);
+      if (snapshot) navigate('resume-choice');
+    };
+    window.addEventListener('focus', refreshSavedGameChoice);
+    document.addEventListener('visibilitychange', refreshSavedGameChoice);
+    return () => {
+      window.removeEventListener('focus', refreshSavedGameChoice);
+      document.removeEventListener('visibilitychange', refreshSavedGameChoice);
+    };
+  }, [navigate, screen]);
 
   return (
     <div
@@ -140,13 +151,21 @@ function AppContent() {
                 const snapshot = readSavedGame();
                 setSavedGame(snapshot);
                 if (snapshot) {
-                  setShowResumeChoice(true);
+                  navigate('resume-choice');
                   return;
                 }
                 navigate('mode-select');
               }}
               onSettings={() => navigate('settings')}
               onAbout={() => navigate('about')}
+            />
+          ) : screen === 'resume-choice' && savedGame ? (
+            <ResumeSavedGameScreen
+              key="resume-choice"
+              lang={lang}
+              savedAt={savedGame.savedAt}
+              onContinue={handleContinueSavedGame}
+              onNewGame={handleStartFreshFromSavedGame}
             />
           ) : screen === 'mode-select' ? (
             <GameModeScreen
@@ -193,24 +212,13 @@ function AppContent() {
             />
           ) : null}
         </AnimatePresence>
-
-        <AnimatePresence>
-          {showResumeChoice && savedGame ? (
-            <ResumeSavedGameDialog
-              lang={lang}
-              savedAt={savedGame.savedAt}
-              onContinue={handleContinueSavedGame}
-              onNewGame={handleStartFreshFromSavedGame}
-            />
-          ) : null}
-        </AnimatePresence>
       </div>
     </div>
   );
 }
 
 
-function ResumeSavedGameDialog({ lang, savedAt, onContinue, onNewGame }: {
+function ResumeSavedGameScreen({ lang, savedAt, onContinue, onNewGame }: {
   lang: 'fr' | 'ar';
   savedAt: string;
   onContinue: () => void;
@@ -223,28 +231,28 @@ function ResumeSavedGameDialog({ lang, savedAt, onContinue, onNewGame }: {
   }).format(new Date(savedAt));
   const copy = lang === 'ar'
     ? {
-        title: 'متابعة المباراة المحفوظة؟',
-        message: `تم العثور على مباراة محفوظة من ${savedDate}. يمكنك المتابعة أو بدء مباراة جديدة`,
-        continue: 'تابع المباراة',
-        newGame: 'مباراة جديدة',
-        note: 'بدء مباراة جديدة يحذف الحفظ القديم.',
+        title: 'مباراة محفوظة',
+        message: `تم العثور على مباراة محفوظة من ${savedDate}. اختر الاستئناف أو بدء جولة جديدة.`,
+        continue: 'استئناف',
+        newGame: 'جولة جديدة',
+        note: 'الجولة الجديدة تحذف الحفظ القديم.',
       }
     : {
-        title: 'Continuer la partie sauvegardée ?',
-        message: `Une partie sauvegardée le ${savedDate} est disponible. Vous pouvez la reprendre ou commencer autrement.`,
-        continue: 'Continuer la partie',
+        title: 'Partie sauvegardée',
+        message: `Une partie sauvegardée le ${savedDate} est disponible. Choisissez comment continuer.`,
+        continue: 'Reprendre',
         newGame: 'Nouvelle partie',
-        note: 'Nouvelle partie supprimera cette sauvegarde.',
+        note: 'Nouvelle partie supprime cette sauvegarde.',
       };
 
   return (
     <motion.div
-      className="absolute inset-0 z-[60] grid place-items-center px-5"
+      className="absolute inset-0 z-10 grid place-items-center px-5"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.18 }}
-      style={{ background: 'linear-gradient(180deg, rgba(2,6,23,0.72), rgba(2,6,23,0.92))', backdropFilter: 'blur(18px)' }}
+      style={{ background: 'linear-gradient(175deg, #1a1040 0%, #0d2a5e 42%, #003a1c 100%)' }}
       dir={isRtl ? 'rtl' : 'ltr'}
     >
       <motion.div

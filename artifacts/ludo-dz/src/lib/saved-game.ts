@@ -74,27 +74,39 @@ export function validateSavedGameSnapshot(value: unknown): SavedGameSnapshot | n
 export function readSavedGame(): SavedGameSnapshot | null {
   if (typeof window === 'undefined') return null;
   const raw = window.localStorage.getItem(SAVED_GAME_STORAGE_KEY);
+  console.info('[saved-game] startup check', { key: SAVED_GAME_STORAGE_KEY, found: Boolean(raw) });
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
     const snapshot = validateSavedGameSnapshot(parsed);
     if (!snapshot) {
+      console.warn('[saved-game] invalid snapshot discarded', { key: SAVED_GAME_STORAGE_KEY });
       clearSavedGame();
       return null;
     }
+    console.info('[saved-game] valid snapshot loaded', { key: SAVED_GAME_STORAGE_KEY, savedAt: snapshot.savedAt });
     return snapshot;
-  } catch {
+  } catch (error) {
+    console.warn('[saved-game] unreadable snapshot discarded', { key: SAVED_GAME_STORAGE_KEY, error });
     clearSavedGame();
     return null;
   }
 }
 
-export function writeSavedGame(snapshot: SavedGameSnapshot): void {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(SAVED_GAME_STORAGE_KEY, JSON.stringify(snapshot));
+export function writeSavedGame(snapshot: SavedGameSnapshot): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    window.localStorage.setItem(SAVED_GAME_STORAGE_KEY, JSON.stringify(snapshot));
+    console.info('[saved-game] snapshot written', { key: SAVED_GAME_STORAGE_KEY, savedAt: snapshot.savedAt });
+    return true;
+  } catch (error) {
+    console.error('[saved-game] snapshot write failed', { key: SAVED_GAME_STORAGE_KEY, error });
+    return false;
+  }
 }
 
 export function clearSavedGame(): void {
   if (typeof window === 'undefined') return;
   window.localStorage.removeItem(SAVED_GAME_STORAGE_KEY);
+  console.info('[saved-game] snapshot cleared', { key: SAVED_GAME_STORAGE_KEY });
 }

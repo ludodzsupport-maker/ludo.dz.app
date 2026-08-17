@@ -3917,6 +3917,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   }, [animSpeed, boardStyle, captureCounts, config, lastDice, moveCount]);
 
   const handleSaveAndExit = useCallback(() => {
+    console.info('[saved-game] save-and-exit selected');
     saveGameState();
     onBack();
   }, [onBack, saveGameState]);
