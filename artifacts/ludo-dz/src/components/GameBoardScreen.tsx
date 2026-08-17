@@ -1335,6 +1335,7 @@ const PawnToken = memo(function PawnToken({
     })();
     return () => {
       seqKeyRef.current++;
+      setIsHopping(false);
     };
   }, [hopSteps]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1347,6 +1348,7 @@ const PawnToken = memo(function PawnToken({
 
   useEffect(() => () => {
     seqKeyRef.current++;
+    setIsHopping(false);
     baseCtrl.stop();
     arcCtrl.stop();
     scaleCtrl.stop();
@@ -1391,8 +1393,8 @@ const PawnToken = memo(function PawnToken({
     <motion.g
       animate={baseCtrl}
       initial={{ x: finalX, y: finalY }}
-      onClick={() => !isHopping && onPieceClick(pid)}
-      style={{ cursor: isMovable && !isHopping ? 'pointer' : 'default', willChange: 'transform' }}>
+      onClick={() => onPieceClick(pid)}
+      style={{ cursor: isMovable ? 'pointer' : 'default', willChange: 'transform' }}>
 
       {/* Stack-scale group: Neon premium multi-pawn shrink (1 → 0.70 → 0.55).
           Wraps the shadow + arc/body so the shadow shrinks in lockstep with
