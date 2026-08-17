@@ -34,6 +34,7 @@ import {
   playSelection,
   resumeBgmForMenu,
 } from '../lib/sound-manager';
+import { playVoiceLine, stopVoiceLines } from '../lib/voice-line-manager';
 import { vibrateDiceRoll, vibratePawnStep, vibrateCaptureOrWin } from '../lib/haptics-manager';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -54,6 +55,46 @@ const ANIM = {
 // cue stays natural while filling the whole roll-animation window. Pawn-hop
 // physics and Neon's dice timing continue to use ANIM.slow.
 const CLASSIC_SLOW_DICE_TIMING = { cycles: 16, baseMs: 38, stepMs: 20 } as const;
+
+const TURN_REMINDER_IDLE_MS = 10000;
+const LAUGH_MOCK_STREAK_THRESHOLD = 2;
+
+type DangerSet = Set<string>;
+type CaptureStreak = { kind: 'captor' | 'victim'; player: number; count: number } | null;
+
+function getDangerSet(pieces: E.Piece[], playerSlots: readonly number[]): DangerSet {
+  const danger = new Set<string>();
+  pieces.forEach(piece => {
+    if (piece.relPos < 0 || piece.relPos >= E.TRACK_SIZE) return;
+    const pieceAbs = (E.PLAYER_STARTS[piece.player] + piece.relPos) % E.MAIN_PATH_SIZE;
+    if (E.SAFE_SET.has(pieceAbs)) return;
+    const threatened = pieces.some(opponent => {
+      if (opponent.player === piece.player || !playerSlots.includes(opponent.player) || opponent.relPos < 0 || opponent.relPos >= E.TRACK_SIZE) return false;
+      for (let dice = 1; dice <= 6; dice++) {
+        const nextRel = opponent.relPos + dice;
+        if (nextRel >= E.TRACK_SIZE) continue;
+        const nextAbs = (E.PLAYER_STARTS[opponent.player] + nextRel) % E.MAIN_PATH_SIZE;
+        if (!E.SAFE_SET.has(nextAbs) && nextAbs === pieceAbs) return true;
+      }
+      return false;
+    });
+    if (threatened) danger.add(E.pieceId(piece.player, piece.index));
+  });
+  return danger;
+}
+
+function hasMixedColorSafeGathering(pieces: E.Piece[]): boolean {
+  const occupantsBySafeCell = new Map<number, Set<number>>();
+  pieces.forEach(piece => {
+    if (piece.relPos < 0 || piece.relPos >= E.TRACK_SIZE) return;
+    const abs = (E.PLAYER_STARTS[piece.player] + piece.relPos) % E.MAIN_PATH_SIZE;
+    if (!E.SAFE_SET.has(abs)) return;
+    const players = occupantsBySafeCell.get(abs) ?? new Set<number>();
+    players.add(piece.player);
+    occupantsBySafeCell.set(abs, players);
+  });
+  return Array.from(occupantsBySafeCell.values()).some(players => players.size >= 2);
+}
 
 // Mirrors the cycle() scheduling math in handleRoll below to compute the
 // exact total time (ms) from the first tick to the roll resolving, for a
@@ -3827,6 +3868,8 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const [captureCounts, setCaptureCounts] = useState<number[]>(() => initialSnapshot?.stats.captureCounts ?? [0, 0, 0, 0]);
   const [matchDurationMs, setMatchDurationMs] = useState(() => initialSnapshot?.stats.matchDurationMs ?? 0);
   const matchStartRef = useRef(Date.now() - (initialSnapshot?.stats.matchDurationMs ?? 0));
+  const dangerPiecesRef = useRef<DangerSet>(new Set());
+  const captureStreakRef = useRef<CaptureStreak>(null);
 
   // ── Animation queue state (owned here, threaded down to BoardSVG) ─────────
   const [isAnimating,   setIsAnimating]   = useState(false);
@@ -4088,6 +4131,37 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     const captorNeon   = E.PLAYER_NEONS[ps];
     const lastStep     = steps.length > 0 ? steps[steps.length - 1] : null;
     const isHomeFinish = pTo === E.FINISHED_POS;
+    const previousDanger = dangerPiecesRef.current;
+    const nextDanger = getDangerSet(nextState.pieces, nextState.playerSlots);
+    const escapedDanger = previousDanger.has(pid) && !nextDanger.has(pid);
+    const hasNewDanger = Array.from(nextDanger).some(dangerPid => !previousDanger.has(dangerPid));
+    const safeGathering = !hasMixedColorSafeGathering(currentGame.pieces) && hasMixedColorSafeGathering(nextState.pieces);
+    const capturedPlayer = capturedP?.player ?? null;
+
+    const playResolvedVoiceLines = () => {
+      if (capturedPid) {
+        playVoiceLine('capture_by_me');
+        playVoiceLine('captured_by_opponent');
+        const captorStreak = captureStreakRef.current?.kind === 'captor' && captureStreakRef.current.player === ps
+          ? captureStreakRef.current.count + 1
+          : 1;
+        const victimStreak = capturedPlayer !== null && captureStreakRef.current?.kind === 'victim' && captureStreakRef.current.player === capturedPlayer
+          ? captureStreakRef.current.count + 1
+          : 1;
+        const nextStreak: CaptureStreak = victimStreak >= captorStreak && capturedPlayer !== null
+          ? { kind: 'victim', player: capturedPlayer, count: victimStreak }
+          : { kind: 'captor', player: ps, count: captorStreak };
+        captureStreakRef.current = nextStreak;
+        if (nextStreak.count >= LAUGH_MOCK_STREAK_THRESHOLD) playVoiceLine('laugh_mock');
+      } else {
+        captureStreakRef.current = null;
+      }
+      if (escapedDanger) playVoiceLine('danger_escape');
+      if (safeGathering) playVoiceLine('safe_gathering');
+      if (isHomeFinish) playVoiceLine('piece_home');
+      if (hasNewDanger) playVoiceLine('danger');
+      dangerPiecesRef.current = nextDanger;
+    };
 
     // Fix: handle zero-step edge case (piece already at destination, e.g. relPos=0
     // on a 6-roll from base). Apply state immediately and unlock — no animation needed.
@@ -4103,6 +4177,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
         setHomeFinishVFX({ x: 7.5, y: 7.5, neon: captorNeon, id: Date.now() });
       }
       setGame(nextState);
+      playResolvedVoiceLines();
       unlockMoveInteraction();
       return;
     }
@@ -4138,6 +4213,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       // NOW commit logical game state: captured piece's relPos → -1,
       // finalXY resolves to its home base, turn advances, etc.
       setGame(nextState);
+      playResolvedVoiceLines();
 
       if (capturedPid && capturedP) {
         const cp = capturedP;
@@ -4223,7 +4299,9 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     if (isNeon) playNeonWelcomeJingle();
     else if (isClassic) playClassicWelcomeJingle();
     else if (isDz) playDzWelcomeJingle();
-    return () => { resumeBgmForMenu(); };
+    playVoiceLine('game_start');
+    dangerPiecesRef.current = getDangerSet(gameRef.current.pieces, gameRef.current.playerSlots);
+    return () => { stopVoiceLines(); resumeBgmForMenu(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Win haptic — fires exactly once, the moment game.winner is first set ─
@@ -4243,6 +4321,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     if (isNeon) playNeonWelcomeJingle();
     else if (isClassic) playClassicWelcomeJingle();
     else if (isDz) playDzWelcomeJingle();
+    playVoiceLine('win');
   }, [game.winner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-pass when no valid moves — blocked while animation is in flight ─
@@ -4282,6 +4361,14 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     return () => clearTimeout(t);
   }, [showExitConfirm, isHumanTurn, game.activePlayer, game.phase, game.movable.length, game.winner, isAnimating, triggerMove]);
 
+  // ── Human idle reminder: 10s without rolling or moving ──────────────────
+  useEffect(() => {
+    if (showExitConfirm || !isHumanTurn || game.winner || rolling || isAnimating) return;
+    if (game.phase !== 'rolling' && game.phase !== 'selecting') return;
+    const t = setTimeout(() => playVoiceLine('turn_reminder'), TURN_REMINDER_IDLE_MS);
+    return () => clearTimeout(t);
+  }, [showExitConfirm, isHumanTurn, game.activePlayer, game.phase, game.diceRolled, game.movable.length, game.winner, rolling, isAnimating]);
+
   // ── Cleanup ───────────────────────────────────────────────────────────────
   useEffect(() => () => {
     rollTimers.current.forEach(clearTimeout);
@@ -4301,7 +4388,12 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     setShockwave(null);
     setHomeImpact(null);
     setHomeFinishVFX(null);
-    setGame(E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
+    const newGame = E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots);
+    setGame(newGame);
+    dangerPiecesRef.current = getDangerSet(newGame.pieces, newGame.playerSlots);
+    captureStreakRef.current = null;
+    stopVoiceLines();
+    playVoiceLine('game_start');
     setRestartKey(k => k + 1);
     // Reset match stats for the new match — this instance never unmounts on
     // restart (same key="game" in App.tsx), so these must be cleared here.
