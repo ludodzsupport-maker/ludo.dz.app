@@ -34,6 +34,54 @@ const SOUND_FILES: Record<UiSoundName, string> = {
 };
 
 const DEFAULT_VOLUME = 0.55;
+const SFX_DUCKED_MULTIPLIER = 0.3;
+const SFX_DUCK_FADE_MS = 200;
+let sfxVolumeMultiplier = 1;
+let sfxDuckFadeTimer: ReturnType<typeof setInterval> | null = null;
+let sfxMasterGain: GainNode | null = null;
+
+function getSfxDestination(context: AudioContext): AudioNode {
+  if (!sfxMasterGain || sfxMasterGain.context !== context) {
+    sfxMasterGain = context.createGain();
+    sfxMasterGain.gain.setValueAtTime(sfxVolumeMultiplier, context.currentTime);
+    sfxMasterGain.connect(context.destination);
+  }
+  return sfxMasterGain;
+}
+
+function applyCachedAudioVolume(): void {
+  audioCache.forEach(audio => { audio.volume = DEFAULT_VOLUME * sfxVolumeMultiplier; });
+}
+
+function applySynthSfxVolume(): void {
+  const gain = sfxMasterGain;
+  const context = gain?.context;
+  if (!context || context.state === 'closed') return;
+  const now = context.currentTime;
+  gain.gain.cancelScheduledValues(now);
+  gain.gain.setValueAtTime(gain.gain.value, now);
+  gain.gain.linearRampToValueAtTime(sfxVolumeMultiplier, now + SFX_DUCK_FADE_MS / 1000);
+}
+
+export function setSfxDucking(ducked: boolean): void {
+  const from = sfxVolumeMultiplier;
+  const to = ducked ? SFX_DUCKED_MULTIPLIER : 1;
+  if (from === to) return;
+  sfxVolumeMultiplier = to;
+  applySynthSfxVolume();
+  sfxVolumeMultiplier = from;
+  if (sfxDuckFadeTimer) clearInterval(sfxDuckFadeTimer);
+  const startedAt = Date.now();
+  sfxDuckFadeTimer = setInterval(() => {
+    const progress = Math.min(1, (Date.now() - startedAt) / SFX_DUCK_FADE_MS);
+    sfxVolumeMultiplier = from + (to - from) * progress;
+    applyCachedAudioVolume();
+    if (progress >= 1 && sfxDuckFadeTimer) {
+      clearInterval(sfxDuckFadeTimer);
+      sfxDuckFadeTimer = null;
+    }
+  }, 16);
+}
 const STORAGE_KEY = "ludo-dz:sound-effects-enabled";
 const NEON_PAWN_MIN_INTERVAL_MS = 38;
 const CLASSIC_PAWN_MIN_INTERVAL_MS = 46;
@@ -234,7 +282,7 @@ export function playNeonDiceRoll(rollDurationMs: number): void {
       const sampleGain = context.createGain();
       sampleGain.gain.setValueAtTime(0.70, now);
 
-      source.connect(hp).connect(sampleGain).connect(context.destination);
+      source.connect(hp).connect(sampleGain).connect(getSfxDestination(context));
       source.start(now, offset);
       source.stop(now + rollSec + 0.02);
     } else {
@@ -262,7 +310,7 @@ export function playNeonDiceRoll(rollDurationMs: number): void {
       glintGain.gain.setValueAtTime(0.0001, t);
       glintGain.gain.linearRampToValueAtTime(0.15, t + 0.008);
       glintGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.050);
-      glint.connect(glintFilter).connect(glintGain).connect(context.destination);
+      glint.connect(glintFilter).connect(glintGain).connect(getSfxDestination(context));
       glint.start(t);
       glint.stop(t + 0.060);
     }
@@ -281,7 +329,7 @@ export function playNeonDiceRoll(rollDurationMs: number): void {
     toneGain.gain.setValueAtTime(0.0001, resolveAt);
     toneGain.gain.exponentialRampToValueAtTime(0.13, resolveAt + 0.012);
     toneGain.gain.exponentialRampToValueAtTime(0.0001, resolveAt + resolveDur);
-    tone.connect(toneGain).connect(context.destination);
+    tone.connect(toneGain).connect(getSfxDestination(context));
     tone.start(resolveAt);
     tone.stop(resolveAt + resolveDur + 0.010);
   });
@@ -299,7 +347,7 @@ export function playNeonClick(): void {
     master.gain.exponentialRampToValueAtTime(0.12, now + 0.003);
     master.gain.exponentialRampToValueAtTime(0.036, now + 0.021);
     master.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
-    master.connect(context.destination);
+    master.connect(getSfxDestination(context));
 
     // Quick, glassy attack: provides definition without the brittle hiss of
     // an all-noise click.
@@ -356,7 +404,7 @@ export function playNeonPawnMove(hopMs?: number): void {
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(0.052, now + 0.006 * scale);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.078 * scale);
-    oscillator.connect(gain).connect(context.destination);
+    oscillator.connect(gain).connect(getSfxDestination(context));
     oscillator.start(now);
     oscillator.stop(now + 0.085 * scale);
   });
@@ -422,16 +470,16 @@ export function playNeonWelcomeJingle(): void {
     sweepGain.gain.setValueAtTime(0.0001, now);
     sweepGain.gain.linearRampToValueAtTime(0.10, now + 0.03);
     sweepGain.gain.exponentialRampToValueAtTime(0.0001, now + sweepDur);
-    sweep.connect(sweepFilter).connect(sweepGain).connect(context.destination);
+    sweep.connect(sweepFilter).connect(sweepGain).connect(getSfxDestination(context));
     sweep.start(now);
     sweep.stop(now + sweepDur + 0.02);
 
     // ── Ascending arpeggio — perfect fourths for an angular, sci-fi shape ──
     const A4 = 440.00, D5 = 587.33, A5 = 880.00, D6 = 1174.66;
-    scheduleNeonChimeNote(context, context.destination, now + 0.30, { amp: 0.17, freq: A4, decay: 0.14 });
-    scheduleNeonChimeNote(context, context.destination, now + 0.44, { amp: 0.19, freq: D5, decay: 0.14 });
-    scheduleNeonChimeNote(context, context.destination, now + 0.58, { amp: 0.21, freq: A5, decay: 0.16 });
-    scheduleNeonChimeNote(context, context.destination, now + 0.74, { amp: 0.23, freq: D6, decay: 0.18 });
+    scheduleNeonChimeNote(context, getSfxDestination(context), now + 0.30, { amp: 0.17, freq: A4, decay: 0.14 });
+    scheduleNeonChimeNote(context, getSfxDestination(context), now + 0.44, { amp: 0.19, freq: D5, decay: 0.14 });
+    scheduleNeonChimeNote(context, getSfxDestination(context), now + 0.58, { amp: 0.21, freq: A5, decay: 0.16 });
+    scheduleNeonChimeNote(context, getSfxDestination(context), now + 0.74, { amp: 0.23, freq: D6, decay: 0.18 });
 
     // ── Digital glints — same technique as playNeonDiceRoll's Layer 2 ──────
     const glintDefs: Array<{ t: number; freq: number }> = [
@@ -451,7 +499,7 @@ export function playNeonWelcomeJingle(): void {
       glintGain.gain.setValueAtTime(0.0001, at);
       glintGain.gain.linearRampToValueAtTime(0.13, at + 0.008);
       glintGain.gain.exponentialRampToValueAtTime(0.0001, at + 0.050);
-      glint.connect(glintFilter).connect(glintGain).connect(context.destination);
+      glint.connect(glintFilter).connect(glintGain).connect(getSfxDestination(context));
       glint.start(at);
       glint.stop(at + 0.06);
     }
@@ -465,7 +513,7 @@ export function playNeonWelcomeJingle(): void {
     ping1Gain.gain.setValueAtTime(0.0001, pingAt);
     ping1Gain.gain.linearRampToValueAtTime(0.26, pingAt + 0.006);
     ping1Gain.gain.exponentialRampToValueAtTime(0.0001, pingAt + 0.6);
-    ping1.connect(ping1Gain).connect(context.destination);
+    ping1.connect(ping1Gain).connect(getSfxDestination(context));
     ping1.start(pingAt);
     ping1.stop(pingAt + 0.62);
 
@@ -476,7 +524,7 @@ export function playNeonWelcomeJingle(): void {
     ping2Gain.gain.setValueAtTime(0.0001, pingAt);
     ping2Gain.gain.linearRampToValueAtTime(0.13, pingAt + 0.006);
     ping2Gain.gain.exponentialRampToValueAtTime(0.0001, pingAt + 0.5);
-    ping2.connect(ping2Gain).connect(context.destination);
+    ping2.connect(ping2Gain).connect(getSfxDestination(context));
     ping2.start(pingAt);
     ping2.stop(pingAt + 0.52);
   });
@@ -628,7 +676,7 @@ export function playClassicDiceRoll(rollDurationMs: number): void {
     const source = context.createBufferSource();
     source.buffer = buffer;
     const gain = context.createGain();
-    source.connect(gain).connect(context.destination);
+    source.connect(gain).connect(getSfxDestination(context));
     gain.gain.setValueAtTime(1, now);
 
     const rollDurationSec = Math.max(0.05, rollDurationMs / 1000);
@@ -666,7 +714,7 @@ export function playClassicDiceRoll(rollDurationMs: number): void {
  */
 export function playClassicClick(): void {
   playSynthCue((context, now) => {
-    scheduleWoodKnock(context, context.destination, now, { amp: 0.34, freq: 340, decay: 0.14, noiseMix: 0.46 });
+    scheduleWoodKnock(context, getSfxDestination(context), now, { amp: 0.34, freq: 340, decay: 0.14, noiseMix: 0.46 });
   });
 }
 
@@ -807,7 +855,7 @@ export function playClassicPawnMove(hopMs?: number): void {
     // against the cartoon pop body (layer 2). decay 0.026×scale: 26 ms at
     // Normal, 35 ms max at Slow — the pop flick completes in 7 ms and the
     // remainder is a clean, fast exponential fade. Zero tail guaranteed.
-    scheduleClassicPawnBody(context, context.destination, now, {
+    scheduleClassicPawnBody(context, getSfxDestination(context), now, {
       amp: 0.38, freq: 680 * jitter, decay: 0.026 * scale, noiseMix: 0.55,
     });
   });
@@ -827,7 +875,7 @@ export function playClassicPawnMove(hopMs?: number): void {
 export function playClassicPawnSelect(): void {
   const jitter = 0.97 + Math.random() * 0.06;
   playSynthCue((context, now) => {
-    scheduleClassicPawnBody(context, context.destination, now, {
+    scheduleClassicPawnBody(context, getSfxDestination(context), now, {
       amp: 0.40, freq: 760 * jitter, decay: 0.034, noiseMix: 0.56,
     });
   });
@@ -846,7 +894,7 @@ export function playClassicCapture(): void {
   playSynthCue((context, now) => {
     const master = context.createGain();
     master.gain.setValueAtTime(1, now);
-    master.connect(context.destination);
+    master.connect(getSfxDestination(context));
 
     scheduleWoodKnock(context, master, now, { amp: 0.52, freq: 250, decay: 0.20, noiseMix: 0.40 });
     scheduleWoodKnock(context, master, now + 0.085, { amp: 0.22, freq: 460, decay: 0.11, noiseMix: 0.56 });
@@ -949,14 +997,14 @@ export function playClassicWelcomeJingle(): void {
     const PICKUP_G4 = 392.00;
     const C5 = 523.25, E5 = 659.25, G5 = 783.99, C6 = 1046.50;
 
-    scheduleMarimbaNote(context, context.destination, now, { amp: 0.11, freq: PICKUP_G4, decay: 0.09 });
-    scheduleMarimbaNote(context, context.destination, now + 0.11, { amp: 0.22, freq: C5, decay: 0.18 });
-    scheduleMarimbaNote(context, context.destination, now + 0.27, { amp: 0.24, freq: E5, decay: 0.18 });
-    scheduleMarimbaNote(context, context.destination, now + 0.43, { amp: 0.26, freq: G5, decay: 0.20 });
-    scheduleMarimbaNote(context, context.destination, now + 0.63, { amp: 0.20, freq: E5, decay: 0.16 });
+    scheduleMarimbaNote(context, getSfxDestination(context), now, { amp: 0.11, freq: PICKUP_G4, decay: 0.09 });
+    scheduleMarimbaNote(context, getSfxDestination(context), now + 0.11, { amp: 0.22, freq: C5, decay: 0.18 });
+    scheduleMarimbaNote(context, getSfxDestination(context), now + 0.27, { amp: 0.24, freq: E5, decay: 0.18 });
+    scheduleMarimbaNote(context, getSfxDestination(context), now + 0.43, { amp: 0.26, freq: G5, decay: 0.20 });
+    scheduleMarimbaNote(context, getSfxDestination(context), now + 0.63, { amp: 0.20, freq: E5, decay: 0.16 });
     // Held landing chord — the fanfare's resolution.
-    scheduleMarimbaNote(context, context.destination, now + 0.81, { amp: 0.30, freq: C6, decay: 1.0 });
-    scheduleMarimbaNote(context, context.destination, now + 0.81, { amp: 0.15, freq: G5, decay: 0.85 });
+    scheduleMarimbaNote(context, getSfxDestination(context), now + 0.81, { amp: 0.30, freq: C6, decay: 1.0 });
+    scheduleMarimbaNote(context, getSfxDestination(context), now + 0.81, { amp: 0.15, freq: G5, decay: 0.85 });
   });
 }
 
@@ -1086,7 +1134,7 @@ export function playDzDiceRoll(rollDurationMs: number): void {
  */
 export function playDzClick(): void {
   playSynthCue((context, now) => {
-    scheduleDzKnock(context, context.destination, now, {
+    scheduleDzKnock(context, getSfxDestination(context), now, {
       amp: 0.36, freq: 300, decay: 0.16,
       shimmerAmp: 0.085, shimmerFreq: 2400, shimmerDecay: 0.10,
       noiseMix: 0.28,
@@ -1227,14 +1275,14 @@ export function playDzPawnMove(hopMs?: number): void {
   const scale = pawnStepTimeScale(hopMs);
   const jitter = 0.97 + Math.random() * 0.06;
   playSynthCue((context, now) => {
-    scheduleDzPlop(context, context.destination, now, {
+    scheduleDzPlop(context, getSfxDestination(context), now, {
       amp: 0.34, freq: 355 * jitter, decay: 0.05 * scale,
       shimmerAmp: 0.026, shimmerFreq: 2200, shimmerDecay: 0.016 * scale,
     });
     // Tiny secondary bounce — a quieter, higher echo of the same plop, the
     // "extra juice" layer that reads as a satisfying little settle rather
     // than one clean hit stopping cold.
-    scheduleDzPlop(context, context.destination, now + 0.03 * scale, {
+    scheduleDzPlop(context, getSfxDestination(context), now + 0.03 * scale, {
       amp: 0.11, freq: 300 * jitter, decay: 0.022 * scale,
       shimmerAmp: 0, shimmerFreq: 2200, shimmerDecay: 0.01,
     });
@@ -1258,7 +1306,7 @@ export function playDzPawnMove(hopMs?: number): void {
 export function playDzPawnSelect(): void {
   const jitter = 0.97 + Math.random() * 0.06;
   playSynthCue((context, now) => {
-    scheduleDzPlop(context, context.destination, now, {
+    scheduleDzPlop(context, getSfxDestination(context), now, {
       amp: 0.40, freq: 400 * jitter, decay: 0.065,
       shimmerAmp: 0.05, shimmerFreq: 2600, shimmerDecay: 0.055,
     });
@@ -1365,14 +1413,14 @@ export function playDzWelcomeJingle(): void {
     const D4 = 293.66, Eb4 = 311.13, FSharp4 = 369.99, G4 = 392.00, D5 = 587.33;
 
     // Rhythmic pulse on the tonic — the "rhythmic chime" character.
-    scheduleDzChimeNote(context, context.destination, now, { amp: 0.24, freq: D4, decay: 0.15 });
-    scheduleDzChimeNote(context, context.destination, now + 0.15, { amp: 0.19, freq: D4, decay: 0.13 });
+    scheduleDzChimeNote(context, getSfxDestination(context), now, { amp: 0.24, freq: D4, decay: 0.15 });
+    scheduleDzChimeNote(context, getSfxDestination(context), now + 0.15, { amp: 0.19, freq: D4, decay: 0.13 });
     // Hijaz tetrachord run: half-step, augmented second, half-step.
-    scheduleDzChimeNote(context, context.destination, now + 0.31, { amp: 0.22, freq: Eb4, decay: 0.15 });
-    scheduleDzChimeNote(context, context.destination, now + 0.48, { amp: 0.25, freq: FSharp4, decay: 0.17 });
-    scheduleDzChimeNote(context, context.destination, now + 0.67, { amp: 0.24, freq: G4, decay: 0.17 });
+    scheduleDzChimeNote(context, getSfxDestination(context), now + 0.31, { amp: 0.22, freq: Eb4, decay: 0.15 });
+    scheduleDzChimeNote(context, getSfxDestination(context), now + 0.48, { amp: 0.25, freq: FSharp4, decay: 0.17 });
+    scheduleDzChimeNote(context, getSfxDestination(context), now + 0.67, { amp: 0.24, freq: G4, decay: 0.17 });
     // Landing on the octave, held, with the family's gold-glint signature.
-    scheduleDzChimeNote(context, context.destination, now + 0.87, {
+    scheduleDzChimeNote(context, getSfxDestination(context), now + 0.87, {
       amp: 0.30, freq: D5, decay: 0.90,
       shimmer: { amp: 0.09, freq: 2600, decay: 0.7 },
     });
@@ -1386,7 +1434,7 @@ function getAudio(name: UiSoundName): HTMLAudioElement | null {
     const base = typeof import.meta !== "undefined" && import.meta.env?.BASE_URL ? import.meta.env.BASE_URL : "/";
     audio = new Audio(`${base}${SOUND_FILES[name]}`);
     audio.preload = "auto";
-    audio.volume = DEFAULT_VOLUME;
+    audio.volume = DEFAULT_VOLUME * sfxVolumeMultiplier;
     audioCache.set(name, audio);
   }
   return audio;
@@ -1590,7 +1638,7 @@ function startBgm(context: AudioContext): void {
   toneFilter.frequency.setValueAtTime(1600, context.currentTime);
   toneFilter.gain.setValueAtTime(-7, context.currentTime);
 
-  masterGain.connect(toneFilter).connect(context.destination);
+  masterGain.connect(toneFilter).connect(getSfxDestination(context));
   bgmMasterGain = masterGain;
   bgmActiveSources = [];
   bgmIsRunning = true;
