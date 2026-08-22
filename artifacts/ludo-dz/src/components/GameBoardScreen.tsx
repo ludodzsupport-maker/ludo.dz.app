@@ -3857,6 +3857,9 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const [restartKey, setRestartKey] = useState(0);
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
   const moveRecoveryTimer = useRef<NodeJS.Timeout | null>(null);
+  // The delayed end of a capture impact must not retain this full board after
+  // the user exits during its 750ms visual tail.
+  const homeImpactTimer = useRef<NodeJS.Timeout | null>(null);
   const moveSequenceRef = useRef(0);
 
   // ── Match stats (additive, local to this screen) — feeds VictoryScreen ────
@@ -3924,6 +3927,12 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     if (!moveRecoveryTimer.current) return;
     clearTimeout(moveRecoveryTimer.current);
     moveRecoveryTimer.current = null;
+  }, []);
+
+  const clearHomeImpactTimer = useCallback(() => {
+    if (!homeImpactTimer.current) return;
+    clearTimeout(homeImpactTimer.current);
+    homeImpactTimer.current = null;
   }, []);
 
   const unlockMoveInteraction = useCallback(() => {
@@ -4226,7 +4235,11 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             onArrival: () => {
               if (moveSequenceRef.current !== moveSeq) return;
               setHomeImpact({ player: cp.player, index: cp.index, id: Date.now() });
-              setTimeout(() => setHomeImpact(null), 750);
+              clearHomeImpactTimer();
+              homeImpactTimer.current = setTimeout(() => {
+                homeImpactTimer.current = null;
+                setHomeImpact(null);
+              }, 750);
               unlockMoveInteraction();
               setPieceAnims({});
             },
@@ -4373,12 +4386,14 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   useEffect(() => () => {
     rollTimers.current.forEach(clearTimeout);
     clearMoveRecoveryTimer();
-  }, [clearMoveRecoveryTimer]);
+    clearHomeImpactTimer();
+  }, [clearHomeImpactTimer, clearMoveRecoveryTimer]);
 
   // ── Restart ───────────────────────────────────────────────────────────────
   const handleRestart = useCallback(() => {
     rollTimers.current.forEach(clearTimeout);
     rollTimers.current = [];
+    clearHomeImpactTimer();
     setRolling(false);
     setAnimDice(1);
     setJustLanded(false);
@@ -4401,7 +4416,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     setCaptureCounts([0, 0, 0, 0]);
     setMatchDurationMs(0);
     matchStartRef.current = Date.now();
-  }, [config.players, config.rule, playerSlots, unlockMoveInteraction]);
+  }, [clearHomeImpactTimer, config.players, config.rule, playerSlots, unlockMoveInteraction]);
 
   // ── Status text ───────────────────────────────────────────────────────────
   const statusMsg =

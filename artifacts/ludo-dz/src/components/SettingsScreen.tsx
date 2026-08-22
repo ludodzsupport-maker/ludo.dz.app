@@ -132,9 +132,10 @@ function NeonToggle({ value, onChange, neon }: { value: boolean; onChange: (v: b
     >
       <motion.div
         className="absolute top-0.5 w-6 h-6 rounded-full"
-        animate={{ left: value ? "calc(100% - 26px)" : "2px" }}
+        animate={{ x: value ? 28 : 0 }}
         transition={{ type: "spring", stiffness: 500, damping: 30 }}
         style={{
+          left: "2px",
           background: value ? neon : "rgba(255,255,255,0.30)",
           boxShadow: value ? `0 0 8px ${neon}` : "none",
         }}

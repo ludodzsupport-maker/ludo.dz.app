@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useTransition } from 'react';
+import { lazy, Suspense, useState, useEffect, useCallback, useTransition } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { SplashScreen } from '@/components/SplashScreen';
@@ -6,7 +6,6 @@ import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { GameModeScreen } from '@/components/GameModeScreen';
 import { SettingsScreen } from '@/components/SettingsScreen';
 import { AboutScreen } from '@/components/AboutScreen';
-import { GameBoardScreen } from '@/components/GameBoardScreen';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { GameConfig } from '@/components/GameConfigOverlay';
@@ -21,6 +20,13 @@ export type BoardStyle = 'neon' | 'classic' | 'dz';
 const MIN_SPLASH_MS = 2700;
 const MAX_SPLASH_MS = 4200;
 const PREPARING_MATCH_MS = 800;
+
+// The board contains the game engine, SVG board and VFX stack. Keep it out of
+// the first-render bundle, while fetching it behind the existing splash so the
+// route is already resident before gameplay can be reached.
+const LazyGameBoardScreen = lazy(() =>
+  import('@/components/GameBoardScreen').then(({ GameBoardScreen }) => ({ default: GameBoardScreen })),
+);
 
 const SCREEN_LAYER_STYLE = {
   transform: 'translateZ(0)',
@@ -44,6 +50,13 @@ function AppContent() {
     });
   }, [startScreenTransition]);
 
+  // Fetch the heavy gameplay chunk while the splash is intentionally onscreen.
+  // This preserves the established interaction timing: the board is ready by
+  // the existing preparation curtain rather than being fetched after Play.
+  useEffect(() => {
+    void import('@/components/GameBoardScreen');
+  }, []);
+
   // Gate the dice splash on real readiness (fonts + hero logo decoded) instead of
   // a blind timer, so the main menu never flashes in with un-swapped
   // fonts or a popping-in logo — while keeping a min/max floor so it neither
@@ -63,19 +76,30 @@ function AppContent() {
       : Promise.resolve();
 
     const readiness = Promise.all([logoReady, fontsReady]);
-    const maxWait = new Promise<void>((resolve) => setTimeout(resolve, MAX_SPLASH_MS));
+    let maxWaitTimer: ReturnType<typeof setTimeout> | undefined;
+    let dismissTimer: ReturnType<typeof setTimeout> | undefined;
+    const maxWait = new Promise<void>((resolve) => {
+      maxWaitTimer = setTimeout(resolve, MAX_SPLASH_MS);
+    });
 
     Promise.race([readiness, maxWait]).then(() => {
+      // The readiness path won: the fallback no longer needs to wake the
+      // WebView while another screen may already be mounted.
+      if (maxWaitTimer) clearTimeout(maxWaitTimer);
       if (cancelled) return;
       const remaining = Math.max(0, MIN_SPLASH_MS - (Date.now() - start));
-      setTimeout(() => {
+      dismissTimer = setTimeout(() => {
         if (!cancelled) {
           setShowSplash(false);
         }
       }, remaining);
     });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (maxWaitTimer) clearTimeout(maxWaitTimer);
+      if (dismissTimer) clearTimeout(dismissTimer);
+    };
   }, []);
 
   useEffect(() => {
@@ -199,17 +223,28 @@ function AppContent() {
               label={lang === 'ar' ? 'جارٍ تحضير اللعبة' : 'Préparation de la partie'}
             />
           ) : screen === 'game' && gameConfig ? (
-            <GameBoardScreen
-              key="game"
-              config={gameConfig}
-              lang={lang}
-              boardStyle={boardStyle}
-              initialSnapshot={resumingSnapshot}
-              onBack={() => {
-                setResumingSnapshot(null);
-                navigate('mode-select');
-              }}
-            />
+            <Suspense
+              fallback={
+                <LoadingOverlay
+                  boardStyle={boardStyle}
+                  lang={lang}
+                  variant="curtain"
+                  label={lang === 'ar' ? 'جارٍ تحضير اللعبة' : 'Préparation de la partie'}
+                />
+              }
+            >
+              <LazyGameBoardScreen
+                key="game"
+                config={gameConfig}
+                lang={lang}
+                boardStyle={boardStyle}
+                initialSnapshot={resumingSnapshot}
+                onBack={() => {
+                  setResumingSnapshot(null);
+                  navigate('mode-select');
+                }}
+              />
+            </Suspense>
           ) : null}
         </AnimatePresence>
       </div>
