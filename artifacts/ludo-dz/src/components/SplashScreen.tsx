@@ -15,6 +15,7 @@
  * copy are unchanged — only the presentation layer is new.
  */
 
+import { memo } from "react";
 import { motion, useAnimationControls, useReducedMotion } from "framer-motion";
 import { useEffect } from "react";
 import type { CSSProperties } from "react";
@@ -63,7 +64,7 @@ const FACES: Array<{ n: number; transform: string }> = [
   { n: 4, transform: `rotateX(-90deg) translateZ(${HALF}px)` }, // bottom
 ];
 
-function DieFace({ n, transform }: { n: number; transform: string }) {
+const DieFace = memo(function DieFace({ n, transform }: { n: number; transform: string }) {
   return (
     <div
       style={{
@@ -95,13 +96,13 @@ function DieFace({ n, transform }: { n: number; transform: string }) {
       })}
     </div>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────────────
 // TumblingDie — dramatic multi-axis tumble on mount, lands, then spins
 // slowly forever on the vertical axis like a showcase display piece.
 // ─────────────────────────────────────────────────────────────────────
-function TumblingDie({ reduced }: { reduced: boolean }) {
+const TumblingDie = memo(function TumblingDie({ reduced }: { reduced: boolean }) {
   const controls = useAnimationControls();
 
   useEffect(() => {
@@ -134,11 +135,11 @@ function TumblingDie({ reduced }: { reduced: boolean }) {
       </motion.div>
     </div>
   );
-}
+});
 
 // A living light source behind the die — slow colour-cycling rotation
 // plus a gentle breathing pulse, blurred into a soft glow.
-function CoreGlow({ reduced }: { reduced: boolean }) {
+const CoreGlow = memo(function CoreGlow({ reduced }: { reduced: boolean }) {
   return (
     <motion.div
       style={{
@@ -158,10 +159,10 @@ function CoreGlow({ reduced }: { reduced: boolean }) {
       }
     />
   );
-}
+});
 
 // One-shot shockwave rings + a soft flash, fired the instant the die lands.
-function ImpactBurst({ reduced }: { reduced: boolean }) {
+const ImpactBurst = memo(function ImpactBurst({ reduced }: { reduced: boolean }) {
   if (reduced) return null;
   return (
     <>
@@ -182,9 +183,9 @@ function ImpactBurst({ reduced }: { reduced: boolean }) {
       ))}
     </>
   );
-}
+});
 
-function DiceHero({ reduced }: { reduced: boolean }) {
+const DiceHero = memo(function DiceHero({ reduced }: { reduced: boolean }) {
   return (
     <motion.div
       style={{ position: "relative", width: GLOW, height: GLOW, display: "flex", alignItems: "center", justifyContent: "center" }}
@@ -197,7 +198,7 @@ function DiceHero({ reduced }: { reduced: boolean }) {
       <TumblingDie reduced={reduced} />
     </motion.div>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────────────
 // CornerBracket — a minimal glowing viewfinder-style corner, one per
@@ -226,7 +227,7 @@ const CORNER_DEFS: { corner: Corner; color: string; delay: number }[] = [
   { corner: "bl", color: PC.green, delay: 0.86 },
 ];
 
-function CornerBracket({ corner, color, delay, reduced }: { corner: Corner; color: string; delay: number; reduced: boolean }) {
+const CornerBracket = memo(function CornerBracket({ corner, color, delay, reduced }: { corner: Corner; color: string; delay: number; reduced: boolean }) {
   return (
     <motion.div
       style={{ position: "absolute", width: 34, height: 34, ...BRACKET_POS[corner] }}
@@ -241,7 +242,7 @@ function CornerBracket({ corner, color, delay, reduced }: { corner: Corner; colo
       />
     </motion.div>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────────────
 // BokehField — a faint scatter of drifting light motes for depth.
@@ -256,7 +257,7 @@ const BOKEH: { x: string; y: string; size: number; dur: number; delay: number; o
   { x: "92%", y: "48%", size: 4, dur: 10.5, delay: 0.3, opacity: 0.35 },
 ];
 
-function BokehField({ reduced }: { reduced: boolean }) {
+const BokehField = memo(function BokehField({ reduced }: { reduced: boolean }) {
   if (reduced) return null;
   return (
     <>
@@ -274,13 +275,13 @@ function BokehField({ reduced }: { reduced: boolean }) {
       ))}
     </>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────────────
 // LightSweepBar — an indeterminate loading indicator: a glass track
 // with a multicolour band of light sweeping back and forth.
 // ─────────────────────────────────────────────────────────────────────
-function LightSweepBar({ reduced }: { reduced: boolean }) {
+const LightSweepBar = memo(function LightSweepBar({ reduced }: { reduced: boolean }) {
   return (
     <div
       style={{
@@ -300,7 +301,7 @@ function LightSweepBar({ reduced }: { reduced: boolean }) {
       />
     </div>
   );
-}
+});
 
 // Title: "LUDO DZ" — last two chars in gold gradient
 const TITLE: { ch: string; gold: boolean }[] = [
