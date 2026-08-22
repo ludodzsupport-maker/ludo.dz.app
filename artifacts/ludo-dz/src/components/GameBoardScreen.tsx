@@ -1922,6 +1922,21 @@ function DzSparkleTrailEffect({
   );
 }
 
+// VFX instances animate independently in Framer Motion. Their coordinates and
+// colors never change after mount, so ignore freshly-created completion closures
+// from the parent when another trail item is added or removed.
+const MemoShockwaveEffect = memo(ShockwaveEffect);
+const MemoHomeFinishVFX = memo(HomeFinishVFX);
+const MemoHopBurstEffect = memo(HopBurstEffect, (prev, next) =>
+  prev.x === next.x && prev.y === next.y && prev.neon === next.neon,
+);
+const MemoDustPuffEffect = memo(DustPuffEffect, (prev, next) =>
+  prev.x === next.x && prev.y === next.y,
+);
+const MemoDzSparkleTrailEffect = memo(DzSparkleTrailEffect, (prev, next) =>
+  prev.x === next.x && prev.y === next.y,
+);
+
 // ─── Shared animation types (used by BoardSVG and GameBoardScreen) ────────────
 type ShockwaveEvent = { x: number; y: number; neon: string; id: number };
 type HomeImpactEvent = { player: number; index: number; id: number };
@@ -2029,10 +2044,12 @@ const BoardSVG = memo(function BoardSVG({
     });
   }, [game.movable, game.phase, pieces]);
 
-  return (
-    <svg viewBox="0 0 15 15"
-      style={{ width: '100%', height: '100%', display: 'block' }}
-      xmlns="http://www.w3.org/2000/svg">
+  // The board chrome contains the dense, mostly-static SVG scene (defs, cells,
+  // home zones and frame). VFX lists update several times during a move; keep
+  // those updates from rebuilding/reconciling this scene when its visual inputs
+  // have not changed.
+  const boardChrome = useMemo(() => (
+    <>
       <defs>
         {/* ── Deep gem body gradient (white highlight → neon → color) ── */}
         {E.PLAYER_COLORS.map((c, i) => (
@@ -3487,9 +3504,18 @@ const BoardSVG = memo(function BoardSVG({
         />
       )}
 
+    </>
+  ), [activeNeon, game.activePlayer, game.phase, game.playerSlots, homeImpact, isClassic, isDz, movableHighlights, pieceAnims, pieces, safeCellOccupancy]);
+
+  return (
+    <svg viewBox="0 0 15 15"
+      style={{ width: '100%', height: '100%', display: 'block' }}
+      xmlns="http://www.w3.org/2000/svg">
+      {boardChrome}
+
       {/* ── Shockwave burst — rendered above board, below pieces ── */}
       {shockwave && (
-        <ShockwaveEffect
+        <MemoShockwaveEffect
           key={shockwave.id}
           x={shockwave.x}
           y={shockwave.y}
@@ -3500,7 +3526,7 @@ const BoardSVG = memo(function BoardSVG({
 
       {/* ── Home finish VFX — neon burst when a pawn reaches center ── */}
       {homeFinishVFX && (
-        <HomeFinishVFX
+        <MemoHomeFinishVFX
           key={homeFinishVFX.id}
           x={homeFinishVFX.x}
           y={homeFinishVFX.y}
@@ -3511,7 +3537,7 @@ const BoardSVG = memo(function BoardSVG({
 
       {/* ── Hop-step light bursts — Neon board only, one per landed cell ── */}
       {hopBursts.map(b => (
-        <HopBurstEffect
+        <MemoHopBurstEffect
           key={b.id}
           x={b.x}
           y={b.y}
@@ -3522,7 +3548,7 @@ const BoardSVG = memo(function BoardSVG({
 
       {/* ── Dust puffs — Classic board only, one per vacated cell ── */}
       {dustPuffs.map(p => (
-        <DustPuffEffect
+        <MemoDustPuffEffect
           key={p.id}
           x={p.x}
           y={p.y}
@@ -3532,7 +3558,7 @@ const BoardSVG = memo(function BoardSVG({
 
       {/* ── DZ gilt sparkle trail — one quiet glint per vacated hop cell ── */}
       {dzSparkles.map(sparkle => (
-        <DzSparkleTrailEffect
+        <MemoDzSparkleTrailEffect
           key={sparkle.id}
           x={sparkle.x}
           y={sparkle.y}
