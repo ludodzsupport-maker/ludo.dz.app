@@ -572,6 +572,15 @@ importers:
         specifier: ^0.31.10
         version: 0.31.10
 
+  lib/omniroute:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.9.5
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.5
+
   scripts:
     devDependencies:
       '@types/node':
