@@ -1,6 +1,4 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useTransition } from 'react';
-import { Toaster } from '@/components/ui/toaster';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { SplashScreen } from '@/components/SplashScreen';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { GameModeScreen } from '@/components/GameModeScreen';
@@ -10,6 +8,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { GameConfig } from '@/components/GameConfigOverlay';
 import { clearSavedGame, readSavedGame, type SavedGameSnapshot } from '@/lib/saved-game';
+import { warmStartupAudio } from '@/lib/sound-manager';
 
 type Screen = 'welcome' | 'resume-choice' | 'mode-select' | 'settings' | 'about' | 'preparing-match' | 'game';
 export type BoardStyle = 'neon' | 'classic' | 'dz';
@@ -50,11 +49,22 @@ function AppContent() {
     });
   }, [startScreenTransition]);
 
-  // Fetch the heavy gameplay chunk while the splash is intentionally onscreen.
-  // This preserves the established interaction timing: the board is ready by
-  // the existing preparation curtain rather than being fetched after Play.
+  // Gameplay cannot be reached until after the splash and mode selection.
+  // Deferring this parse/compile work keeps the first splash frames isolated
+  // from the board engine; the existing preparation curtain remains the
+  // unchanged route-level fallback while the chunk is fetched in the menu.
   useEffect(() => {
+    if (showSplash) return;
     void import('@/components/GameBoardScreen');
+  }, [showSplash]);
+
+  // Keep cold-start rendering clear of AudioContext creation and two audio
+  // decodes. The splash remains onscreen for at least 2.7 seconds, so this
+  // preserves the existing ready-before-interaction behavior without making
+  // its opening tumble compete with audio startup work.
+  useEffect(() => {
+    const timer = setTimeout(warmStartupAudio, 1750);
+    return () => clearTimeout(timer);
   }, []);
 
   // Gate the dice splash on real readiness (fonts + hero logo decoded) instead of
@@ -323,20 +333,9 @@ function ResumeSavedGameScreen({ lang, savedAt, onContinue, onNewGame }: {
 }
 
 function App() {
-  return (
-    <TooltipProvider>
-      {/*
-        The game is a single-screen state machine. Previously AppContent was
-        behind a wouter <Route path="/"> with a catch-all NotFound route. Any
-        deployment that served the app at another path (for example
-        /index.html in an Android WebView or a Vercel preview/deep link) missed
-        that route before SplashScreen mounted, leaving #root empty. Render the
-        app shell directly so boot is not gated by the browser pathname.
-      */}
-      <AppContent />
-      <Toaster />
-    </TooltipProvider>
-  );
+  // The game is a single-screen state machine; rendering its shell directly
+  // keeps boot independent of the browser pathname.
+  return <AppContent />;
 }
 
 export default App;

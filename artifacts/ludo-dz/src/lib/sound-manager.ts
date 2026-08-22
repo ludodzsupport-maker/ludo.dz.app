@@ -623,13 +623,6 @@ function loadClassicDiceRollBuffer(context: AudioContext): Promise<AudioBuffer |
   return classicDiceRollLoadPromise;
 }
 
-// Kick off the fetch/decode the moment this module is first imported — i.e.
-// on initial app load, well before the player reaches the game board — so
-// the very first roll never waits on the network or the decoder.
-if (typeof window !== "undefined") {
-  const warmContext = getSynthAudioContext();
-  if (warmContext) void loadClassicDiceRollBuffer(warmContext);
-}
 
 // Sample outlasts the roll animation (Fast/Rapid speeds): rather than always
 // starting at the recording's beginning and fading its tail early — which
@@ -1548,12 +1541,17 @@ function loadBgmBuffer(context: AudioContext): Promise<AudioBuffer | null> {
   return bgmLoadPromise;
 }
 
-// Kick off the fetch/decode the moment this module is first imported — same
-// warm-load pattern as the Classic dice sample above — so playback can start
-// with zero latency the instant it's actually allowed to (first gesture).
-if (typeof window !== "undefined") {
-  const warmBgmContext = getSynthAudioContext();
-  if (warmBgmContext) void loadBgmBuffer(warmBgmContext);
+/**
+ * Warm the recorded dice sample and optional BGM after the first splash frames
+ * have painted. Keeping this explicit prevents AudioContext construction,
+ * network work, and decoding from competing with cold-start rendering while
+ * still completing behind the app's existing splash duration.
+ */
+export function warmStartupAudio(): void {
+  const context = getSynthAudioContext();
+  if (!context) return;
+  void loadClassicDiceRollBuffer(context);
+  if (bgmEnabled) void loadBgmBuffer(context);
 }
 
 /**
