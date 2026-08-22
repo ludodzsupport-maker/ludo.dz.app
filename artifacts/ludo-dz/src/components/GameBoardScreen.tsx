@@ -582,7 +582,7 @@ function CornerDice({
         pointerEvents: 'none',
       }}/>
     <motion.div
-      onClick={canTap ? () => {
+      onPointerDown={canTap ? () => {
         // handleRoll supplies Neon's, Classic's, and DZ's dedicated dice
         // cues. Only a future, still-uncategorized board style would reach
         // this generic fallback.
@@ -637,6 +637,9 @@ function CornerDice({
         padding: isClassic ? '10px 4px 6px' : '6px 4px',
         borderRadius: isClassic ? 10 : 12,
         cursor: canTap ? 'pointer' : 'default',
+        // Explicitly opts the game-only control out of legacy double-tap
+        // gesture handling, allowing the pointer press to dispatch at once.
+        touchAction: canTap ? 'manipulation' : undefined,
         background: isClassic
           ? `linear-gradient(168deg, #fefdf6 0%, #f6e9c6 45%, #ead5a0 100%)`
           : isDz
@@ -1434,8 +1437,12 @@ const PawnToken = memo(function PawnToken({
     <motion.g
       animate={baseCtrl}
       initial={{ x: finalX, y: finalY }}
-      onClick={() => onPieceClick(pid)}
-      style={{ cursor: isMovable ? 'pointer' : 'default', willChange: 'transform' }}>
+      onPointerDown={() => onPieceClick(pid)}
+      style={{
+        cursor: isMovable ? 'pointer' : 'default',
+        touchAction: 'manipulation',
+        willChange: 'transform',
+      }}>
 
       {/* Stack-scale group: Neon premium multi-pawn shrink (1 → 0.70 → 0.55).
           Wraps the shadow + arc/body so the shadow shrinks in lockstep with
