@@ -4414,7 +4414,13 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   // ── Auto-pass when no valid moves — blocked while animation is in flight ─
   useEffect(() => {
     if (showExitConfirm || game.phase !== 'selecting' || game.movable.length > 0 || game.winner || isAnimating) return;
-    const t = setTimeout(() => setGame(E.autoPassTurn), 1080);
+    // All still in home + not a 6: nothing can leave, so pass through faster.
+    // Every other no-move case (pawns already on the track) keeps the 1080ms beat.
+    const allHome = game.pieces
+      .filter(p => p.player === game.activePlayer)
+      .every(p => p.relPos === -1);
+    const passMs = allHome && game.dice !== 6 ? 400 : 1080;
+    const t = setTimeout(() => setGame(E.autoPassTurn), passMs);
     return () => clearTimeout(t);
   }, [showExitConfirm, game.phase, game.movable.length, game.winner, isAnimating]);
 
