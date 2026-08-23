@@ -8,11 +8,11 @@ import { SettingsScreen } from '@/components/SettingsScreen';
 import { AboutScreen } from '@/components/AboutScreen';
 import { GameBoardScreen } from '@/components/GameBoardScreen';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import type { GameConfig } from '@/components/GameConfigOverlay';
-import { clearSavedGame, readSavedGame, type SavedGameSnapshot } from '@/lib/saved-game';
+import { clearSavedGame, type SavedGameSnapshot } from '@/lib/saved-game';
 
-type Screen = 'welcome' | 'resume-choice' | 'mode-select' | 'settings' | 'about' | 'preparing-match' | 'game';
+type Screen = 'welcome' | 'mode-select' | 'settings' | 'about' | 'preparing-match' | 'game';
 export type BoardStyle = 'neon' | 'classic' | 'dz';
 
 // Splash stays on screen at least this long so its tumble-and-impact
@@ -34,7 +34,6 @@ function AppContent() {
   const [lang, setLang]               = useState<'fr' | 'ar'>('fr');
   const [gameConfig, setGameConfig]   = useState<GameConfig | null>(null);
   const [boardStyle, setBoardStyle]   = useState<BoardStyle>('classic');
-  const [savedGame, setSavedGame]     = useState<SavedGameSnapshot | null>(null);
   const [resumingSnapshot, setResumingSnapshot] = useState<SavedGameSnapshot | null>(null);
   const [, startScreenTransition]      = useTransition();
 
@@ -79,13 +78,6 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (showSplash) return;
-    const snapshot = readSavedGame();
-    setSavedGame(snapshot);
-    if (snapshot) navigate('resume-choice');
-  }, [showSplash]);
-
-  useEffect(() => {
     if (screen !== 'preparing-match') return;
     const timer = setTimeout(() => navigate('game'), PREPARING_MATCH_MS);
     return () => clearTimeout(timer);
@@ -93,46 +85,19 @@ function AppContent() {
 
   const handleStartGame = useCallback((config: GameConfig) => {
     clearSavedGame();
-    setSavedGame(null);
     setResumingSnapshot(null);
     setGameConfig(config);
     navigate('preparing-match');
   }, [navigate]);
 
-  const handleContinueSavedGame = useCallback(() => {
-    const snapshot = savedGame ?? readSavedGame();
-    if (!snapshot) {
-      setSavedGame(null);
-      navigate('mode-select');
-      return;
-    }
+  // Resuming is offered per game mode, from that mode's configuration sheet,
+  // so the snapshot always arrives already matched to the selected mode.
+  const handleResumeSavedGame = useCallback((snapshot: SavedGameSnapshot) => {
     setResumingSnapshot(snapshot);
     setGameConfig(snapshot.config);
     setBoardStyle(snapshot.boardStyle ?? 'classic');
     navigate('preparing-match');
-  }, [navigate, savedGame]);
-
-  const handleStartFreshFromSavedGame = useCallback(() => {
-    clearSavedGame();
-    setSavedGame(null);
-    setResumingSnapshot(null);
-    navigate('mode-select');
   }, [navigate]);
-
-  useEffect(() => {
-    if (screen !== 'welcome' && screen !== 'mode-select') return;
-    const refreshSavedGameChoice = () => {
-      const snapshot = readSavedGame();
-      setSavedGame(snapshot);
-      if (snapshot) navigate('resume-choice');
-    };
-    window.addEventListener('focus', refreshSavedGameChoice);
-    document.addEventListener('visibilitychange', refreshSavedGameChoice);
-    return () => {
-      window.removeEventListener('focus', refreshSavedGameChoice);
-      document.removeEventListener('visibilitychange', refreshSavedGameChoice);
-    };
-  }, [navigate, screen]);
 
   return (
     <div
@@ -147,25 +112,9 @@ function AppContent() {
             <WelcomeScreen
               key="welcome"
               lang={lang}
-              onPlay={() => {
-                const snapshot = readSavedGame();
-                setSavedGame(snapshot);
-                if (snapshot) {
-                  navigate('resume-choice');
-                  return;
-                }
-                navigate('mode-select');
-              }}
+              onPlay={() => navigate('mode-select')}
               onSettings={() => navigate('settings')}
               onAbout={() => navigate('about')}
-            />
-          ) : screen === 'resume-choice' && savedGame ? (
-            <ResumeSavedGameScreen
-              key="resume-choice"
-              lang={lang}
-              savedAt={savedGame.savedAt}
-              onContinue={handleContinueSavedGame}
-              onNewGame={handleStartFreshFromSavedGame}
             />
           ) : screen === 'mode-select' ? (
             <GameModeScreen
@@ -173,6 +122,7 @@ function AppContent() {
               lang={lang}
               onBack={() => navigate('welcome')}
               onStart={handleStartGame}
+              onResume={handleResumeSavedGame}
             />
           ) : screen === 'settings' ? (
             <SettingsScreen
@@ -214,76 +164,6 @@ function AppContent() {
         </AnimatePresence>
       </div>
     </div>
-  );
-}
-
-
-function ResumeSavedGameScreen({ lang, savedAt, onContinue, onNewGame }: {
-  lang: 'fr' | 'ar';
-  savedAt: string;
-  onContinue: () => void;
-  onNewGame: () => void;
-}) {
-  const isRtl = lang === 'ar';
-  const savedDate = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-DZ' : 'fr-DZ', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(savedAt));
-  const copy = lang === 'ar'
-    ? {
-        title: 'مباراة محفوظة',
-        message: `تم العثور على مباراة محفوظة من ${savedDate}. اختر الاستئناف أو بدء جولة جديدة.`,
-        continue: 'استئناف',
-        newGame: 'جولة جديدة',
-        note: 'الجولة الجديدة تحذف الحفظ القديم.',
-      }
-    : {
-        title: 'Partie sauvegardée',
-        message: `Une partie sauvegardée le ${savedDate} est disponible. Choisissez comment continuer.`,
-        continue: 'Reprendre',
-        newGame: 'Nouvelle partie',
-        note: 'Nouvelle partie supprime cette sauvegarde.',
-      };
-
-  return (
-    <motion.div
-      className="absolute inset-0 z-10 grid place-items-center px-5"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.18 }}
-      style={{ background: 'linear-gradient(175deg, #1a1040 0%, #0d2a5e 42%, #003a1c 100%)' }}
-      dir={isRtl ? 'rtl' : 'ltr'}
-    >
-      <motion.div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="resume-save-title"
-        initial={{ y: 18, scale: 0.96, opacity: 0 }}
-        animate={{ y: 0, scale: 1, opacity: 1 }}
-        exit={{ y: 14, scale: 0.98, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-        style={{
-          width: '100%',
-          maxWidth: 380,
-          borderRadius: 30,
-          padding: 24,
-          background: 'linear-gradient(145deg, rgba(13,24,54,0.98), rgba(5,12,30,0.98))',
-          border: '1px solid rgba(255,215,0,0.34)',
-          boxShadow: '0 28px 70px rgba(0,0,0,0.62), inset 0 1px 0 rgba(255,255,255,0.12)',
-          textAlign: isRtl ? 'right' : 'left',
-        }}
-      >
-        <p style={{ margin: '0 0 8px', color: '#FFD700', fontFamily: 'Rajdhani, Cairo, sans-serif', fontWeight: 900, fontSize: 12, letterSpacing: isRtl ? 0 : '0.16em' }}>LUDO DZ</p>
-        <h2 id="resume-save-title" style={{ margin: 0, color: '#FFF7CC', fontFamily: 'Rajdhani, Cairo, sans-serif', fontSize: 27, lineHeight: 1.05, fontWeight: 900 }}>{copy.title}</h2>
-        <p style={{ margin: '14px 0 20px', color: 'rgba(255,255,255,0.76)', fontFamily: 'Cairo, sans-serif', fontSize: 14, lineHeight: 1.55 }}>{copy.message}</p>
-        <div style={{ display: 'grid', gap: 10 }}>
-          <button onClick={onContinue} style={{ minHeight: 50, borderRadius: 18, border: '1px solid rgba(255,215,0,0.62)', background: 'linear-gradient(135deg, #FFE76B, #FFB000)', color: '#201400', fontFamily: 'Rajdhani, Cairo, sans-serif', fontSize: 17, fontWeight: 900, cursor: 'pointer' }}>{copy.continue}</button>
-          <button onClick={onNewGame} style={{ minHeight: 48, borderRadius: 18, border: '1px solid rgba(255,255,255,0.16)', background: 'rgba(255,255,255,0.07)', color: '#FFFFFF', fontFamily: 'Rajdhani, Cairo, sans-serif', fontSize: 16, fontWeight: 800, cursor: 'pointer' }}>{copy.newGame}</button>
-        </div>
-        <p style={{ margin: '14px 0 0', color: 'rgba(255,255,255,0.48)', fontFamily: 'Cairo, sans-serif', fontSize: 12 }}>{copy.note}</p>
-      </motion.div>
-    </motion.div>
   );
 }
 

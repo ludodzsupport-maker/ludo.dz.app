@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { RotateCcw, X } from "lucide-react";
 import { playIconTap, playNavBack, playSelection, playStartPress, playToggleClick } from "../lib/sound-manager";
 import { supportsDvh } from "../lib/utils";
+import { readSavedGame, type SavedGameSnapshot } from "../lib/saved-game";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 export interface SelectedMode {
@@ -24,6 +25,8 @@ interface GameConfigOverlayProps {
   lang:    "fr" | "ar";
   onClose: () => void;
   onStart: (config: GameConfig) => void;
+  /** Called with the paused game that belongs to this mode, when the player resumes it. */
+  onResume: (snapshot: SavedGameSnapshot) => void;
 }
 
 // ─── Translations ─────────────────────────────────────────────────────────────
@@ -33,6 +36,8 @@ const T = {
     rules:          "Règles du jeu",
     players:        "Joueurs",
     start:          "Commencer",
+    resume:         "Reprendre",
+    resumeHint:     "Partie en pause disponible pour ce mode",
     classic:        "Classique",
     classicSub:     "4 pions — règles complètes",
     quick:          "Rapide",
@@ -53,6 +58,8 @@ const T = {
     rules:          "قواعد اللعبة",
     players:        "اللاعبون",
     start:          "ابدأ اللعبة",
+    resume:         "استئناف",
+    resumeHint:     "توجد مباراة متوقفة لهذا الوضع",
     classic:        "كلاسيكي",
     classicSub:     "٤ قطع — القواعد الكاملة",
     quick:          "سريع",
@@ -303,12 +310,18 @@ function PawnSilhouette({ color, size = 10 }: { color: string; size?: number }) 
 const PLAYER_COLORS = ["#DC143C", "#1E90FF", "#FFD700", "#00A550"];
 
 // ─── Main overlay ─────────────────────────────────────────────────────────────
-export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOverlayProps) {
+export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume }: GameConfigOverlayProps) {
   const [rule,         setRule]         = useState<Rule>("classic");
   const [players,      setPlayers]      = useState(2);
   const [teamAttack,   setTeamAttack]   = useState(false);
   const [turnPass,     setTurnPass]     = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  // A paused game is surfaced only inside the mode it belongs to. The sheet is
+  // mounted fresh each time a mode is opened, so this read is always current.
+  const [savedGame] = useState<SavedGameSnapshot | null>(() => {
+    const snapshot = readSavedGame();
+    return snapshot && snapshot.config.modeId === mode.id ? snapshot : null;
+  });
 
   const t   = T[lang];
   const dir = lang === "ar" ? "rtl" : "ltr";
@@ -609,7 +622,8 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
             </div>
           )}
 
-          {/* ── START CTA ── */}
+          {/* ── START CTA (+ per-mode resume, only when this mode has a paused game) ── */}
+          <div className="flex items-stretch gap-2.5">
           <motion.button
             whileHover={{ scale: 1.018, y: -2 }}
             whileTap={{ scale: 0.978 }}
@@ -621,7 +635,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
                 modeId:  mode.id,
               });
             }}
-            className="w-full relative rounded-2xl overflow-hidden"
+            className={`${savedGame ? "flex-1 min-w-0" : "w-full"} relative rounded-2xl overflow-hidden`}
             style={{
               background: `linear-gradient(135deg, ${mode.neon}28 0%, ${mode.neon}12 100%)`,
               border: `1.5px solid ${mode.neon}60`,
@@ -668,6 +682,41 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart }: GameConfigOv
               </span>
             </div>
           </motion.button>
+
+          {savedGame && (
+            <motion.button
+              whileHover={{ scale: 1.018, y: -2 }}
+              whileTap={{ scale: 0.978 }}
+              onClick={() => { playStartPress(); onResume(savedGame); }}
+              className="relative rounded-2xl overflow-hidden flex-shrink-0 flex flex-col items-center justify-center gap-1"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: `1.5px solid ${mode.neon}45`,
+                boxShadow: "0 8px 28px rgba(0,0,0,0.50)",
+                padding: "12px 16px",
+              }}
+              aria-label={t.resume}
+              title={t.resumeHint}
+            >
+              <RotateCcw className="w-4 h-4" style={{ color: mode.neon }} />
+              <span
+                className="font-heading font-bold text-white/85 leading-none"
+                style={{ fontSize: "11px", letterSpacing: "0.06em" }}
+              >
+                {t.resume}
+              </span>
+            </motion.button>
+          )}
+          </div>
+
+          {savedGame && (
+            <p
+              className="font-sans text-white/45 text-center mt-2.5"
+              style={{ fontSize: "10px" }}
+            >
+              {t.resumeHint}
+            </p>
+          )}
 
         </div>
 

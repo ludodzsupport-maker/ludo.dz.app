@@ -4,11 +4,13 @@ import { ArrowLeft, X } from "lucide-react";
 import { GamePiece } from "./GamePiece";
 import { GameConfigOverlay, type SelectedMode, type GameConfig } from "./GameConfigOverlay";
 import { playIconTap, playModeSelect, playNavBack } from "../lib/sound-manager";
+import type { SavedGameSnapshot } from "../lib/saved-game";
 
 interface GameModeScreenProps {
   lang: 'fr' | 'ar';
   onBack: () => void;
   onStart: (config: GameConfig) => void;
+  onResume: (snapshot: SavedGameSnapshot) => void;
 }
 
 // ─── Translations ─────────────────────────────────────────────────────────────
@@ -787,7 +789,7 @@ function ComingSoonPopup({
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export function GameModeScreen({ lang, onBack, onStart }: GameModeScreenProps) {
+export function GameModeScreen({ lang, onBack, onStart, onResume }: GameModeScreenProps) {
   const t = TRANSLATIONS[lang];
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
 
@@ -941,6 +943,10 @@ export function GameModeScreen({ lang, onBack, onStart }: GameModeScreenProps) {
             onStart={(config: GameConfig) => {
               setSelectedMode(null);
               onStart(config);
+            }}
+            onResume={(snapshot: SavedGameSnapshot) => {
+              setSelectedMode(null);
+              onResume(snapshot);
             }}
           />
         )}
