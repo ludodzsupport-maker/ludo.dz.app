@@ -173,6 +173,30 @@ const CL_BORDER = ['#8A0B1E','#0C3082','#9C6E00','#10481C'] as const;
 const CL_ARROW  = ['#640016','#081B5A','#664600','#073010'] as const;
 const CL_GOLD   = '#B8863B'; // warm brass/gilt accent for premium home-base trim
 
+// This layer is independent of match state. Keeping it in its own memoized
+// component means dice ticks and pawn-step VFX do not rebuild its three
+// perpetual decorative animations.
+const AMBIENT_DECORATIONS = [
+  { color: '#DC143C', top: '-3%',  right: '-5%',  size: 70, delay: 0 },
+  { color: '#1E90FF', top: '18%',  left: '-9%',   size: 55, delay: 5 },
+  { color: '#FFD700', bottom: '4%',right: '-4%',  size: 45, delay: 9 },
+];
+
+const AmbientDecorations = memo(function AmbientDecorations() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {AMBIENT_DECORATIONS.map(({ color, size, delay, ...pos }, i) => (
+        <motion.div key={i} className="absolute opacity-[0.06]"
+          style={{ ...pos, width: size, height: size*1.5 }}
+          animate={{ y: [0,16,0], rotate: [0,25,0] }}
+          transition={{ duration: 13+i*3, repeat: Infinity, ease: 'easeInOut', delay }}>
+          <GamePiece color={color}/>
+        </motion.div>
+      ))}
+    </div>
+  );
+});
+
 // Lighten (positive) or darken (negative) a hex colour by `percent` (-100..100).
 // Used to build richly-graded, per-colour gradients for the Classic dome pawns
 // and warm ornamental home-base details — premium 3D shading needs true tonal
@@ -484,7 +508,7 @@ type PanelLayout = {
 // with a small tail pointing at the frame so it reads as anchored, not
 // floating. Vertical layout: colour dot + name → die face → TAP label →
 // progress dots.
-function CornerDice({
+const CornerDice = memo(function CornerDice({
   player, anchor, game, isAI, lang, boardStyle,
   rolling, animDice, justLanded, lastDice,
   onRoll, canRoll, panelLayout,
@@ -656,6 +680,10 @@ function CornerDice({
         transition: 'background 0.4s, border-color 0.4s',
         overflow: 'hidden',
         userSelect: 'none',
+        // Tell mobile browsers this control is a tap, not a gesture candidate.
+        // This removes touch gesture arbitration without changing the click
+        // handler, animation, or hit area.
+        touchAction: 'manipulation',
         // Scale grows toward the board corner so the active card "leans in" to the game
         transformOrigin: { tl: 'top left', tr: 'top right', bl: 'bottom left', br: 'bottom right' }[anchor],
       }}
@@ -900,7 +928,7 @@ function CornerDice({
     </motion.div>
     </div>
   );
-}
+});
 
 // ─── Player chip (header bar — name + colour only, no dice) ───────────────────
 function PlayerChip({ game, player, isAI, lang, boardStyle }: {
@@ -1186,7 +1214,6 @@ const PawnToken = memo(function PawnToken({
   const baseCtrl  = useAnimationControls();
   const arcCtrl   = useAnimationControls();
   const scaleCtrl = useAnimationControls();
-  const [isHopping, setIsHopping] = useState(false);
   const stackScaleVal = stackScale ?? 1;
 
   // Stable refs so async closures always see latest values
@@ -1225,7 +1252,6 @@ const PawnToken = memo(function PawnToken({
 
     // ── Defeat arc: captured piece spins and flies home on a high parabola ────
     if (hopSteps === 'defeat') {
-      setIsHopping(true);
       (async () => {
         // Brief delay so the shockwave renders first
         await new Promise<void>(r => setTimeout(r, 95));
@@ -1250,7 +1276,6 @@ const PawnToken = memo(function PawnToken({
         if (stale()) return;
         arcCtrl.set({ y: 0, rotate: 0, scaleX: 1, scaleY: 1 });
         onDefeatRef.current?.();   // trigger home-pad impact flash
-        setIsHopping(false);
       })();
       return;
     }
@@ -1259,7 +1284,6 @@ const PawnToken = memo(function PawnToken({
     // Fix 2: strict step-by-step — each hop awaits before the next begins.
     // Fix 3: track previous position so we only animate the axis that changes,
     //        preventing Framer Motion from blending both axes diagonally at corners.
-    setIsHopping(true);
     (async () => {
       const dur = hopMs / 1000;
 
@@ -1372,11 +1396,9 @@ const PawnToken = memo(function PawnToken({
       // Final spring corrects stacking offsets (multiple pieces on same tile).
       const { x, y } = finalRef.current;
       await baseCtrl.start({ x, y, transition: LAND_SPRING });
-      if (!stale()) setIsHopping(false);
     })();
     return () => {
       seqKeyRef.current++;
-      setIsHopping(false);
     };
   }, [hopSteps]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1389,7 +1411,6 @@ const PawnToken = memo(function PawnToken({
 
   useEffect(() => () => {
     seqKeyRef.current++;
-    setIsHopping(false);
     baseCtrl.stop();
     arcCtrl.stop();
     scaleCtrl.stop();
@@ -1435,7 +1456,14 @@ const PawnToken = memo(function PawnToken({
       animate={baseCtrl}
       initial={{ x: finalX, y: finalY }}
       onClick={() => onPieceClick(pid)}
-      style={{ cursor: isMovable ? 'pointer' : 'default', willChange: 'transform' }}>
+      style={{
+        cursor: isMovable ? 'pointer' : 'default',
+        willChange: 'transform',
+        // Keep pawn taps on the fast tap path in mobile WebViews. The existing
+        // click event remains the activation event, so tap/cancel semantics
+        // and all game behavior stay unchanged.
+        touchAction: 'manipulation',
+      }}>
 
       {/* Stack-scale group: Neon premium multi-pawn shrink (1 → 0.70 → 0.55).
           Wraps the shadow + arc/body so the shadow shrinks in lockstep with
@@ -1649,7 +1677,7 @@ const PawnToken = memo(function PawnToken({
 });
 
 // ─── Shockwave burst — neon ripple rings that emanate from the capture tile ────
-function ShockwaveEffect({
+const ShockwaveEffect = memo(function ShockwaveEffect({
   x, y, neon, onDone,
 }: { x: number; y: number; neon: string; onDone: () => void }) {
   useEffect(() => {
@@ -1684,10 +1712,10 @@ function ShockwaveEffect({
       />
     </g>
   );
-}
+});
 
 // ─── Home Finish VFX — cyberpunk neon burst when a pawn reaches center ────────
-function HomeFinishVFX({
+const HomeFinishVFX = memo(function HomeFinishVFX({
   x, y, neon, onDone,
 }: { x: number; y: number; neon: string; onDone: () => void }) {
   useEffect(() => {
@@ -1756,7 +1784,7 @@ function HomeFinishVFX({
       })}
     </g>
   );
-}
+});
 
 // ─── Hop-step light burst — Neon board only ───────────────────────────────────
 // A quick radial energy flash (ring + hot core + short outward rays) fired the
@@ -1765,7 +1793,7 @@ function HomeFinishVFX({
 // unlike ShockwaveEffect/HomeFinishVFX above, this is NOT tied to captures or
 // finishing; it is purely a per-step movement flourish, kept short (<=300ms)
 // so back-to-back steps on a long move don't smear together.
-function HopBurstEffect({
+const HopBurstEffect = memo(function HopBurstEffect({
   x, y, neon, onDone,
 }: { x: number; y: number; neon: string; onDone: () => void }) {
   useEffect(() => {
@@ -1823,7 +1851,7 @@ function HopBurstEffect({
       })}
     </g>
   );
-}
+}, (prev, next) => prev.x === next.x && prev.y === next.y && prev.neon === next.neon);
 
 // ─── Dust puff — Classic board only ───────────────────────────────────────────
 // A soft, muted dust puff left behind at the cell a pawn just vacated mid-hop.
@@ -1834,7 +1862,7 @@ function HopBurstEffect({
 // (isClassic) only; Neon and DZ never spawn this effect.
 const DUST_TONES = ['#B7A688', '#A6906E', '#8F7B60'] as const; // warm gray-tan, board-neutral
 
-function DustPuffEffect({
+const DustPuffEffect = memo(function DustPuffEffect({
   x, y, onDone,
 }: { x: number; y: number; onDone: () => void }) {
   useEffect(() => {
@@ -1865,13 +1893,13 @@ function DustPuffEffect({
       ))}
     </g>
   );
-}
+}, (prev, next) => prev.x === next.x && prev.y === next.y);
 
 // ─── DZ sparkle trail — quiet gold/ivory glint left at each hop cell ─────────
 // This is intentionally compact and neutral: it echoes the board's najma stars
 // and gilt inlay without borrowing any player's colour, expanding ring, or
 // particle flight. It sits beneath the pawn and fades within one hop interval.
-function DzSparkleTrailEffect({
+const DzSparkleTrailEffect = memo(function DzSparkleTrailEffect({
   x, y, onDone,
 }: { x: number; y: number; onDone: () => void }) {
   useEffect(() => {
@@ -1920,7 +1948,7 @@ function DzSparkleTrailEffect({
       })}
     </g>
   );
-}
+}, (prev, next) => prev.x === next.x && prev.y === next.y);
 
 // ─── Shared animation types (used by BoardSVG and GameBoardScreen) ────────────
 type ShockwaveEvent = { x: number; y: number; neon: string; id: number };
@@ -2029,10 +2057,8 @@ const BoardSVG = memo(function BoardSVG({
     });
   }, [game.movable, game.phase, pieces]);
 
-  return (
-    <svg viewBox="0 0 15 15"
-      style={{ width: '100%', height: '100%', display: 'block' }}
-      xmlns="http://www.w3.org/2000/svg">
+  const boardStatic = useMemo(() => (
+    <>
       <defs>
         {/* ── Deep gem body gradient (white highlight → neon → color) ── */}
         {E.PLAYER_COLORS.map((c, i) => (
@@ -3487,6 +3513,15 @@ const BoardSVG = memo(function BoardSVG({
         />
       )}
 
+    </>
+  ), [activeNeon, boardStyle, game, homeImpact, isClassic, isDz, movableHighlights, pieceAnims, safeCellOccupancy]);
+
+  return (
+    <svg viewBox="0 0 15 15"
+      style={{ width: '100%', height: '100%', display: 'block' }}
+      xmlns="http://www.w3.org/2000/svg">
+      {boardStatic}
+
       {/* ── Shockwave burst — rendered above board, below pieces ── */}
       {shockwave && (
         <ShockwaveEffect
@@ -3938,6 +3973,19 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const isNeon      = boardStyle === 'neon';
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
+  // The frame pulse only changes when the active player changes. Reusing the
+  // target object prevents every dice tick from asking Framer Motion to
+  // reconcile the same infinite shadow animation.
+  const boardShadowAnimation = useMemo(() => ({
+    boxShadow: [
+      `0 0 28px ${activeColor}28, 0 0 60px rgba(0,0,0,0.65)`,
+      `0 0 48px ${activeColor}55, 0 0 80px rgba(0,0,0,0.65)`,
+      `0 0 28px ${activeColor}28, 0 0 60px rgba(0,0,0,0.65)`,
+    ],
+  }), [activeColor]);
+  const boardShadowTransition = useMemo(() => ({
+    duration: 2.6, repeat: Infinity, ease: 'easeInOut' as const,
+  }), []);
   const isHumanTurn = !isComputer || game.activePlayer === 0;
   const canRoll     = isHumanTurn && game.phase === 'rolling' && !rolling && !game.winner;
   const cfg         = ANIM[animSpeed];
@@ -4466,20 +4514,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       transition={{ duration: 0.28 }}>
 
       {/* ── Ambient decorative pieces ── */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {[
-          { color: '#DC143C', top: '-3%',  right: '-5%',  size: 70, delay: 0 },
-          { color: '#1E90FF', top: '18%',  left: '-9%',   size: 55, delay: 5 },
-          { color: '#FFD700', bottom: '4%',right: '-4%',  size: 45, delay: 9 },
-        ].map(({ color, size, delay, ...pos }, i) => (
-          <motion.div key={i} className="absolute opacity-[0.06]"
-            style={{ ...pos, width: size, height: size*1.5 }}
-            animate={{ y: [0,16,0], rotate: [0,25,0] }}
-            transition={{ duration: 13+i*3, repeat: Infinity, ease: 'easeInOut', delay }}>
-            <GamePiece color={color}/>
-          </motion.div>
-        ))}
-      </div>
+      <AmbientDecorations />
 
       {/* ── Header — back far-left, settings far-right, 44 px touch targets ── */}
       <div className="relative z-10 flex-shrink-0 flex items-center gap-2 px-4"
@@ -4538,14 +4573,8 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
               : 'radial-gradient(ellipse 120% 100% at 50% 50%, #0e2647 0%, #030b16 70%)',
             border: (isClassic || isDz) ? 'none' : '1px solid rgba(255,255,255,0.07)',
           }}
-          animate={{
-            boxShadow: [
-              `0 0 28px ${activeColor}28, 0 0 60px rgba(0,0,0,0.65)`,
-              `0 0 48px ${activeColor}55, 0 0 80px rgba(0,0,0,0.65)`,
-              `0 0 28px ${activeColor}28, 0 0 60px rgba(0,0,0,0.65)`,
-            ],
-          }}
-          transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}>
+          animate={boardShadowAnimation}
+          transition={boardShadowTransition}>
 
           {/* Inner felt — live SVG board, clipped to the rounded frame */}
           <div style={{
@@ -4583,16 +4612,48 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
           {/* ── Corner dice panels — outside the board, adjacent to each corner ── */}
           {/* Red   → top-left    (player 0) */}
-          <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
+          <CornerDice
+            game={game}
+            lang={lang}
+            rolling={rolling && game.activePlayer === 0}
+            animDice={game.activePlayer === 0 ? animDice : (lastDice[0] || 1)}
+            justLanded={justLanded && game.activePlayer === 0}
+            lastDice={lastDice}
+            onRoll={handleRoll}
+            canRoll={canRoll && game.activePlayer === 0}
             player={0} anchor="tl" isAI={false} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Blue  → top-right   (player 1) */}
-          <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
+          <CornerDice
+            game={game}
+            lang={lang}
+            rolling={rolling && game.activePlayer === 1}
+            animDice={game.activePlayer === 1 ? animDice : (lastDice[1] || 1)}
+            justLanded={justLanded && game.activePlayer === 1}
+            lastDice={lastDice}
+            onRoll={handleRoll}
+            canRoll={canRoll && game.activePlayer === 1}
             player={1} anchor="tr" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Yellow → bottom-right (player 2) */}
-          <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
+          <CornerDice
+            game={game}
+            lang={lang}
+            rolling={rolling && game.activePlayer === 2}
+            animDice={game.activePlayer === 2 ? animDice : (lastDice[2] || 1)}
+            justLanded={justLanded && game.activePlayer === 2}
+            lastDice={lastDice}
+            onRoll={handleRoll}
+            canRoll={canRoll && game.activePlayer === 2}
             player={2} anchor="br" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Green  → bottom-left  (player 3) */}
-          <CornerDice {...{ game, lang, rolling, animDice, justLanded, lastDice, onRoll: handleRoll, canRoll }}
+          <CornerDice
+            game={game}
+            lang={lang}
+            rolling={rolling && game.activePlayer === 3}
+            animDice={game.activePlayer === 3 ? animDice : (lastDice[3] || 1)}
+            justLanded={justLanded && game.activePlayer === 3}
+            lastDice={lastDice}
+            onRoll={handleRoll}
+            canRoll={canRoll && game.activePlayer === 3}
             player={3} anchor="bl" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
         </motion.div>
       </div>
