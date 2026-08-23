@@ -4227,8 +4227,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
     const playResolvedVoiceLines = () => {
       if (capturedPid) {
-        playVoiceLine('capture_by_me');
-        playVoiceLine('captured_by_opponent');
+        playVoiceLine(Math.random() < 0.5 ? 'capture_by_me' : 'captured_by_opponent');
         const captorStreak = captureStreakRef.current?.kind === 'captor' && captureStreakRef.current.player === ps
           ? captureStreakRef.current.count + 1
           : 1;
