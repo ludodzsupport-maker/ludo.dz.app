@@ -148,12 +148,75 @@ function weightedSixRoll(): number {
   return Math.floor(r - 3) + 1; // [3,4)→1, [4,5)→2, [5,6)→3, [6,7)→4, [7,8)→5
 }
 
+// Would landing this player's piece at newRel capture an opponent? Mirrors doMove.
+function wouldCaptureAt(pieces: Piece[], player: number, newRel: number): boolean {
+  if (newRel < 1 || newRel >= TRACK_SIZE) return false;
+  const abs = (PLAYER_STARTS[player] + newRel) % MAIN_PATH_SIZE;
+  if (SAFE_SET.has(abs)) return false;
+  const [pr, pc] = MAIN_PATH[abs];
+  return pieces.some(op => {
+    if (op.player === player || op.relPos < 0 || op.relPos >= TRACK_SIZE) return false;
+    const oAbs = (PLAYER_STARTS[op.player] + op.relPos) % MAIN_PATH_SIZE;
+    const [or, oc] = MAIN_PATH[oAbs];
+    return or === pr && oc === pc;
+  });
+}
+
+// Light fun-weighting on top of uniform randomness. Each face starts at 1;
+// exciting outcomes get a small bonus so the die still looks fair over time.
+function funWeightedRoll(state: GameState): number {
+  const weights = [0, 1, 1, 1, 1, 1, 1]; // index 1..6
+  const { pieces, activePlayer: ap, consecutiveSixes } = state;
+  const mine = pieces.filter(p => p.player === ap && p.relPos !== FINISHED_POS);
+
+  const captureRels = new Set<number>();
+  for (const p of mine) {
+    if (p.relPos < 0) continue;
+    for (let d = 1; d <= 6; d++) {
+      const newRel = p.relPos + d;
+      if (wouldCaptureAt(pieces, ap, newRel)) captureRels.add(newRel);
+    }
+  }
+
+  for (let d = 1; d <= 6; d++) {
+    let bonus = 0;
+    for (const p of mine) {
+      if (p.relPos === -1) {
+        if (d === 6) bonus = Math.max(bonus, 0.16);
+        continue;
+      }
+      const newRel = p.relPos + d;
+      if (newRel > FINISHED_POS) continue;
+      if (newRel === FINISHED_POS) bonus = Math.max(bonus, 0.26);
+      else if (p.relPos < TRACK_SIZE && newRel >= TRACK_SIZE) bonus = Math.max(bonus, 0.10);
+      if (wouldCaptureAt(pieces, ap, newRel)) bonus = Math.max(bonus, 0.30);
+      else if (captureRels.has(newRel + 1)) bonus = Math.max(bonus, 0.14);
+    }
+    if (calcMovable(pieces, ap, d).length === 0) bonus -= 0.10;
+    // A second 6 continues a streak; a third forfeits the turn — nudge away.
+    if (d === 6) {
+      if (consecutiveSixes === 1) bonus = Math.max(bonus, 0.12);
+      if (consecutiveSixes >= 2) bonus -= 0.40;
+    }
+    weights[d] += bonus;
+    if (weights[d] < 0.15) weights[d] = 0.15;
+  }
+
+  const total = weights[1] + weights[2] + weights[3] + weights[4] + weights[5] + weights[6];
+  let r = Math.random() * total;
+  for (let d = 1; d <= 6; d++) {
+    r -= weights[d];
+    if (r < 0) return d;
+  }
+  return 6;
+}
+
 export function doRoll(state: GameState): GameState {
   if (state.diceRolled || state.phase !== 'rolling') return state;
   const allHome = state.pieces
     .filter(p => p.player === state.activePlayer)
     .every(p => p.relPos === -1);
-  const dice    = allHome ? weightedSixRoll() : Math.floor(Math.random() * 6) + 1;
+  const dice    = allHome ? weightedSixRoll() : funWeightedRoll(state);
   const movable = calcMovable(state.pieces, state.activePlayer, dice);
   const sixs    = dice === 6 ? state.consecutiveSixes + 1 : 0;
   const message = movable.length === 0 ? 'Aucun mouvement possible' : '';
