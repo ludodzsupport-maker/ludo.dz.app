@@ -2045,6 +2045,34 @@ const BoardSVG = memo(function BoardSVG({
     return map;
   }, [pieces]);
 
+  // Perf (move-start jank): the huge boardStatic memo below reads pieceAnims
+  // in exactly two places — the DZ empty-perch markers and the Classic pawn
+  // bays — and in both, `slotAnimating` only matters when the slot's pawn is
+  // logically home (relPos === -1). Deriving that tiny fact here as an
+  // identity-stable Set means an ordinary track move (which replaces the
+  // whole pieceAnims object on its first frame via setPieceAnims(initAnims))
+  // no longer forces the entire static board JSX to be rebuilt/reconciled on
+  // the exact frame the hop animation starts. Base-exit departures and defeat
+  // arrivals DO change this set, so those bays still empty/fill on precisely
+  // the same frame as before — rendered output is identical in every case.
+  const animatingHomeSlotsRef = useRef<ReadonlySet<string>>(new Set());
+  const animatingHomeSlots = useMemo(() => {
+    const next = new Set<string>();
+    pieces.forEach(p => {
+      if (p.relPos !== -1) return;
+      const pid = E.pieceId(p.player, p.index);
+      if (pieceAnims[pid]?.steps != null) next.add(pid);
+    });
+    const prev = animatingHomeSlotsRef.current;
+    if (prev.size === next.size) {
+      let same = true;
+      next.forEach(pid => { if (!prev.has(pid)) same = false; });
+      if (same) return prev; // contents unchanged → keep old identity → boardStatic memo holds
+    }
+    animatingHomeSlotsRef.current = next;
+    return next;
+  }, [pieces, pieceAnims]);
+
   const movableHighlights = useMemo(() => {
     if (game.phase !== 'selecting' || !game.movable.length) return [];
     return game.movable.flatMap(pid => {
@@ -2473,7 +2501,7 @@ const BoardSVG = memo(function BoardSVG({
                 const slotInHome = game.pieces.some(
                   p => p.player === player && p.index === si && p.relPos === -1
                 );
-                const slotAnimating = pieceAnims[E.pieceId(player, si)]?.steps != null;
+                const slotAnimating = animatingHomeSlots.has(E.pieceId(player, si));
                 if (slotInHome && !slotAnimating) return null; // occupied — no perch drawn
 
                 const px = bc + 0.5, py = br + 0.5;
@@ -2619,7 +2647,7 @@ const BoardSVG = memo(function BoardSVG({
                 const slotInHome   = game.pieces.some(
                   p => p.player === player && p.index === si && p.relPos === -1
                 );
-                const slotAnimating = pieceAnims[slotPid]?.steps != null;
+                const slotAnimating = animatingHomeSlots.has(slotPid);
                 const slotOccupied  = slotInHome && !slotAnimating;
                 return (
                 <g key={si}>
@@ -3514,7 +3542,7 @@ const BoardSVG = memo(function BoardSVG({
       )}
 
     </>
-  ), [activeNeon, boardStyle, game, homeImpact, isClassic, isDz, movableHighlights, pieceAnims, safeCellOccupancy]);
+  ), [activeNeon, boardStyle, game, homeImpact, isClassic, isDz, movableHighlights, animatingHomeSlots, safeCellOccupancy]);
 
   return (
     <svg viewBox="0 0 15 15"
@@ -4085,6 +4113,17 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     cycle();
   }, [rolling, game.phase, game.winner, game.activePlayer, animSpeed, isNeon, isClassic, isDz]);
 
+  // Perf (roll-start jank): handleRoll's identity changes whenever `rolling`
+  // flips (it's a dep above), which — passed directly as the memoized corner
+  // panels' onRoll prop — forced all four CornerDice to re-render on the very
+  // frame the roll begins. This ref-dispatcher keeps the prop identity stable
+  // forever while always invoking the latest handleRoll, so the guards,
+  // timing, sounds, and dice logic are byte-for-byte the same. The AI-roll
+  // effect below intentionally keeps using handleRoll directly (unchanged).
+  const handleRollRef = useRef(handleRoll);
+  handleRollRef.current = handleRoll;
+  const onRollStable = useCallback(() => handleRollRef.current(), []);
+
   // This runs at the same landing callback that already creates Neon’s visual
   // hop burst. It does not alter the hop sequence, move resolution, or VFX;
   // its explicit board-style guard keeps Classic and DZ entirely unchanged.
@@ -4619,7 +4658,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             animDice={game.activePlayer === 0 ? animDice : (lastDice[0] || 1)}
             justLanded={justLanded && game.activePlayer === 0}
             lastDice={lastDice}
-            onRoll={handleRoll}
+            onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 0}
             player={0} anchor="tl" isAI={false} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Blue  → top-right   (player 1) */}
@@ -4630,7 +4669,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             animDice={game.activePlayer === 1 ? animDice : (lastDice[1] || 1)}
             justLanded={justLanded && game.activePlayer === 1}
             lastDice={lastDice}
-            onRoll={handleRoll}
+            onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 1}
             player={1} anchor="tr" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Yellow → bottom-right (player 2) */}
@@ -4641,7 +4680,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             animDice={game.activePlayer === 2 ? animDice : (lastDice[2] || 1)}
             justLanded={justLanded && game.activePlayer === 2}
             lastDice={lastDice}
-            onRoll={handleRoll}
+            onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 2}
             player={2} anchor="br" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Green  → bottom-left  (player 3) */}
@@ -4652,7 +4691,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             animDice={game.activePlayer === 3 ? animDice : (lastDice[3] || 1)}
             justLanded={justLanded && game.activePlayer === 3}
             lastDice={lastDice}
-            onRoll={handleRoll}
+            onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 3}
             player={3} anchor="bl" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
         </motion.div>
