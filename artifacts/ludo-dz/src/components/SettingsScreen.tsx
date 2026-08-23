@@ -11,6 +11,8 @@ import {
   setSoundEnabled,
   isBgmEnabled,
   setBgmEnabled,
+  getBgmVolume,
+  setBgmVolume,
   playLanguageChange,
   playNavBack,
   playSelection,
@@ -53,6 +55,7 @@ const T = {
     voiceVolume: "Volume voix",
     music:       "Musique de Fond",
     musicSub:    "Ambiance sonore pendant le jeu",
+    musicVolume: "Volume musique",
     vibration:   "Vibrations",
     vibrationSub:"Retour haptique lors des actions",
 
@@ -89,6 +92,7 @@ const T = {
     voiceVolume: "مستوى الصوت",
     music:       "موسيقى الخلفية",
     musicSub:    "الأجواء الصوتية أثناء اللعب",
+    musicVolume: "مستوى الموسيقى",
     vibration:   "الاهتزاز",
     vibrationSub:"اهتزاز الجهاز عند كل حركة",
 
@@ -191,6 +195,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
   const [voice,      setVoice]      = useState(isVoiceLinesEnabled());
   const [voiceVolume, setVoiceVolume] = useState(getVoiceLineVolume());
   const [music,      setMusic]      = useState(isBgmEnabled());
+  const [musicVolume, setMusicVolume] = useState(getBgmVolume());
   const [vibration,  setVibration]  = useState(isHapticsEnabled());
   const [langOpen,   setLangOpen]   = useState(false);
   const [boardOpen,  setBoardOpen]  = useState(false);
@@ -224,6 +229,12 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
     setBgmEnabled(next);
     setMusic(next);
   };
+  const handleMusicVolumeChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const raw = Number(event.currentTarget.value);
+    const next = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw / 100)) : musicVolume;
+    setBgmVolume(next);
+    setMusicVolume(next);
+  };
   // Vibrations is fully independent from Sound Effects / Music: its own
   // storage key and gate inside the haptics manager, same pattern as BGM.
   const handleVibrationToggle = (next: boolean) => {
@@ -244,6 +255,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
   };
 
   const voiceVolumePercent = Math.round(voiceVolume * 100);
+  const musicVolumePercent = Math.round(musicVolume * 100);
 
   return (
     <motion.div
@@ -530,29 +542,46 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
           {/* Music */}
           <motion.div
             variants={itemVariants}
-            className="rounded-2xl flex items-center gap-4 px-4 py-4"
+            className="rounded-2xl px-4 py-4"
             style={{
               background: "linear-gradient(145deg, #0e0420 0%, #160830 100%)",
               border: "1px solid rgba(180,79,255,0.20)",
               boxShadow: "0 4px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05)",
             }}
           >
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: "rgba(180,79,255,0.15)", boxShadow: "0 0 14px rgba(180,79,255,0.25)" }}
-            >
-              {/* Music note SVG */}
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-                <path d="M9 18V5l12-2v13" stroke="#B44FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="6"  cy="18" r="3" stroke="#B44FFF" strokeWidth="2"/>
-                <circle cx="18" cy="16" r="3" stroke="#B44FFF" strokeWidth="2"/>
-              </svg>
+            <div className="flex items-center gap-4">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: "rgba(180,79,255,0.15)", boxShadow: "0 0 14px rgba(180,79,255,0.25)" }}
+              >
+                {/* Music note SVG */}
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+                  <path d="M9 18V5l12-2v13" stroke="#B44FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="6"  cy="18" r="3" stroke="#B44FFF" strokeWidth="2"/>
+                  <circle cx="18" cy="16" r="3" stroke="#B44FFF" strokeWidth="2"/>
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-heading font-bold text-white" style={{ fontSize: "14px", letterSpacing: "0.05em" }}>{t.music}</p>
+                <p className="text-white/40 font-sans" style={{ fontSize: "10px" }}>{t.musicSub}</p>
+              </div>
+              <NeonToggle value={music} onChange={handleMusicToggle} neon="#B44FFF" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-heading font-bold text-white" style={{ fontSize: "14px", letterSpacing: "0.05em" }}>{t.music}</p>
-              <p className="text-white/40 font-sans" style={{ fontSize: "10px" }}>{t.musicSub}</p>
+            <div className="mt-3 flex items-center gap-3">
+              <span className="text-[10px] font-heading font-bold text-white/45 uppercase flex-shrink-0" style={{ letterSpacing: "0.08em" }}>{t.musicVolume}</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={musicVolumePercent}
+                onChange={handleMusicVolumeChange}
+                disabled={!music}
+                aria-label={t.musicVolume}
+                className="min-w-0 flex-1 accent-[#B44FFF] disabled:opacity-40"
+              />
+              <span className="w-10 text-end text-[10px] font-heading font-bold text-white/55 flex-shrink-0">{musicVolumePercent}%</span>
             </div>
-            <NeonToggle value={music} onChange={handleMusicToggle} neon="#B44FFF" />
           </motion.div>
 
           {/* Vibration */}

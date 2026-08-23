@@ -1493,8 +1493,10 @@ export const playModeSelect = playSelection;
 // material's own edges.
 
 const BGM_STORAGE_KEY = "ludo-dz:bgm-enabled";
+const BGM_VOLUME_STORAGE_KEY = "ludo-dz:bgm-volume";
 const BGM_URL = "sounds/bgm-ambient-loop.mp3";
 const BGM_TARGET_VOLUME = 0.20;      // balanced, non-distracting bed level per spec (~0.20)
+const DEFAULT_BGM_VOLUME = 1.0;      // slider default (100 % of BGM_TARGET_VOLUME)
 const BGM_FADE_IN_SEC = 1.2;
 const BGM_FADE_OUT_SEC = 1.0;
 const BGM_LOOP_CROSSFADE_SEC = 1.6;  // overlap window that hides any seam at the loop boundary
@@ -1510,7 +1512,23 @@ function readStoredBgmPreference(): boolean {
   }
 }
 
+function clampBgmVolume(volume: number): number {
+  if (!Number.isFinite(volume)) return DEFAULT_BGM_VOLUME;
+  return Math.min(1, Math.max(0, volume));
+}
+
+function readStoredBgmVolume(): number {
+  if (typeof window === "undefined") return DEFAULT_BGM_VOLUME;
+  try {
+    const raw = window.localStorage.getItem(BGM_VOLUME_STORAGE_KEY);
+    return raw === null ? DEFAULT_BGM_VOLUME : clampBgmVolume(Number(raw));
+  } catch {
+    return DEFAULT_BGM_VOLUME;
+  }
+}
+
 let bgmEnabled = readStoredBgmPreference();
+let bgmVolume = readStoredBgmVolume();
 let bgmBuffer: AudioBuffer | null = null;
 let bgmLoadPromise: Promise<AudioBuffer | null> | null = null;
 let bgmMasterGain: GainNode | null = null;
@@ -1521,6 +1539,35 @@ let bgmIsRunning = false;
 /** Current on/off state of the "Background Music" setting (persisted across reloads, independent of Sound Effects). */
 export function isBgmEnabled(): boolean {
   return bgmEnabled;
+}
+
+/** Current BGM volume level (0–1), persisted independently of the on/off toggle. */
+export function getBgmVolume(): number {
+  return bgmVolume;
+}
+
+/**
+ * Update the BGM volume slider value (0–1). Persists to localStorage and
+ * applies immediately to any running BGM session via the master gain node,
+ * so the change is audible without toggling BGM off and back on.
+ */
+export function setBgmVolume(volume: number): void {
+  bgmVolume = clampBgmVolume(volume);
+  // Apply live to running BGM: ramp the master gain to the new target level.
+  if (bgmMasterGain && bgmIsRunning) {
+    const context = bgmMasterGain.context;
+    const now = context.currentTime;
+    const targetLevel = BGM_TARGET_VOLUME * bgmVolume;
+    bgmMasterGain.gain.cancelScheduledValues(now);
+    bgmMasterGain.gain.setValueAtTime(bgmMasterGain.gain.value, now);
+    bgmMasterGain.gain.linearRampToValueAtTime(targetLevel, now + 0.08);
+  }
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(BGM_VOLUME_STORAGE_KEY, String(bgmVolume));
+  } catch {
+    // ignore storage failures (e.g. private browsing)
+  }
 }
 
 function loadBgmBuffer(context: AudioContext): Promise<AudioBuffer | null> {
@@ -1625,8 +1672,9 @@ function startBgm(context: AudioContext): void {
   }
 
   const masterGain = context.createGain();
+  const targetLevel = BGM_TARGET_VOLUME * bgmVolume;
   masterGain.gain.setValueAtTime(0.0001, context.currentTime);
-  masterGain.gain.linearRampToValueAtTime(BGM_TARGET_VOLUME, context.currentTime + BGM_FADE_IN_SEC);
+  masterGain.gain.linearRampToValueAtTime(targetLevel, context.currentTime + BGM_FADE_IN_SEC);
 
   // Gentle high-shelf cut carves out the mid-high range so pawn taps and
   // dice rolls stay clearly audible on top of the bed instead of getting
@@ -1807,4 +1855,59 @@ export function resumeBgmForMenu(): void {
   const context = getSynthAudioContext();
   if (!context) return;
   void context.resume().then(() => startBgm(context)).catch(() => {});
+}
+
+/**
+ * Best-effort attempt to unlock the AudioContext and start BGM immediately.
+ * Safe to call from any context: if a user gesture has already satisfied the
+ * browser's autoplay policy (e.g. a tap on the splash screen), `resume()`
+ * succeeds and BGM fades in; if no gesture has occurred yet, `resume()` is
+ * rejected silently and the existing first-gesture listener will pick it up
+ * later. Called from App.tsx when the splash screen dismisses (both the
+ * auto-dismiss path and the tap-to-skip path).
+ */
+export function tryUnlockBgm(): void {
+  if (!bgmEnabled || bgmIsRunning) return;
+  const context = getSynthAudioContext();
+  if (!context) return;
+  void context.resume().then(() => {
+    if (context.state === "running" && bgmEnabled && !bgmIsRunning) {
+      startBgm(context);
+    }
+  }).catch(() => {});
+}
+
+// ─── Change 3: Stop BGM completely when the app is exited/closed ─────────────
+// `pagehide` fires reliably on tab close, app kill, and navigation-away in
+// every modern browser and WebView (including iOS WKWebView and Android
+// WebView). Unlike `beforeunload`, it doesn't show a confirmation dialog and
+// is the event the Web Audio spec itself recommends for cleanup.
+// `visibilitychange` fires when the tab is backgrounded or the app is
+// minimised — stopping BGM there too means it never keeps playing silently
+// behind a minimised app.
+if (typeof window !== "undefined") {
+  const stopBgmImmediately = () => {
+    const context = getSynthAudioContext();
+    if (!context) return;
+    // Hard stop: no fade-out — the app is going away, so we just disconnect
+    // and release everything right now.
+    bgmIsRunning = false;
+    if (bgmSchedulerTimer !== null) {
+      clearTimeout(bgmSchedulerTimer);
+      bgmSchedulerTimer = null;
+    }
+    for (const src of bgmActiveSources) {
+      try { src.stop(); } catch { /* already stopped */ }
+    }
+    bgmActiveSources = [];
+    if (bgmMasterGain) {
+      try { bgmMasterGain.disconnect(); } catch { /* already disconnected */ }
+      bgmMasterGain = null;
+    }
+  };
+
+  window.addEventListener("pagehide", stopBgmImmediately, { capture: true });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") stopBgmImmediately();
+  }, { capture: true });
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useTransition } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { tryUnlockBgm } from '@/lib/sound-manager';
 import { SplashScreen } from '@/components/SplashScreen';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { GameModeScreen } from '@/components/GameModeScreen';
@@ -43,6 +44,14 @@ function AppContent() {
     });
   }, [startScreenTransition]);
 
+  // Tap-to-skip on the splash screen: dismisses splash early and unlocks
+  // the AudioContext in the same gesture event, so BGM starts fading in
+  // the instant the welcome screen appears.
+  const handleSplashDismiss = useCallback(() => {
+    setShowSplash(false);
+    tryUnlockBgm();
+  }, []);
+
   // Gate the dice splash on real readiness (fonts + hero logo decoded) instead of
   // a blind timer, so the main menu never flashes in with un-swapped
   // fonts or a popping-in logo — while keeping a min/max floor so it neither
@@ -70,6 +79,11 @@ function AppContent() {
       setTimeout(() => {
         if (!cancelled) {
           setShowSplash(false);
+          // Splash auto-dismissed without a tap — still try to unlock BGM.
+          // Succeeds only if a gesture happened during splash (captured by
+          // the document-level first-gesture listener); silently no-ops
+          // otherwise, and the existing listener catches the next tap.
+          tryUnlockBgm();
         }
       }, remaining);
     });
@@ -107,7 +121,7 @@ function AppContent() {
       <div className="w-full max-w-[430px] h-viewport-full h-viewport-capped-sm relative bg-deep-blue shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden text-white sm:rounded-[2rem] sm:border-[8px] sm:border-gray-900 mx-auto" style={SCREEN_LAYER_STYLE}>
         <AnimatePresence mode="wait" presenceAffectsLayout={false}>
           {showSplash ? (
-            <SplashScreen key="splash" lang={lang} />
+            <SplashScreen key="splash" lang={lang} onDismiss={handleSplashDismiss} />
           ) : screen === 'welcome' ? (
             <WelcomeScreen
               key="welcome"

@@ -17,7 +17,7 @@
 
 import { memo } from "react";
 import { motion, useAnimationControls, useReducedMotion } from "framer-motion";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 
 // ── Brand palette ──────────────────────────────────────────────────────
@@ -314,12 +314,24 @@ const TITLE: { ch: string; gold: boolean }[] = [
 // ─────────────────────────────────────────────────────────────────────
 // SplashScreen — main export
 // ─────────────────────────────────────────────────────────────────────
-interface SplashScreenProps { lang: "fr" | "ar"; }
+interface SplashScreenProps { lang: "fr" | "ar"; onDismiss?: () => void; }
 
-export function SplashScreen({ lang }: SplashScreenProps) {
+// Delay before the "tap to skip" overlay appears — timed to just after the
+// die's 1.7 s tumble-and-land choreography finishes, so the prompt never
+// competes visually with the hero animation.
+const TAP_PROMPT_DELAY_MS = 1900;
+
+export function SplashScreen({ lang, onDismiss }: SplashScreenProps) {
   const reduced    = useReducedMotion() ?? false;
   const subtitle   = lang === "fr" ? "Le Ludo Algérien"    : "لودو جزائري";
   const loadingTxt = lang === "fr" ? "Chargement en cours" : "جارٍ التحميل";
+  const tapTxt     = lang === "fr" ? "Appuyez pour continuer" : "انقر للمتابعة";
+  const [showTapPrompt, setShowTapPrompt] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowTapPrompt(true), TAP_PROMPT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <motion.div
@@ -469,6 +481,44 @@ export function SplashScreen({ lang }: SplashScreenProps) {
         </motion.p>
 
       </div>
+
+      {/* ── Tap-to-skip overlay ─────────────────────────────────────────
+           Full-screen invisible button that appears after the die animation
+           settles. Tapping it dismisses the splash early and provides the
+           user gesture that unlocks the AudioContext for BGM — so from the
+           player's perspective, music starts the instant the app opens.
+           If the player doesn't tap, the auto-dismiss timer in App.tsx
+           still fires normally. */}
+      {showTapPrompt && onDismiss && (
+        <motion.button
+          type="button"
+          onClick={onDismiss}
+          className="absolute inset-0 z-[60] flex flex-col items-center justify-end pb-[18%] cursor-pointer"
+          style={{ background: "transparent", border: "none", outline: "none", WebkitTapHighlightColor: "transparent" }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          aria-label={tapTxt}
+        >
+          <motion.p
+            style={{
+              fontFamily: "'Cairo', 'Rajdhani', sans-serif",
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.22em",
+              textTransform: "uppercase" as const,
+              color: "rgba(230,222,255,0.38)",
+              margin: 0,
+              pointerEvents: "none",
+            }}
+            animate={reduced ? { opacity: 0.38 } : { opacity: [0.22, 0.50, 0.22] }}
+            transition={reduced ? {} : { duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+            dir={lang === "ar" ? "rtl" : "ltr"}
+          >
+            {tapTxt}
+          </motion.p>
+        </motion.button>
+      )}
     </motion.div>
   );
 }
