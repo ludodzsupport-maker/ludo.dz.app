@@ -137,6 +137,7 @@ function AppContent() {
               onBack={() => navigate('welcome')}
               onStart={handleStartGame}
               onResume={handleResumeSavedGame}
+              boardStyle={boardStyle}
             />
           ) : screen === 'settings' ? (
             <SettingsScreen

@@ -41,7 +41,8 @@ function isValidGameConfig(value: unknown): value is GameConfig {
     && typeof value.players === 'number'
     && Number.isInteger(value.players)
     && value.players >= 2
-    && value.players <= 4;
+    && value.players <= 4
+    && (value.humanColor === undefined || (typeof value.humanColor === 'number' && Number.isInteger(value.humanColor) && value.humanColor >= 0 && value.humanColor <= 3));
 }
 
 function isValidGameState(value: unknown): value is GameState {

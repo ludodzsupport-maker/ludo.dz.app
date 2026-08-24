@@ -4,6 +4,8 @@ import { RotateCcw, X } from "lucide-react";
 import { playIconTap, playNavBack, playSelection, playStartPress, playToggleClick } from "../lib/sound-manager";
 import { supportsDvh } from "../lib/utils";
 import { readSavedGame, type SavedGameSnapshot } from "../lib/saved-game";
+import type { BoardStyle } from "../App";
+import * as DZ from "../lib/board-theme-dz";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 export interface SelectedMode {
@@ -18,6 +20,7 @@ export interface GameConfig {
   rule:    Rule;
   players: number;
   modeId:  string;
+  humanColor?: number;
 }
 
 interface GameConfigOverlayProps {
@@ -27,6 +30,7 @@ interface GameConfigOverlayProps {
   onStart: (config: GameConfig) => void;
   /** Called with the paused game that belongs to this mode, when the player resumes it. */
   onResume: (snapshot: SavedGameSnapshot) => void;
+  boardStyle: BoardStyle;
 }
 
 // ─── Translations ─────────────────────────────────────────────────────────────
@@ -36,6 +40,10 @@ const T = {
     rules:          "Règles du jeu",
     players:        "Joueurs",
     start:          "Commencer",
+    chooseColor:    "Choisissez votre couleur",
+    chooseColorSub: "Votre pion sera associé à cette couleur pour la partie",
+    colorSection:   "Votre couleur",
+    colorBack:      "Configuration",
     resume:         "Reprendre",
     resumeHint:     "Partie en pause disponible pour ce mode",
     classic:        "Classique",
@@ -58,6 +66,10 @@ const T = {
     rules:          "قواعد اللعبة",
     players:        "اللاعبون",
     start:          "ابدأ اللعبة",
+    chooseColor:    "اختر لونك",
+    chooseColorSub: "سيتم تخصيص هذا اللون لقطعك في هذه الجولة",
+    colorSection:   "لونك",
+    colorBack:      "الإعدادات",
     resume:         "استئناف",
     resumeHint:     "توجد مباراة متوقفة لهذا الوضع",
     classic:        "كلاسيكي",
@@ -308,11 +320,20 @@ function PawnSilhouette({ color, size = 10 }: { color: string; size?: number }) 
 
 // Player colour palette
 const PLAYER_COLORS = ["#DC143C", "#1E90FF", "#FFD700", "#00A550"];
+const CLASSIC_PLAYER_COLORS = ["#C31024", "#1542B0", "#E8A800", "#1C6B2E"];
+
+function themePlayerColors(boardStyle: BoardStyle): readonly string[] {
+  if (boardStyle === "dz") return DZ.HOME_COLORS;
+  if (boardStyle === "classic") return CLASSIC_PLAYER_COLORS;
+  return PLAYER_COLORS;
+}
 
 // ─── Main overlay ─────────────────────────────────────────────────────────────
-export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume }: GameConfigOverlayProps) {
+export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume, boardStyle }: GameConfigOverlayProps) {
   const [rule,         setRule]         = useState<Rule>("classic");
-  const [players,      setPlayers]      = useState(2);
+  const [players,      setPlayers]      = useState(4);
+  const [humanColor,   setHumanColor]  = useState(0);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [teamAttack,   setTeamAttack]   = useState(false);
   const [turnPass,     setTurnPass]     = useState(true);
   const [showSettings, setShowSettings] = useState(false);
@@ -325,6 +346,8 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume }: Ga
 
   const t   = T[lang];
   const dir = lang === "ar" ? "rtl" : "ltr";
+  const themeColors = themePlayerColors(boardStyle);
+  const needsColorPicker = mode.id === "computer" || mode.id === "teamup" || players > 2;
 
   const ruleLabel = (r: Rule) =>
     r === "classic" ? t.classic : r === "quick" ? t.quick : t.teamup;
@@ -433,6 +456,47 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume }: Ga
         {/* ── Scrollable body ── */}
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-5 pb-6">
 
+          {showColorPicker ? (
+            <motion.div initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col">
+              <SectionLabel label={t.colorSection} neon={mode.neon}/>
+              <h3 className="font-heading font-bold text-white text-center" style={{ fontSize: "21px", letterSpacing: "0.05em" }}>{t.chooseColor}</h3>
+              <p className="font-sans text-white/50 text-center mt-1 mb-5" style={{ fontSize: "11px" }}>{t.chooseColorSub}</p>
+              <div className="flex justify-center items-end gap-3 py-4 mb-5 rounded-2xl" style={{ background: "rgba(255,255,255,0.035)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                {themeColors.map((color, index) => (
+                  <motion.div key={color} animate={{ y: humanColor === index ? -5 : 0, scale: humanColor === index ? 1.12 : 0.9, opacity: humanColor === index ? 1 : 0.55 }} transition={{ type: "spring", stiffness: 400, damping: 24 }}>
+                    <PawnSilhouette color={color} size={22}/>
+                  </motion.div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {themeColors.map((color, index) => {
+                  const active = humanColor === index;
+                  return <motion.button key={color} onClick={() => { playSelection(); setHumanColor(index); }} whileTap={{ scale: 0.95 }} className="relative flex items-center gap-3 rounded-2xl px-4 py-3" style={{ background: active ? `${color}22` : "rgba(255,255,255,0.04)", border: `1.5px solid ${active ? color : "rgba(255,255,255,0.10)"}`, boxShadow: active ? `0 0 20px ${color}45` : "none" }} aria-label={`${t.chooseColor} ${index + 1}`}>
+                    <PawnSilhouette color={color} size={18}/><span className="font-heading font-bold" style={{ fontSize: "12px", color: active ? "white" : "rgba(255,255,255,0.5)", letterSpacing: "0.06em" }}>{index === 0 ? "ROUGE" : index === 1 ? "BLEU" : index === 2 ? "JAUNE" : "VERT"}</span>{active && <span className="ml-auto w-2 h-2 rounded-full" style={{ background: color, boxShadow: `0 0 8px ${color}` }}/>}
+                  </motion.button>;
+                })}
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.018, y: -2 }}
+                whileTap={{ scale: 0.978 }}
+                onClick={() => {
+                  playStartPress();
+                  onStart({
+                    rule: mode.id === "teamup" ? "teamup" : rule,
+                    players: mode.id === "teamup" ? 4 : players,
+                    modeId: mode.id,
+                    humanColor,
+                  });
+                }}
+                className="relative rounded-2xl overflow-hidden mt-5 w-full"
+                style={{ background: `linear-gradient(135deg, ${mode.neon}28 0%, ${mode.neon}12 100%)`, border: `1.5px solid ${mode.neon}60`, boxShadow: `0 8px 28px rgba(0,0,0,0.50), 0 0 24px ${mode.neon}30`, padding: "16px 24px" }}
+              >
+                <span className="font-heading font-bold text-white" style={{ fontSize: "15px", letterSpacing: "0.10em" }}>{t.start}</span>
+              </motion.button>
+              <button onClick={() => { playNavBack(); setShowColorPicker(false); }} className="font-heading font-bold text-white/55 mt-2 py-2" style={{ fontSize: "12px", letterSpacing: "0.08em" }}>← {t.colorBack}</button>
+            </motion.div>
+          ) : (
+          <>
           {/* ── RULES SECTION — always shown ── */}
           <SectionLabel label={t.rules} neon={mode.neon}/>
           <div className="flex gap-2.5 mb-6">
@@ -629,10 +693,15 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume }: Ga
             whileTap={{ scale: 0.978 }}
             onClick={() => {
               playStartPress();
+              if (needsColorPicker && !showColorPicker) {
+                setShowColorPicker(true);
+                return;
+              }
               onStart({
                 rule:    mode.id === "teamup" ? "teamup" : rule,
                 players: mode.id === "teamup" ? 4       : players,
                 modeId:  mode.id,
+                humanColor,
               });
             }}
             className={`${savedGame ? "flex-1 min-w-0" : "w-full"} relative rounded-2xl overflow-hidden`}
@@ -716,6 +785,8 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume }: Ga
             >
               {t.resumeHint}
             </p>
+          )}
+          </>
           )}
 
         </div>
