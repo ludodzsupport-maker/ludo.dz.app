@@ -1,4 +1,4 @@
-import { memo, useId } from "react";
+import { memo } from "react";
 import { motion } from "framer-motion";
 import { GamePiece } from "./GamePiece";
 import { Settings, Trophy, Info } from "lucide-react";
@@ -74,10 +74,10 @@ function Shimmer() {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScreenProps) {
-  const logoPath = import.meta.env.BASE_URL + "ludo-logo.png";
-  const clipId   = useId();
-  const pfxId    = useId();
-  const dir      = lang === "ar" ? "rtl" : "ltr";
+  const logoPath     = import.meta.env.BASE_URL + "ludo-logo.png";
+  const pawnCharPath = import.meta.env.BASE_URL + "pawn-character.png";
+  const pawnCharWebp = import.meta.env.BASE_URL + "pawn-character.webp";
+  const dir          = lang === "ar" ? "rtl" : "ltr";
 
   const t = {
     play:        lang === "fr" ? "Jouer"      : "العب",
@@ -168,117 +168,36 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
             animate={{ y: [0, -10, 0] }}
             transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
           >
-            {/* ── LEFT: Proud Algerian pawn — chechia, moustache & flag medallion ── */}
+            {/* ── LEFT: Proud Algerian pawn mascot — traditional chèche, charismatic wink & flag robe ── */}
             <motion.div
               className="flex-shrink-0"
               animate={{ y: [0, -7, 0] }}
               transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut", delay: 0.35 }}
               style={{ width: "clamp(52px, 14vw, 68px)", height: "clamp(78px, 21vw, 102px)" }}
             >
-              <svg
-                width="100%" height="100%"
-                viewBox="0 0 100 155"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
+              <motion.div
+                className="w-full h-full relative flex items-center justify-center"
+                animate={{
+                  filter: [
+                    "drop-shadow(0 0 10px rgba(0,165,80,0.38)) drop-shadow(0 6px 14px rgba(0,0,0,0.60))",
+                    "drop-shadow(0 0 22px rgba(0,165,80,0.68)) drop-shadow(0 6px 14px rgba(0,0,0,0.60))",
+                    "drop-shadow(0 0 10px rgba(0,165,80,0.38)) drop-shadow(0 6px 14px rgba(0,0,0,0.60))",
+                  ],
+                }}
+                transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut", delay: 0.35 }}
               >
-                <defs>
-                  <clipPath id={clipId}>
-                    <path d="M 25 130 Q 30 100 40 70 Q 40 50 50 40 Q 60 50 60 70 Q 70 100 75 130 Q 90 130 90 145 L 10 145 Q 10 130 25 130 Z"/>
-                  </clipPath>
-                  <filter id={`${pfxId}-shad`} x="-40%" y="-40%" width="180%" height="180%">
-                    <feGaussianBlur stdDeviation="4"/>
-                  </filter>
-                  <filter id={`${pfxId}-neon`} x="-40%" y="-40%" width="180%" height="180%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="b"/>
-                    <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-                  </filter>
-                  <filter id={`${pfxId}-sf`} x="-60%" y="-60%" width="220%" height="220%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b"/>
-                    <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-                  </filter>
-                  <radialGradient id={`${pfxId}-bod`} cx="33%" cy="22%" r="75%">
-                    <stop offset="0%"   stopColor="#6EE89A"/>
-                    <stop offset="42%"  stopColor="#00A550"/>
-                    <stop offset="100%" stopColor="#003318"/>
-                  </radialGradient>
-                  <radialGradient id={`${pfxId}-hd`} cx="38%" cy="30%" r="68%">
-                    <stop offset="0%"   stopColor="#7AEEAA"/>
-                    <stop offset="45%"  stopColor="#00A550"/>
-                    <stop offset="100%" stopColor="#002e14"/>
-                  </radialGradient>
-                  <radialGradient id={`${pfxId}-che`} cx="35%" cy="24%" r="75%">
-                    <stop offset="0%"   stopColor="#FFFFFF"/>
-                    <stop offset="50%"  stopColor="#F3EEDD"/>
-                    <stop offset="100%" stopColor="#C7BC9C"/>
-                  </radialGradient>
-                </defs>
-                {/* shadows */}
-                <ellipse cx="50" cy="151" rx="34" ry="5.5" fill="#000" opacity="0.45" filter={`url(#${pfxId}-shad)`}/>
-                <ellipse cx="50" cy="150" rx="22" ry="3"   fill="#000" opacity="0.25"/>
-                <path d="M 25 130 Q 30 100 40 70 Q 40 50 50 40 Q 60 50 60 70 Q 70 100 75 130 Q 90 130 90 145 L 10 145 Q 10 130 25 130 Z"
-                  fill="#000" opacity="0.32" filter={`url(#${pfxId}-shad)`} transform="translate(5,7)"/>
-                <circle cx="55" cy="47" r="28" fill="#000" opacity="0.28" filter={`url(#${pfxId}-shad)`}/>
-                {/* neon ring — #00A550 palette green */}
-                <motion.g
-                  animate={{ opacity: [0.45, 1, 0.45] }}
-                  transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  <path d="M 25 130 Q 30 100 40 70 Q 40 50 50 40 Q 60 50 60 70 Q 70 100 75 130 Q 90 130 90 145 L 10 145 Q 10 130 25 130 Z"
-                    fill="none" stroke="#00A550" strokeWidth="8" strokeLinejoin="round" filter={`url(#${pfxId}-neon)`}/>
-                  <circle cx="50" cy="40" r="32" fill="none" stroke="#00A550" strokeWidth="8" filter={`url(#${pfxId}-neon)`}/>
-                </motion.g>
-                {/* body */}
-                <g stroke="rgba(0,0,0,0.20)" strokeWidth="2.5" strokeLinejoin="round">
-                  <path d="M 25 130 Q 30 100 40 70 Q 40 50 50 40 Q 60 50 60 70 Q 70 100 75 130 Q 90 130 90 145 L 10 145 Q 10 130 25 130 Z"
-                    fill={`url(#${pfxId}-bod)`}/>
-                  <circle cx="50" cy="40" r="28" fill={`url(#${pfxId}-hd)`}/>
-                </g>
-                {/* specular */}
-                <path d="M 33 72 Q 31 93 30 118" stroke="white" strokeWidth="5" fill="none" strokeLinecap="round" opacity="0.20"/>
-                <path d="M 38 70 Q 40 50 48 43"  stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.42"/>
-                <path d="M 25 130 C 35 125, 65 125, 75 130" stroke="white" strokeWidth="4" fill="none" strokeLinecap="round" opacity="0.38"/>
-                <path d="M 15 140 L 85 140" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.26"/>
-                <path d="M 72 76 Q 76 96 74 122" stroke="#6EE89A" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.32"/>
-                {/* flag sash — white diagonal band across the robe */}
-                <polygon points="34,66 47,66 79,132 66,132" fill="white" opacity="0.94" clipPath={`url(#${clipId})`}/>
-                <line x1="34" y1="66" x2="66" y2="132" stroke="rgba(0,0,0,0.12)" strokeWidth="1" clipPath={`url(#${clipId})`}/>
-                <line x1="47" y1="66" x2="79" y2="132" stroke="white" strokeWidth="1.2" opacity="0.5" clipPath={`url(#${clipId})`}/>
-                {/* chechia — traditional cap, tilted with a little tassel */}
-                <path d="M 26 31 Q 24 16 50 11 Q 76 16 74 31 Q 75 36 65 34 Q 50 30 35 34 Q 25 36 26 31 Z"
-                  fill={`url(#${pfxId}-che)`} stroke="rgba(0,0,0,0.22)" strokeWidth="1.5" strokeLinejoin="round"/>
-                <path d="M 29 28 Q 50 24 71 28" stroke="#00A550" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.55"/>
-                <path d="M 31 32 Q 50 28.5 69 32" stroke="white" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity="0.6"/>
-                <path d="M 71 15 Q 80 20 78 28" stroke="#2B1810" strokeWidth="2" fill="none" strokeLinecap="round"/>
-                <circle cx="78" cy="29" r="2.4" fill="#2B1810"/>
-                {/* eyebrows — bold, right brow cocked for a cheeky look */}
-                <path d="M 30 36 Q 38 31 46 35" stroke="#1a1a2e" strokeWidth="3" fill="none" strokeLinecap="round"/>
-                <path d="M 55 33 Q 63 27 71 31" stroke="#1a1a2e" strokeWidth="3" fill="none" strokeLinecap="round"/>
-                {/* eyes */}
-                <ellipse cx="38" cy="45" rx="5.5" ry="6.5" fill="white"/>
-                <ellipse cx="62" cy="45" rx="5.5" ry="6.5" fill="white"/>
-                <circle cx="39"   cy="46"   r="3.8" fill="#1a1a2e"/>
-                <circle cx="63"   cy="46"   r="3.8" fill="#1a1a2e"/>
-                <circle cx="40.5" cy="44.5" r="1.5" fill="white"/>
-                <circle cx="64.5" cy="44.5" r="1.5" fill="white"/>
-                {/* small proud moustache — compact, stays clear of the eyes */}
-                <path d="M 50 54 Q 55 57.5 59.5 56 Q 64.5 54.5 66 49.5" stroke="#2B1810" strokeWidth="5.5" fill="none" strokeLinecap="round"/>
-                <path d="M 50 54 Q 45 57.5 40.5 56 Q 35.5 54.5 34 49.5" stroke="#2B1810" strokeWidth="5.5" fill="none" strokeLinecap="round"/>
-                <path d="M 50 53 Q 54.5 56 57.7 55" stroke="#6b4226" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity="0.55"/>
-                <path d="M 50 53 Q 45.5 56 42.3 55" stroke="#6b4226" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity="0.55"/>
-                {/* grin — confident and a little cheeky */}
-                <path d="M 41 61 Q 50 68 61 59" stroke="#1a1a2e" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
-                {/* flag medallion — crescent & star pinned on the sash */}
-                <motion.g animate={{ opacity: [0.80, 1, 0.80] }} transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut", delay: 0.6 }}>
-                  <circle cx="50" cy="80" r="13.5" fill="#000" opacity="0.30" filter={`url(#${pfxId}-sf)`}/>
-                  <circle cx="50" cy="80" r="12.5" fill="#00A550" stroke="#FFFFFF" strokeWidth="2.2"/>
-                  <circle cx="50" cy="80" r="10.5" fill="#FFFFFF"/>
-                  <circle cx="48" cy="80" r="7.4"  fill="#D21034"/>
-                  <circle cx="51.2" cy="80" r="6.1" fill="#FFFFFF"/>
-                  <polygon
-                    points="55.2,75.6 56.2,78.1 58.9,78.3 56.8,80 57.5,82.6 55.2,81.1 52.9,82.6 53.6,80 51.5,78.3 54.2,78.1"
-                    fill="#D21034"/>
-                </motion.g>
-              </svg>
+                <picture className="w-full h-full flex items-center justify-center">
+                  <source srcSet={pawnCharWebp} type="image/webp" />
+                  <img
+                    src={pawnCharPath}
+                    alt="Pion Algérien"
+                    className="w-full h-full object-contain select-none pointer-events-none"
+                    loading="eager"
+                    decoding="async"
+                    draggable={false}
+                  />
+                </picture>
+              </motion.div>
             </motion.div>
 
             {/* ── CENTER: Logo card — premium neon-card treatment ── */}
