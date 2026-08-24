@@ -4,6 +4,8 @@ import { RotateCcw, X } from "lucide-react";
 import { playIconTap, playNavBack, playSelection, playStartPress, playToggleClick } from "../lib/sound-manager";
 import { supportsDvh } from "../lib/utils";
 import { readSavedGame, type SavedGameSnapshot } from "../lib/saved-game";
+import type { BoardStyle } from "../App";
+import * as DZ from "../lib/board-theme-dz";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 export interface SelectedMode {
@@ -18,6 +20,8 @@ export interface GameConfig {
   rule:    Rule;
   players: number;
   modeId:  string;
+  humanColor?: number;
+  excludedColor?: number;
 }
 
 interface GameConfigOverlayProps {
@@ -27,6 +31,7 @@ interface GameConfigOverlayProps {
   onStart: (config: GameConfig) => void;
   /** Called with the paused game that belongs to this mode, when the player resumes it. */
   onResume: (snapshot: SavedGameSnapshot) => void;
+  boardStyle: BoardStyle;
 }
 
 // ─── Translations ─────────────────────────────────────────────────────────────
@@ -36,6 +41,13 @@ const T = {
     rules:          "Règles du jeu",
     players:        "Joueurs",
     start:          "Commencer",
+    chooseColor:    "Choisissez votre couleur",
+    chooseColorSub: "Votre pion sera associé à cette couleur pour la partie",
+    colorSection:   "Votre couleur",
+    colorBack:      "Configuration",
+    excludeTitle:   "Coin à laisser libre",
+    excludeSub:     "Choisissez la couleur qui ne participera pas à cette partie",
+    inPlay:         "Couleurs en jeu",
     resume:         "Reprendre",
     resumeHint:     "Partie en pause disponible pour ce mode",
     classic:        "Classique",
@@ -58,6 +70,13 @@ const T = {
     rules:          "قواعد اللعبة",
     players:        "اللاعبون",
     start:          "ابدأ اللعبة",
+    chooseColor:    "اختر لونك",
+    chooseColorSub: "سيتم تخصيص هذا اللون لقطعك في هذه الجولة",
+    colorSection:   "لونك",
+    colorBack:      "الإعدادات",
+    excludeTitle:   "الزاوية المستبعدة",
+    excludeSub:     "اختر اللون الذي لن يشارك في هذه الجولة",
+    inPlay:         "الألوان المشاركة",
     resume:         "استئناف",
     resumeHint:     "توجد مباراة متوقفة لهذا الوضع",
     classic:        "كلاسيكي",
@@ -308,11 +327,21 @@ function PawnSilhouette({ color, size = 10 }: { color: string; size?: number }) 
 
 // Player colour palette
 const PLAYER_COLORS = ["#DC143C", "#1E90FF", "#FFD700", "#00A550"];
+const CLASSIC_PLAYER_COLORS = ["#C31024", "#1542B0", "#E8A800", "#1C6B2E"];
+
+function themePlayerColors(boardStyle: BoardStyle): readonly string[] {
+  if (boardStyle === "dz") return DZ.HOME_COLORS;
+  if (boardStyle === "classic") return CLASSIC_PLAYER_COLORS;
+  return PLAYER_COLORS;
+}
 
 // ─── Main overlay ─────────────────────────────────────────────────────────────
-export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume }: GameConfigOverlayProps) {
+export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume, boardStyle }: GameConfigOverlayProps) {
   const [rule,         setRule]         = useState<Rule>("classic");
-  const [players,      setPlayers]      = useState(2);
+  const [players,      setPlayers]      = useState(4);
+  const [humanColor,   setHumanColor]  = useState(0);
+  const [excludedColor, setExcludedColor] = useState<number | undefined>(undefined);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [teamAttack,   setTeamAttack]   = useState(false);
   const [turnPass,     setTurnPass]     = useState(true);
   const [showSettings, setShowSettings] = useState(false);
@@ -325,6 +354,10 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume }: Ga
 
   const t   = T[lang];
   const dir = lang === "ar" ? "rtl" : "ltr";
+  const themeColors = themePlayerColors(boardStyle);
+  const needsColorPicker = mode.id === "computer" || (players < 4 && mode.id !== "teamup");
+  const showHumanColor = mode.id === "computer";
+  const resolvedExcludedColor = excludedColor ?? (humanColor === 0 && players < 4 ? players : 0);
 
   const ruleLabel = (r: Rule) =>
     r === "classic" ? t.classic : r === "quick" ? t.quick : t.teamup;
@@ -433,6 +466,37 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume }: Ga
         {/* ── Scrollable body ── */}
         <div className="flex-1 overflow-y-auto overscroll-contain px-4 pt-5 pb-6">
 
+          {showColorPicker ? (
+            <motion.div initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col">
+              <div className="relative overflow-hidden rounded-3xl px-5 pt-5 pb-4 mb-5" style={{ background: `linear-gradient(145deg, ${mode.neon}18 0%, rgba(7,10,34,0.72) 58%, rgba(4,7,22,0.88) 100%)`, border: `1px solid ${mode.neon}42`, boxShadow: `0 12px 32px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.09)` }}>
+                <div className="absolute -right-10 -top-12 w-32 h-32 rounded-full" style={{ background: `radial-gradient(circle, ${mode.neon}40, transparent 68%)` }}/>
+                <div className="relative flex items-center gap-4">
+                  <motion.div className="relative flex items-center justify-center w-[78px] h-[78px] rounded-3xl" animate={{ boxShadow: [`0 0 18px ${themeColors[humanColor]}35`, `0 0 34px ${themeColors[humanColor]}70`, `0 0 18px ${themeColors[humanColor]}35`] }} transition={{ duration: 2.2, repeat: Infinity }} style={{ background: `radial-gradient(circle, ${themeColors[humanColor]}30, rgba(255,255,255,0.04) 58%, transparent 72%)`, border: `1px solid ${themeColors[humanColor]}60` }}>
+                    <motion.div animate={{ y: [0, -4, 0], rotate: [-2, 2, -2] }} transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}><PawnSilhouette color={themeColors[humanColor]} size={34}/></motion.div>
+                  </motion.div>
+                  <div className="min-w-0"><p className="font-heading uppercase" style={{ fontSize: "9px", letterSpacing: "0.18em", color: `${mode.neon}aa` }}>{showHumanColor ? t.colorSection : t.inPlay}</p><h3 className="font-heading font-bold text-white leading-tight" style={{ fontSize: "20px", letterSpacing: "0.04em" }}>{showHumanColor ? t.chooseColor : t.excludeTitle}</h3><p className="font-sans text-white/50 mt-1" style={{ fontSize: "10px", lineHeight: 1.35 }}>{showHumanColor ? t.chooseColorSub : t.excludeSub}</p></div>
+                </div>
+              </div>
+
+              {showHumanColor && <>
+                <SectionLabel label={t.colorSection} neon={mode.neon}/>
+                <div className="grid grid-cols-2 gap-2.5 mb-5">
+                  {themeColors.map((color, index) => { const active = humanColor === index; const unavailable = resolvedExcludedColor === index; return <motion.button key={color} disabled={unavailable} onClick={() => { playSelection(); setHumanColor(index); if (excludedColor === index) setExcludedColor(undefined); }} whileHover={{ y: -2 }} whileTap={{ scale: 0.96 }} className="relative flex items-center gap-3 rounded-2xl px-3.5 py-3" style={{ opacity: unavailable ? 0.28 : 1, background: active ? `linear-gradient(135deg, ${color}30, ${color}10)` : "rgba(255,255,255,0.04)", border: `1.5px solid ${active ? color : "rgba(255,255,255,0.10)"}`, boxShadow: active ? `0 0 22px ${color}40, inset 0 1px 0 rgba(255,255,255,0.10)` : "inset 0 1px 0 rgba(255,255,255,0.04)" }}><PawnSilhouette color={color} size={20}/><span className="font-heading font-bold" style={{ fontSize: "12px", color: active ? "white" : "rgba(255,255,255,0.58)", letterSpacing: "0.06em" }}>{["ROUGE", "BLEU", "JAUNE", "VERT"][index]}</span>{active && <span className="ml-auto w-2 h-2 rounded-full" style={{ background: color, boxShadow: `0 0 8px ${color}` }}/>}</motion.button>; })}
+                </div>
+              </>}
+
+              {players < 4 && <>
+                <SectionLabel label={t.excludeTitle} neon={mode.neon}/>
+                <p className="font-sans text-white/50 text-center -mt-1 mb-3" style={{ fontSize: "10px" }}>{t.excludeSub}</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {themeColors.map((color, index) => { const active = resolvedExcludedColor === index; const unavailable = showHumanColor && humanColor === index; return <motion.button key={`exclude-${color}`} disabled={unavailable} onClick={() => { playSelection(); setExcludedColor(index); }} whileHover={{ y: -2 }} whileTap={{ scale: 0.96 }} className="relative flex items-center gap-3 rounded-2xl px-3.5 py-3" style={{ opacity: unavailable ? 0.25 : 1, background: active ? `linear-gradient(135deg, ${color}28, ${color}0e)` : "rgba(255,255,255,0.035)", border: `1.5px solid ${active ? color : "rgba(255,255,255,0.10)"}`, boxShadow: active ? `0 0 20px ${color}38` : "none" }}><span className="flex items-center justify-center w-8 h-8 rounded-xl" style={{ background: `${color}28`, border: `1px solid ${color}55` }}><PawnSilhouette color={color} size={18}/></span><span className="font-heading font-bold" style={{ fontSize: "11px", color: active ? "white" : "rgba(255,255,255,0.55)", letterSpacing: "0.05em" }}>{["ROUGE", "BLEU", "JAUNE", "VERT"][index]}</span>{active && <span className="ml-auto font-heading font-bold" style={{ fontSize: "9px", color }}>OUT</span>}</motion.button>; })}
+                </div>
+              </>}
+
+              <motion.button whileHover={{ scale: 1.018, y: -2 }} whileTap={{ scale: 0.978 }} onClick={() => { playStartPress(); onStart({ rule: mode.id === "teamup" ? "teamup" : rule, players: mode.id === "teamup" ? 4 : players, modeId: mode.id, humanColor: showHumanColor ? humanColor : undefined, excludedColor: players < 4 ? resolvedExcludedColor : undefined }); }} className="relative rounded-2xl overflow-hidden mt-6 w-full" style={{ background: `linear-gradient(135deg, ${mode.neon}38 0%, ${mode.neon}12 100%)`, border: `1.5px solid ${mode.neon}70`, boxShadow: `0 10px 30px rgba(0,0,0,0.52), 0 0 26px ${mode.neon}35`, padding: "16px 24px" }}><span className="font-heading font-bold text-white" style={{ fontSize: "15px", letterSpacing: "0.10em" }}>{t.start}</span></motion.button>
+              <button onClick={() => { playNavBack(); setShowColorPicker(false); }} className="font-heading font-bold text-white/55 mt-2 py-2" style={{ fontSize: "12px", letterSpacing: "0.08em" }}>← {t.colorBack}</button>
+            </motion.div>          ) : (
+          <>
           {/* ── RULES SECTION — always shown ── */}
           <SectionLabel label={t.rules} neon={mode.neon}/>
           <div className="flex gap-2.5 mb-6">
@@ -629,10 +693,16 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume }: Ga
             whileTap={{ scale: 0.978 }}
             onClick={() => {
               playStartPress();
+              if (needsColorPicker && !showColorPicker) {
+                setShowColorPicker(true);
+                return;
+              }
               onStart({
                 rule:    mode.id === "teamup" ? "teamup" : rule,
                 players: mode.id === "teamup" ? 4       : players,
                 modeId:  mode.id,
+                humanColor: mode.id === "computer" ? humanColor : undefined,
+                excludedColor: players < 4 ? resolvedExcludedColor : undefined,
               });
             }}
             className={`${savedGame ? "flex-1 min-w-0" : "w-full"} relative rounded-2xl overflow-hidden`}
@@ -716,6 +786,8 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume }: Ga
             >
               {t.resumeHint}
             </p>
+          )}
+          </>
           )}
 
         </div>

@@ -3941,7 +3941,14 @@ function ExitConfirmationModal({ lang, isNeon, isClassic, isDz, onSaveExit, onDi
 
 // ─── Main GameBoardScreen ─────────────────────────────────────────────────────
 export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onBack }: Props) {
-  const playerSlots = useMemo(() => config.players === 2 ? [0, 2] : Array.from({ length: config.players }, (_, i) => i), [config.players]);
+  const playerSlots = useMemo(() => {
+    if (config.humanColor === undefined && config.excludedColor === undefined && config.players === 2) return [0, 2];
+    const humanColor = config.humanColor;
+    const excludedColor = config.excludedColor;
+    const available = Array.from({ length: 4 }, (_, i) => i).filter(slot => slot !== excludedColor && slot !== humanColor);
+    const ordered = humanColor === undefined ? available : [humanColor, ...available];
+    return ordered.slice(0, config.players);
+  }, [config.players, config.humanColor]);
   const [game, setGame]             = useState<E.GameState>(() => initialSnapshot?.game ?? E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
   const [rolling, setRolling]       = useState(false);
   const [animDice, setAnimDice]     = useState(() => initialSnapshot?.game.dice || 1);
@@ -4033,6 +4040,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   }, [clearMoveRecoveryTimer]);
 
   const isComputer  = config.modeId === 'computer';
+  const humanPlayer = config.humanColor ?? playerSlots[0];
   const isClassic   = boardStyle === 'classic';
   const isDz        = boardStyle === 'dz';
   const isNeon      = boardStyle === 'neon';
@@ -4051,7 +4059,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const boardShadowTransition = useMemo(() => ({
     duration: 2.6, repeat: Infinity, ease: 'easeInOut' as const,
   }), []);
-  const isHumanTurn = !isComputer || game.activePlayer === 0;
+  const isHumanTurn = !isComputer || game.activePlayer === humanPlayer;
   const canRoll     = isHumanTurn && game.phase === 'rolling' && !rolling && !game.winner;
   const diceTiming  = useMemo(() => diceTimingFor(diceSpeed), [diceSpeed]);
   const pawnTiming  = useMemo(() => pawnTimingFor(pawnSpeed), [pawnSpeed]);
@@ -4464,7 +4472,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
   // ── AI roll ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (showExitConfirm || !isComputer || game.activePlayer === 0) return;
+    if (showExitConfirm || !isComputer || game.activePlayer === humanPlayer) return;
     if (game.phase !== 'rolling' || rolling || game.winner) return;
     const t = setTimeout(handleRoll, 620 + Math.random() * 320);
     return () => clearTimeout(t);
@@ -4472,7 +4480,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
   // ── AI move — blocked while animation is in flight ────────────────────────
   useEffect(() => {
-    if (showExitConfirm || !isComputer || game.activePlayer === 0) return;
+    if (showExitConfirm || !isComputer || game.activePlayer === humanPlayer) return;
     if (game.phase !== 'selecting' || !game.movable.length || game.winner || isAnimating) return;
     const pid = E.aiPickMove(game);
     if (!pid) return;
@@ -4708,7 +4716,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 0}
-            player={0} anchor="tl" isAI={false} boardStyle={boardStyle} panelLayout={panelLayout}/>
+            player={0} anchor="tl" isAI={isComputer && 0 !== humanPlayer} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Blue  → top-right   (player 1) */}
           <CornerDice
             game={game}
@@ -4719,7 +4727,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 1}
-            player={1} anchor="tr" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
+            player={1} anchor="tr" isAI={isComputer && humanPlayer !== 1} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Yellow → bottom-right (player 2) */}
           <CornerDice
             game={game}
@@ -4730,7 +4738,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 2}
-            player={2} anchor="br" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
+            player={2} anchor="br" isAI={isComputer && humanPlayer !== 2} boardStyle={boardStyle} panelLayout={panelLayout}/>
           {/* Green  → bottom-left  (player 3) */}
           <CornerDice
             game={game}
@@ -4741,7 +4749,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 3}
-            player={3} anchor="bl" isAI={isComputer} boardStyle={boardStyle} panelLayout={panelLayout}/>
+            player={3} anchor="bl" isAI={isComputer && humanPlayer !== 3} boardStyle={boardStyle} panelLayout={panelLayout}/>
         </motion.div>
       </div>
 
