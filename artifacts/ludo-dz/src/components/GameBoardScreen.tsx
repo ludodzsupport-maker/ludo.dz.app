@@ -2,17 +2,25 @@
 // • Correct path/corner alignment (Red=TL, Blue=TR, Yellow=BR, Green=BL)
 // • Side-column per-player dice panels; only active player interactive
 // • Middle lane only colored; outer strips neutral
-// • Animation speed setting (Fast / Normal / Slow)
+// • Continuous animation-speed sliders (dice roll + pawn movement)
 
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useAnimationControls, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, Bot, Save, Settings, Trash2, X, Zap } from 'lucide-react';
+import { ArrowLeft, Bot, Save, Settings, Trash2, X } from 'lucide-react';
 import { GamePiece } from './GamePiece';
 import { VictoryScreen } from './VictoryScreen';
 import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
 import type { GameConfig } from './GameConfigOverlay';
 import { supportsDvh } from '../lib/utils';
+import {
+  SPEED_MAX,
+  SPEED_MIN,
+  SPEED_STEP,
+  diceTimingFor,
+  pawnTimingFor,
+  resolveSpeedSlider,
+} from '../lib/anim-speed';
 import {
   pauseBgmForGameplay,
   playClassicCapture,
@@ -31,7 +39,6 @@ import {
   playNeonPawnMove,
   playNeonWelcomeJingle,
   playPrimaryAction,
-  playSelection,
   resumeBgmForMenu,
 } from '../lib/sound-manager';
 import { playVoiceLine, stopVoiceLines } from '../lib/voice-line-manager';
@@ -41,20 +48,20 @@ import { vibrateDiceRoll, vibratePawnStep, vibrateCaptureOrWin } from '../lib/ha
 import type { BoardStyle } from '../App';
 import { SAVED_GAME_VERSION, clearSavedGame, writeSavedGame, type SavedGameSnapshot } from '../lib/saved-game';
 interface Props { config: GameConfig; lang: 'fr' | 'ar'; boardStyle?: BoardStyle; initialSnapshot?: SavedGameSnapshot | null; onBack: () => void; }
-type AnimSpeed = 'fast' | 'normal' | 'slow';
 
-// ─── Animation speed presets ──────────────────────────────────────────────────
-const ANIM = {
-  fast:   { cycles: 8,  baseMs: 32, stepMs: 15, stiffness: 520, damping: 32, mass: 0.60, hopMs:  90 },
-  normal: { cycles: 11, baseMs: 50, stepMs: 24, stiffness: 400, damping: 30, mass: 0.75, hopMs: 150 },
-  slow:   { cycles: 16, baseMs: 80, stepMs: 42, stiffness: 180, damping: 22, mass: 1.20, hopMs: 240 },
-} as const;
+// ─── Animation speed (continuous sliders) ─────────────────────────────────────
+// The former three-mode preset table (ANIM: fast / normal / slow) is retired.
+// Dice-roll and pawn-movement speeds are now two independent 0–100 sliders
+// (see lib/anim-speed); the timing values below are interpolated live, with
+// slider 0 / 100 reproducing the old Slow / Fast presets exactly.
 
-// The shared ANIM presets serve all three board themes. Classic and DZ use
-// this local timing only for their Slow dice tumble so their shared recorded
-// cue stays natural while filling the whole roll-animation window. Pawn-hop
-// physics and Neon's dice timing continue to use ANIM.slow.
+// The shared interpolation serves all three board themes. Classic and DZ use
+// this local timing only for their dice tumble at the slow end of the slider
+// (≤ CLASSIC_SLOW_DICE_MAX_SPEED, the old "Lent" seat) so their shared
+// recorded cue stays natural while filling the whole roll-animation window.
+// Pawn-hop physics and Neon's dice timing always use the slider values.
 const CLASSIC_SLOW_DICE_TIMING = { cycles: 16, baseMs: 38, stepMs: 20 } as const;
+const CLASSIC_SLOW_DICE_MAX_SPEED = 10;
 
 const TURN_REMINDER_IDLE_MS = 10000;
 const LAUGH_MOCK_STREAK_THRESHOLD = 2;
@@ -98,8 +105,8 @@ function hasMixedColorSafeGathering(pieces: E.Piece[]): boolean {
 
 // Mirrors the cycle() scheduling math in handleRoll below to compute the
 // exact total time (ms) from the first tick to the roll resolving, for a
-// given speed preset. Purely a read of ANIM's existing values — it does not
-// change ANIM or the cycle() timer logic in any way. Used only so the
+// given dice timing. Purely a read of the caller's values — it does not
+// change the timing or the cycle() timer logic in any way. Used only so the
 // Classic dice audio sample can be trimmed to the animation's real length.
 function getRollDurationMs({ cycles, baseMs, stepMs }: { cycles: number; baseMs: number; stepMs: number }): number {
   const threshold = Math.floor(cycles * 0.4);
@@ -3638,18 +3645,63 @@ const BoardSVG = memo(function BoardSVG({
 });
 
 // ─── Settings overlay ─────────────────────────────────────────────────────────
-function SettingsOverlay({ lang, animSpeed, isNeon, isClassic, isDz, onSpeed, onClose }: {
-  lang: 'fr'|'ar'; animSpeed: AnimSpeed;
+// Speed rows mirror the SettingsScreen volume-slider pattern (small-caps label
+// / native range input / fixed-width value readout), restated in this sheet's
+// own typography (Rajdhani) and accent (#4DBBFF) so they read native, not
+// bolted on. The readout keeps the retired mode vocabulary (Lent / Normal /
+// Rapide) as continuous zones, which also makes legacy migration legible.
+function speedZoneLabel(value: number, lang: 'fr' | 'ar'): string {
+  if (value <= 30) return lang === 'ar' ? 'بطيء' : 'Lent';
+  if (value <= 75) return lang === 'ar' ? 'عادي' : 'Normal';
+  return lang === 'ar' ? 'سريع' : 'Rapide';
+}
+
+function SpeedSliderRow({ label, value, onChange, lang }: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  lang: 'fr' | 'ar';
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <span style={{
+        flexShrink: 0,
+        fontFamily: 'Rajdhani, sans-serif', fontSize: 10, fontWeight: 700,
+        color: 'rgba(255,255,255,0.45)', letterSpacing: '0.08em', textTransform: 'uppercase',
+      }}>
+        {label}
+      </span>
+      <input
+        type="range"
+        min={SPEED_MIN}
+        max={SPEED_MAX}
+        step={SPEED_STEP}
+        value={value}
+        onChange={e => {
+          const raw = Number(e.currentTarget.value);
+          onChange(Number.isFinite(raw) ? raw : value);
+        }}
+        aria-label={label}
+        style={{ flex: 1, minWidth: 0, accentColor: '#4DBBFF', cursor: 'pointer' }}
+      />
+      <span style={{
+        flexShrink: 0, width: 56, textAlign: 'end',
+        fontFamily: 'Rajdhani, sans-serif', fontSize: 12, fontWeight: 700,
+        color: 'rgba(77,187,255,0.90)', letterSpacing: '0.04em',
+      }}>
+        {speedZoneLabel(value, lang)}
+      </span>
+    </div>
+  );
+}
+
+function SettingsOverlay({ lang, diceSpeed, pawnSpeed, isNeon, isClassic, isDz, onDiceSpeed, onPawnSpeed, onClose }: {
+  lang: 'fr'|'ar'; diceSpeed: number; pawnSpeed: number;
   isNeon: boolean;
   isClassic: boolean;
   isDz: boolean;
-  onSpeed: (s: AnimSpeed) => void; onClose: () => void;
+  onDiceSpeed: (v: number) => void; onPawnSpeed: (v: number) => void; onClose: () => void;
 }) {
-  const speeds: { key: AnimSpeed; fr: string; ar: string; icon: string }[] = [
-    { key: 'slow',   fr: 'Lent',   ar: 'بطيء',  icon: '🐢' },
-    { key: 'normal', fr: 'Normal', ar: 'عادي',  icon: '⚡' },
-    { key: 'fast',   fr: 'Rapide', ar: 'سريع',  icon: '🚀' },
-  ];
 
   return (
     <motion.div
@@ -3689,46 +3741,27 @@ function SettingsOverlay({ lang, animSpeed, isNeon, isClassic, isDz, onSpeed, on
           </button>
         </div>
 
-        {/* Animation speed */}
+        {/* Animation speed — two continuous sliders (dice roll / pawn movement) */}
         <p style={{
           fontFamily: 'Rajdhani, sans-serif', fontSize: 11, fontWeight: 600,
           color: 'rgba(255,255,255,0.40)', letterSpacing: '0.10em',
-          marginBottom: 10,
+          marginBottom: 12,
         }}>
           {lang === 'ar' ? 'سرعة الرسوم المتحركة' : 'VITESSE D\'ANIMATION'}
         </p>
-        <div style={{ display: 'flex', gap: 10 }}>
-          {speeds.map(({ key, fr, ar, icon }) => {
-            const active = animSpeed === key;
-            return (
-              <motion.button key={key}
-                onClick={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playSelection(); onSpeed(key); }}
-                whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
-                style={{
-                  flex: 1, padding: '12px 6px', borderRadius: 14,
-                  background: active
-                    ? 'linear-gradient(135deg, #1E90FF33, #1E90FF15)'
-                    : 'rgba(255,255,255,0.05)',
-                  border: `1.5px solid ${active ? '#4DBBFF' : 'rgba(255,255,255,0.10)'}`,
-                  cursor: 'pointer',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                  boxShadow: active ? '0 0 14px #1E90FF30' : 'none',
-                }}>
-                <span style={{ fontSize: 22 }}>{icon}</span>
-                <span style={{
-                  fontFamily: 'Rajdhani, sans-serif', fontWeight: 700,
-                  fontSize: 12, color: active ? '#4DBBFF' : 'rgba(255,255,255,0.50)',
-                  letterSpacing: '0.04em',
-                }}>
-                  {lang === 'ar' ? ar : fr}
-                </span>
-                {active && (
-                  <Zap size={10} color="#4DBBFF"/>
-                )}
-              </motion.button>
-            );
-          })}
-        </div>
+        <SpeedSliderRow
+          label={lang === 'ar' ? 'النرد' : 'Dé'}
+          value={diceSpeed}
+          onChange={onDiceSpeed}
+          lang={lang}
+        />
+        <div style={{ height: 14 }}/>
+        <SpeedSliderRow
+          label={lang === 'ar' ? 'القطع' : 'Pions'}
+          value={pawnSpeed}
+          onChange={onPawnSpeed}
+          lang={lang}
+        />
 
         {/* Divider + tip */}
         <div style={{ marginTop: 24, padding: '14px 16px', borderRadius: 12,
@@ -3738,8 +3771,8 @@ function SettingsOverlay({ lang, animSpeed, isNeon, isClassic, isDz, onSpeed, on
             textAlign: 'center',
           }}>
             {lang === 'ar'
-              ? 'تحكّم في سرعة رمي الحجر وحركة القطع'
-              : 'Contrôle la vitesse du lancer et des déplacements'}
+              ? 'اضبط سرعة رمي النرد وسرعة تحرّك القطع كلًّا على حدة'
+              : 'Réglez séparément la vitesse du lancer de dés et celle des déplacements des pions'}
           </p>
         </div>
       </motion.div>
@@ -3914,7 +3947,11 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const [animDice, setAnimDice]     = useState(() => initialSnapshot?.game.dice || 1);
   const [justLanded, setJustLanded] = useState(false);
   const [lastDice, setLastDice]     = useState<number[]>(() => initialSnapshot?.lastDice ?? [0, 0, 0, 0]);
-  const [animSpeed, setAnimSpeed]   = useState<AnimSpeed>(() => initialSnapshot?.animSpeed ?? 'normal');
+  // Speed sliders (0–100, continuous — see lib/anim-speed). A pre-slider save
+  // carrying the retired animSpeed mode migrates it here; no save → defaults,
+  // which sit slightly faster than the old Normal preset.
+  const [diceSpeed, setDiceSpeed] = useState(() => resolveSpeedSlider(initialSnapshot?.speedDice, initialSnapshot?.animSpeed));
+  const [pawnSpeed, setPawnSpeed] = useState(() => resolveSpeedSlider(initialSnapshot?.speedPawns, initialSnapshot?.animSpeed));
   const [showSettings, setShowSettings] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [restartKey, setRestartKey] = useState(0);
@@ -4016,8 +4053,9 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   }), []);
   const isHumanTurn = !isComputer || game.activePlayer === 0;
   const canRoll     = isHumanTurn && game.phase === 'rolling' && !rolling && !game.winner;
-  const cfg         = ANIM[animSpeed];
-  const springCfg   = useMemo(() => ({ stiffness: cfg.stiffness, damping: cfg.damping, mass: cfg.mass }), [cfg.stiffness, cfg.damping, cfg.mass]);
+  const diceTiming  = useMemo(() => diceTimingFor(diceSpeed), [diceSpeed]);
+  const pawnTiming  = useMemo(() => pawnTimingFor(pawnSpeed), [pawnSpeed]);
+  const springCfg   = useMemo(() => ({ stiffness: pawnTiming.stiffness, damping: pawnTiming.damping, mass: pawnTiming.mass }), [pawnTiming]);
 
   const saveGameState = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -4029,11 +4067,12 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       boardStyle,
       game: gameRef.current,
       lastDice,
-      animSpeed,
+      speedDice: diceSpeed,
+      speedPawns: pawnSpeed,
       stats: { moveCount, captureCounts, matchDurationMs: elapsedMs },
     };
     writeSavedGame(snapshot);
-  }, [animSpeed, boardStyle, captureCounts, config, lastDice, moveCount]);
+  }, [diceSpeed, pawnSpeed, boardStyle, captureCounts, config, lastDice, moveCount]);
 
   const handleSaveAndExit = useCallback(() => {
     console.info('[saved-game] save-and-exit selected');
@@ -4069,10 +4108,10 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     if (rolling || game.phase !== 'rolling' || game.winner) return;
     const rollingPlayer = game.activePlayer; // capture now — must not close over future state
     // Read timing before triggering audio so the shared Classic/DZ sample and
-    // this cycle() share an exact duration. The local slow override remains
-    // dice-roll-only; all shared ANIM values and Neon timing stay untouched.
+    // this cycle() share an exact duration. The local slow-end override
+    // remains dice-roll-only; slider values and Neon timing stay untouched.
     const { cycles, baseMs, stepMs } =
-      (isClassic || isDz) && animSpeed === 'slow' ? CLASSIC_SLOW_DICE_TIMING : ANIM[animSpeed];
+      (isClassic || isDz) && diceSpeed <= CLASSIC_SLOW_DICE_MAX_SPEED ? CLASSIC_SLOW_DICE_TIMING : diceTiming;
     if (isNeon) playNeonDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
     else if (isClassic) playClassicDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
     else if (isDz) playDzDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
@@ -4111,7 +4150,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       }
     };
     cycle();
-  }, [rolling, game.phase, game.winner, game.activePlayer, animSpeed, isNeon, isClassic, isDz]);
+  }, [rolling, game.phase, game.winner, game.activePlayer, diceSpeed, diceTiming, isNeon, isClassic, isDz]);
 
   // Perf (roll-start jank): handleRoll's identity changes whenever `rolling`
   // flips (it's a dep above), which — passed directly as the memoized corner
@@ -4129,16 +4168,16 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   // its explicit board-style guard keeps Classic and DZ entirely unchanged.
   const handleNeonHopLand = useCallback((x: number, y: number, neon: string) => {
     spawnHopBurst(x, y, neon);
-    // cfg.hopMs is the active speed preset's per-hop duration (unchanged
-    // timing value, just read here) — lets the blip's envelope track
-    // Fast/Rapid and Slow instead of staying fixed-length. See
-    // playNeonPawnMove's bounded scale in sound-manager.ts.
-    if (isNeon) playNeonPawnMove(cfg.hopMs);
+    // pawnTiming.hopMs is the active pawn-speed slider's per-hop duration
+    // (continuous value, just read here) — lets the blip's envelope track
+    // the slider instead of staying fixed-length. See playNeonPawnMove's
+    // bounded scale in sound-manager.ts.
+    if (isNeon) playNeonPawnMove(pawnTiming.hopMs);
     // Haptics are theme-independent: this callback is only ever invoked when
     // Neon is active (see PawnToken's per-step guard), so exactly one of the
     // three handle*Step callbacks fires per physical hop regardless of theme.
     vibratePawnStep();
-  }, [isNeon, spawnHopBurst, cfg.hopMs]);
+  }, [isNeon, spawnHopBurst, pawnTiming]);
 
   // Mirrors handleNeonHopLand above, but hooks the existing Classic-only dust
   // puff callback instead. It does not alter the hop sequence, move
@@ -4146,12 +4185,12 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   // true (see PawnToken's per-step guard), so Neon/DZ are unaffected.
   const handleClassicDustStep = useCallback((x: number, y: number) => {
     spawnDustPuff(x, y);
-    if (isClassic) playClassicPawnMove(cfg.hopMs);
+    if (isClassic) playClassicPawnMove(pawnTiming.hopMs);
     // Haptics are theme-independent: this callback is only ever invoked when
     // Classic is active (see PawnToken's per-step guard), so exactly one of
     // the three handle*Step callbacks fires per physical hop regardless of theme.
     vibratePawnStep();
-  }, [isClassic, spawnDustPuff, cfg.hopMs]);
+  }, [isClassic, spawnDustPuff, pawnTiming]);
 
   // Mirrors handleNeonHopLand/handleClassicDustStep above, but hooks the
   // existing DZ-only sparkle callback instead. It does not alter the hop
@@ -4160,12 +4199,12 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   // unaffected.
   const handleDzSparkleStep = useCallback((x: number, y: number) => {
     spawnDzSparkle(x, y);
-    if (isDz) playDzPawnMove(cfg.hopMs);
+    if (isDz) playDzPawnMove(pawnTiming.hopMs);
     // Haptics are theme-independent: this callback is only ever invoked when
     // DZ is active (see PawnToken's per-step guard), so exactly one of the
     // three handle*Step callbacks fires per physical hop regardless of theme.
     vibratePawnStep();
-  }, [isDz, spawnDzSparkle, cfg.hopMs]);
+  }, [isDz, spawnDzSparkle, pawnTiming]);
 
   // ── triggerMove — async-safe, decoupled animation from state resolution ──
   // Uses refs for game/isAnimating so it is stable (no deps) and never stale.
@@ -4270,7 +4309,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
     setIsAnimating(true);
 
-    const recoveryMs = Math.max(3500, steps.length * (cfg.hopMs + INTER_MS + SQUASH_MS) + Math.max(cfg.hopMs * 3, 500) + 2500);
+    const recoveryMs = Math.max(3500, steps.length * (pawnTiming.hopMs + INTER_MS + SQUASH_MS) + Math.max(pawnTiming.hopMs * 3, 500) + 2500);
     clearMoveRecoveryTimer();
     moveRecoveryTimer.current = setTimeout(() => {
       if (moveSequenceRef.current !== moveSeq) return;
@@ -4337,7 +4376,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     initAnims[pid] = { steps, startX, startY, onLastHop };
     // Do NOT set capturedPid to 'defeat' here — it waits for onLastHop
     setPieceAnims(initAnims);
-  }, [clearMoveRecoveryTimer, cfg.hopMs, isClassic, unlockMoveInteraction]); // stable — reads game/isAnimating via refs
+  }, [clearMoveRecoveryTimer, pawnTiming.hopMs, isClassic, unlockMoveInteraction]); // stable — reads game/isAnimating via refs
 
   // ── Piece click ───────────────────────────────────────────────────────────
   // Non-movable pawns no longer swallow the tap — their onClick now calls here
@@ -4441,10 +4480,14 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     return () => clearTimeout(t);
   }, [showExitConfirm, isComputer, game.activePlayer, game.phase, game.movable.length, game.winner, isAnimating, triggerMove]);
 
-  // ── Auto-move: lone released pawn is the only legal move ─────────────────
-  // Human turns only. If the player has exactly 3 pawns home + 1 pawn out,
-  // and that released pawn is the sole legal move for the roll, skip manual
-  // tap/select and move it directly — mirrors the AI-move effect above.
+  // ── Auto-move: single actionable choice ──────────────────────────────────
+  // Human turns only. When the roll's legal moves collapse to one real option
+  // (a single movable pawn, an all-home 6 roll where every exit is identical,
+  // or pawns stacked on the same square — see E.getAutoMovePawn), skip the
+  // manual tap and move directly, mirroring the AI-move effect above.
+  // Genuinely distinct legal moves keep the tap-to-choose flow. Disjoint from
+  // the no-move auto-pass effect above: that one only fires when movable is
+  // empty, this one only when it is not — the two can never conflict.
   useEffect(() => {
     if (showExitConfirm || !isHumanTurn || game.phase !== 'selecting' || game.winner || isAnimating) return;
     const pid = E.getAutoMovePawn(game);
@@ -4634,7 +4677,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
               game={game}
               onPieceClick={handlePieceClick}
               springCfg={springCfg}
-              hopMs={cfg.hopMs}
+              hopMs={pawnTiming.hopMs}
               pieceAnims={pieceAnims}
               shockwave={shockwave}
               onShockwaveDone={clearShockwave}
@@ -4749,8 +4792,8 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       {/* ── Settings overlay ── */}
       <AnimatePresence>
         {showSettings && (
-          <SettingsOverlay lang={lang} animSpeed={animSpeed} isNeon={isNeon} isClassic={isClassic} isDz={isDz}
-            onSpeed={s => { setAnimSpeed(s); }}
+          <SettingsOverlay lang={lang} diceSpeed={diceSpeed} pawnSpeed={pawnSpeed} isNeon={isNeon} isClassic={isClassic} isDz={isDz}
+            onDiceSpeed={setDiceSpeed} onPawnSpeed={setPawnSpeed}
             onClose={() => setShowSettings(false)}/>
         )}
       </AnimatePresence>

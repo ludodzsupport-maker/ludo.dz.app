@@ -277,27 +277,36 @@ export function doMove(state: GameState, pid: string): GameState {
   };
 }
 
-// ─── Auto-move: lone released pawn ─────────────────────────────────────────
-// When a player has exactly 3 pawns still at home (relPos === -1) and exactly
-// 1 pawn released onto the board, and that released pawn is the ONLY legal
-// move for the current roll (no home-release choice, no other option), the
-// move should happen automatically instead of waiting for manual selection.
-// Returns the pawn's id to auto-move, or null if the condition isn't met.
+// ─── Auto-move: single actionable choice ───────────────────────────────────
+// Auto-move fires ONLY when the roll's legal moves collapse to one real
+// option, so the player never waits for a tap that carries no decision:
+//   • exactly one pawn can move (the former lone-released-pawn case is a
+//     subset of this), or
+//   • every movable pawn is functionally identical: still-home pawns on a
+//     6 roll (every exit lands on the same spawn square) or 2+ pawns stacked
+//     on the exact same board square (same relPos → same square, same forward
+//     path, same capture outcome — moving any one of them is indistinguishable
+//     in game terms).
+// Two or more genuinely distinct legal moves (different pawns on different
+// squares, or a home-base exit vs. a board advance on a 6) still require a
+// manual tap: real player choice is never removed. Returns the pawn id to
+// auto-move, or null when a real choice exists / nothing can move.
 export function getAutoMovePawn(state: GameState): string | null {
-  if (state.movable.length !== 1) return null;
+  if (state.movable.length === 0) return null;
 
-  const activePieces = state.pieces.filter(p => p.player === state.activePlayer);
-  const homeCount = activePieces.filter(p => p.relPos === -1).length;
-  const outCount  = activePieces.filter(p => p.relPos >= 0 && p.relPos < FINISHED_POS).length;
-  if (homeCount !== 3 || outCount !== 1) return null;
-
-  const pid = state.movable[0];
-  const [, indexStr] = pid.split(':');
-  const piece = activePieces.find(p => p.index === Number(indexStr));
-  // Safety: only ever auto-move the released pawn, never a home-release move.
-  if (!piece || piece.relPos === -1) return null;
-
-  return pid;
+  let identity: number | null = null;
+  for (const pid of state.movable) {
+    const [ps, is] = pid.split(':').map(Number);
+    const piece = state.pieces.find(p => p.player === ps && p.index === is);
+    if (!piece) return null;
+    // relPos is the functional identity of a movable pawn: -1 groups all
+    // home-base exits together (only reachable on a 6), and equal relPos
+    // values mean pawns stacked on the same square with the same forward
+    // path. One distinct value across all movable pawns → one real option.
+    if (identity === null) identity = piece.relPos;
+    else if (identity !== piece.relPos) return null;
+  }
+  return state.movable[0];
 }
 
 export function autoPassTurn(state: GameState): GameState {

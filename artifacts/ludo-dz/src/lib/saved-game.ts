@@ -1,6 +1,7 @@
 import type { BoardStyle } from '../App';
 import type { GameConfig } from '../components/GameConfigOverlay';
 import type { GameState } from './ludo-engine';
+import { SPEED_MIN, SPEED_MAX, type LegacyAnimSpeed } from './anim-speed';
 
 export const SAVED_GAME_STORAGE_KEY = 'ludo-dz:saved-game';
 export const SAVED_GAME_VERSION = 1 as const;
@@ -12,7 +13,16 @@ export interface SavedGameSnapshot {
   boardStyle?: BoardStyle;
   game: GameState;
   lastDice: number[];
-  animSpeed: 'fast' | 'normal' | 'slow';
+  /**
+   * Legacy three-mode animation speed from pre-slider builds. Read-only:
+   * migrated to speedDice/speedPawns on load (see lib/anim-speed), never
+   * written anymore. Kept optional so pre-slider saves still validate.
+   */
+  animSpeed?: LegacyAnimSpeed;
+  /** Continuous dice-roll speed slider (0–100). Absent in pre-slider saves. */
+  speedDice?: number;
+  /** Continuous pawn-movement speed slider (0–100). Absent in pre-slider saves. */
+  speedPawns?: number;
   stats: {
     moveCount: number;
     captureCounts: number[];
@@ -61,7 +71,15 @@ export function validateSavedGameSnapshot(value: unknown): SavedGameSnapshot | n
   if (!isValidGameConfig(value.config) || !isValidGameState(value.game)) return null;
   if (value.boardStyle !== undefined && value.boardStyle !== 'neon' && value.boardStyle !== 'classic' && value.boardStyle !== 'dz') return null;
   if (!Array.isArray(value.lastDice) || !value.lastDice.every(die => Number.isInteger(die))) return null;
-  if (value.animSpeed !== 'fast' && value.animSpeed !== 'normal' && value.animSpeed !== 'slow') return null;
+  // Speed fields: accept the new continuous sliders (0–100), the retired
+  // three-mode animSpeed (migrated on load), or neither (defaults) — but
+  // never garbage. This is what lets an old Lent/Normal/Rapide save upgrade
+  // in place instead of being discarded.
+  const isValidSlider = (v: unknown): boolean =>
+    typeof v === 'number' && Number.isFinite(v) && v >= SPEED_MIN && v <= SPEED_MAX;
+  if (value.animSpeed !== undefined && value.animSpeed !== 'fast' && value.animSpeed !== 'normal' && value.animSpeed !== 'slow') return null;
+  if (value.speedDice !== undefined && !isValidSlider(value.speedDice)) return null;
+  if (value.speedPawns !== undefined && !isValidSlider(value.speedPawns)) return null;
   if (!isRecord(value.stats)
     || typeof value.stats.matchDurationMs !== 'number'
     || !Number.isFinite(value.stats.matchDurationMs)
