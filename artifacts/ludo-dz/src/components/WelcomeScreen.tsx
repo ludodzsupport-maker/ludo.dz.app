@@ -74,9 +74,11 @@ function Shimmer() {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScreenProps) {
-  const logoPath     = import.meta.env.BASE_URL + "ludo-logo.png";
-  const pawnCharPath = import.meta.env.BASE_URL + "pawn-character.png";
-  const pawnCharWebp = import.meta.env.BASE_URL + "pawn-character.webp";
+  const logoPath        = import.meta.env.BASE_URL + "ludo-logo.png";
+  const pawnCharPath    = import.meta.env.BASE_URL + "pawn-character.png";
+  const pawnCharWebp    = import.meta.env.BASE_URL + "pawn-character.webp";
+  const pawnHerPath     = import.meta.env.BASE_URL + "pawn-character-female.png";
+  const pawnHerWebp     = import.meta.env.BASE_URL + "pawn-character-female.webp";
   const dir          = lang === "ar" ? "rtl" : "ltr";
 
   const t = {
@@ -254,54 +256,35 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
               </div>
             </motion.div>
 
-            {/* ── RIGHT: Trophy — neon-gold treatment ── */}
+            {/* ── RIGHT: Algerian champion pawn — feminine companion with victory trophy ── */}
             <motion.div
               className="flex-shrink-0"
               animate={{ y: [0, -7, 0] }}
               transition={{ duration: 2.9, repeat: Infinity, ease: "easeInOut", delay: 0.75 }}
-              style={{ width: "clamp(52px, 14vw, 68px)", height: "clamp(68px, 18vw, 90px)" }}
+              style={{ width: "clamp(52px, 14vw, 68px)", height: "clamp(78px, 21vw, 102px)" }}
             >
               <motion.div
-                style={{ width: "100%", height: "100%" }}
+                className="w-full h-full relative flex items-center justify-center"
                 animate={{
                   filter: [
-                    "drop-shadow(0 0 8px rgba(255,215,0,0.38)) drop-shadow(0 6px 14px rgba(0,0,0,0.55))",
-                    "drop-shadow(0 0 18px rgba(255,215,0,0.65)) drop-shadow(0 6px 14px rgba(0,0,0,0.55))",
-                    "drop-shadow(0 0 8px rgba(255,215,0,0.38)) drop-shadow(0 6px 14px rgba(0,0,0,0.55))",
+                    "drop-shadow(0 0 10px rgba(0,165,80,0.38)) drop-shadow(0 6px 14px rgba(0,0,0,0.60))",
+                    "drop-shadow(0 0 22px rgba(0,165,80,0.68)) drop-shadow(0 6px 14px rgba(0,0,0,0.60))",
+                    "drop-shadow(0 0 10px rgba(0,165,80,0.38)) drop-shadow(0 6px 14px rgba(0,0,0,0.60))",
                   ],
                 }}
-                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                transition={{ duration: 2.9, repeat: Infinity, ease: "easeInOut", delay: 0.75 }}
               >
-                <svg width="100%" height="100%" viewBox="0 0 100 130" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <ellipse cx="50" cy="126" rx="28" ry="4" fill="rgba(0,0,0,0.22)"/>
-                  <rect x="24" y="110" width="52" height="8"  rx="3" fill="#b07800" stroke="rgba(0,0,0,0.28)" strokeWidth="1.5"/>
-                  <rect x="20" y="116" width="60" height="7"  rx="3" fill="#8a5c00" stroke="rgba(0,0,0,0.28)" strokeWidth="1.5"/>
-                  <rect x="26" y="111" width="48" height="2.5" rx="1" fill="white" opacity="0.25"/>
-                  <rect x="41" y="90"  width="18" height="22" rx="3" fill="#cc8800" stroke="rgba(0,0,0,0.28)" strokeWidth="2"/>
-                  <rect x="43" y="91"  width="6"  height="20" rx="2" fill="white" opacity="0.22"/>
-                  <path d="M 22 46 Q 2 52 2 67 Q 2 80 22 76"   stroke="rgba(0,0,0,0.28)" strokeWidth="10" strokeLinecap="round" fill="none"/>
-                  <path d="M 22 46 Q 4 52 4 67 Q 4 79 22 76"   stroke="#cc8800" strokeWidth="8" strokeLinecap="round" fill="none"/>
-                  <path d="M 22 48 Q 8 54 8 67 Q 8 77 22 74"   stroke="white"   strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.35"/>
-                  <path d="M 78 46 Q 98 52 98 67 Q 98 80 78 76" stroke="rgba(0,0,0,0.28)" strokeWidth="10" strokeLinecap="round" fill="none"/>
-                  <path d="M 78 46 Q 96 52 96 67 Q 96 79 78 76" stroke="#cc8800" strokeWidth="8" strokeLinecap="round" fill="none"/>
-                  <path d="M 78 48 Q 92 54 92 67 Q 92 77 78 74" stroke="white"   strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.35"/>
-                  <path d="M 18 18 Q 13 46 16 63 Q 24 90 50 92 Q 76 90 84 63 Q 87 46 82 18 Z" fill="rgba(0,0,0,0.25)" transform="translate(1,2)"/>
-                  <path d="M 18 18 Q 13 46 16 63 Q 24 90 50 92 Q 76 90 84 63 Q 87 46 82 18 Z" fill="#FFD700"/>
-                  <path d="M 22 20 Q 17 46 20 62 Q 28 86 50 88 Q 72 86 80 62 Q 83 46 78 20 Z" fill="#FFC107" opacity="0.55"/>
-                  <path d="M 26 22 Q 23 46 25 60 Q 30 78 44 85" stroke="white" strokeWidth="5" strokeLinecap="round" fill="none" opacity="0.30"/>
-                  <path d="M 26 22 Q 23 46 25 58"                stroke="white" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.50"/>
-                  <path d="M 18 18 Q 50 10 82 18" stroke="rgba(0,0,0,0.22)" strokeWidth="7" strokeLinecap="round" fill="none"/>
-                  <path d="M 18 18 Q 50 10 82 18" stroke="#FFD700"           strokeWidth="5" strokeLinecap="round" fill="none"/>
-                  <path d="M 20 17 Q 50  9 80 17" stroke="white"             strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.5"/>
-                  <circle cx="50" cy="56" r="22" fill="rgba(0,0,0,0.28)" transform="translate(1,2)"/>
-                  <circle cx="50" cy="56" r="22" fill="#DC143C" stroke="#FFD700" strokeWidth="3"/>
-                  <circle cx="50" cy="56" r="19" fill="#DC143C"/>
-                  <path d="M 32 45 Q 50 38 68 45" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none" opacity="0.32"/>
-                  <text x="50" y="64" textAnchor="middle" fontSize="22" fontWeight="bold" fill="white" fontFamily="Arial,sans-serif" letterSpacing="2">VS</text>
-                  <text x="36" y="10" textAnchor="middle" fontSize="13" fill="#FFD700" fontFamily="Arial">★</text>
-                  <text x="50" y="6"  textAnchor="middle" fontSize="15" fill="#FFD700" fontFamily="Arial">★</text>
-                  <text x="64" y="10" textAnchor="middle" fontSize="13" fill="#FFD700" fontFamily="Arial">★</text>
-                </svg>
+                <picture className="w-full h-full flex items-center justify-center">
+                  <source srcSet={pawnHerWebp} type="image/webp" />
+                  <img
+                    src={pawnHerPath}
+                    alt="Pionne Algérienne"
+                    className="w-full h-full object-contain select-none pointer-events-none"
+                    loading="eager"
+                    decoding="async"
+                    draggable={false}
+                  />
+                </picture>
               </motion.div>
             </motion.div>
           </motion.div>
