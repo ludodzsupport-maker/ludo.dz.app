@@ -56,6 +56,60 @@ const ANIM = {
 // physics and Neon's dice timing continue to use ANIM.slow.
 const CLASSIC_SLOW_DICE_TIMING = { cycles: 16, baseMs: 38, stepMs: 20 } as const;
 
+// High-frequency dice-face ticks must not re-render GameBoardScreen (or the
+// SVG board). Subscribers (the active corner die only) update locally.
+// Visual tumble/landing is unchanged — only who receives the setState.
+type DiceFaceListener = (value: number) => void;
+const diceFaceListeners = new Set<DiceFaceListener>();
+let diceFaceValue = 1;
+function publishDiceFace(value: number) {
+  diceFaceValue = value;
+  diceFaceListeners.forEach((fn) => fn(value));
+}
+function useLiveDiceFace(enabled: boolean): number {
+  const [face, setFace] = useState(diceFaceValue);
+  useEffect(() => {
+    if (!enabled) return;
+    setFace(diceFaceValue);
+    const listener: DiceFaceListener = (value) => setFace(value);
+    diceFaceListeners.add(listener);
+    return () => { diceFaceListeners.delete(listener); };
+  }, [enabled]);
+  return face;
+}
+
+const CLASSIC_PLAYFIELD_BG = [
+  'radial-gradient(ellipse 105% 105% at 50% 50%, transparent 42%, rgba(8,3,18,0.72) 100%)',
+  'radial-gradient(circle at 12% 22%, rgba(255,220,100,0.10) 0px, transparent 1.5px)',
+  'radial-gradient(circle at 80% 15%, rgba(255,220,100,0.08) 0px, transparent 1px)',
+  'radial-gradient(circle at 44% 75%, rgba(255,220,100,0.09) 0px, transparent 1.5px)',
+  'radial-gradient(circle at 90% 68%, rgba(255,220,100,0.07) 0px, transparent 1px)',
+  'radial-gradient(circle at 28% 90%, rgba(255,220,100,0.08) 0px, transparent 1.5px)',
+  'radial-gradient(circle at 67% 38%, rgba(255,220,100,0.06) 0px, transparent 1px)',
+  'radial-gradient(circle at 55% 8%,  rgba(255,220,100,0.07) 0px, transparent 1.5px)',
+  'radial-gradient(ellipse 56% 50% at 50% 52%, rgba(255,200,60,0.065) 0%, transparent 72%)',
+  'repeating-linear-gradient(45deg,  rgba(201,162,39,0.10) 0px, rgba(201,162,39,0.10) 1px, transparent 1px, transparent 32px)',
+  'repeating-linear-gradient(-45deg, rgba(201,162,39,0.10) 0px, rgba(201,162,39,0.10) 1px, transparent 1px, transparent 32px)',
+  'radial-gradient(ellipse 90% 70% at 50% 42%, #3d2566 0%, #2d1b4e 45%, #1a0f30 100%)',
+].join(', ');
+
+const DZ_PLAYFIELD_BG = [
+  'radial-gradient(ellipse 110% 105% at 50% 48%, transparent 36%, rgba(0,18,9,0.68) 100%)',
+  'radial-gradient(ellipse 72% 74% at 76% 46%, rgba(251,255,248,0.15) 0%, rgba(241,251,240,0.07) 34%, transparent 72%)',
+  'radial-gradient(circle at 84.5% 61%, rgba(0,57,29,0.86) 0%, rgba(0,57,29,0.86) 12.1%, transparent 12.6%)',
+  'radial-gradient(circle at 80.5% 61%, rgba(247,255,247,0.16) 0%, rgba(231,249,234,0.09) 14.8%, transparent 15.4%)',
+  'radial-gradient(circle at 92.0% 50.0%, rgba(218,50,57,0.34) 0px, rgba(218,50,57,0.22) 1.5px, transparent 3px)',
+  'radial-gradient(circle at 89.4% 47.2%, rgba(218,50,57,0.30) 0px, rgba(218,50,57,0.18) 1.2px, transparent 2.8px)',
+  'radial-gradient(circle at 94.7% 47.2%, rgba(218,50,57,0.30) 0px, rgba(218,50,57,0.18) 1.2px, transparent 2.8px)',
+  'radial-gradient(circle at 90.4% 53.2%, rgba(218,50,57,0.27) 0px, rgba(218,50,57,0.16) 1.1px, transparent 2.6px)',
+  'radial-gradient(circle at 93.6% 53.2%, rgba(218,50,57,0.27) 0px, rgba(218,50,57,0.16) 1.1px, transparent 2.6px)',
+  'repeating-linear-gradient(45deg, rgba(235,251,237,0.035) 0px, rgba(235,251,237,0.035) 1px, transparent 1px, transparent 42px)',
+  'repeating-linear-gradient(-45deg, rgba(235,251,237,0.035) 0px, rgba(235,251,237,0.035) 1px, transparent 1px, transparent 42px)',
+  'linear-gradient(112deg, #003c1f 0%, #006233 34%, #0b6e3b 47%, #174a2d 62%, #062d18 100%)',
+].join(', ');
+
+const NEON_PLAYFIELD_BG = 'linear-gradient(175deg, #060f1d 0%, #09152a 55%, #050d18 100%)';
+
 const TURN_REMINDER_IDLE_MS = 10000;
 const LAUGH_MOCK_STREAK_THRESHOLD = 2;
 
@@ -375,7 +429,7 @@ function cubeFaceTransform(fv: number, half: number): string {
   }
 }
 
-function DieFace({
+const DieFace = memo(function DieFace({
   value, neon, col, size, rolling, justLanded, dim, classic, dz,
 }: {
   value: number; neon: string; col: string; size: number;
@@ -471,7 +525,17 @@ function DieFace({
       </motion.div>
     </div>
   );
-}
+}, (prev, next) => (
+  prev.rolling === next.rolling
+  && prev.justLanded === next.justLanded
+  && prev.neon === next.neon
+  && prev.col === next.col
+  && prev.size === next.size
+  && prev.dim === next.dim
+  && prev.classic === next.classic
+  && prev.dz === next.dz
+  && (Boolean(prev.rolling) || prev.value === next.value)
+));
 
 // ─── Layout constants for corner dice panels ──────────────────────────────────
 // Each panel hovers above/below its board corner, inset to the frame's own
@@ -510,13 +574,13 @@ type PanelLayout = {
 // progress dots.
 const CornerDice = memo(function CornerDice({
   player, anchor, game, isAI, lang, boardStyle,
-  rolling, animDice, justLanded, lastDice,
+  rolling, justLanded, lastDice,
   onRoll, canRoll, panelLayout,
 }: {
   player: number;
   anchor: 'tl' | 'tr' | 'bl' | 'br';
   game: E.GameState; isAI: boolean; lang: 'fr' | 'ar';
-  rolling: boolean; animDice: number; justLanded: boolean; lastDice: number[];
+  rolling: boolean; justLanded: boolean; lastDice: number[];
   onRoll: () => void; canRoll: boolean;
   boardStyle?: BoardStyle;
   panelLayout: PanelLayout;
@@ -525,6 +589,7 @@ const CornerDice = memo(function CornerDice({
   const neon        = E.PLAYER_NEONS[player];
   const isActive    = game.activePlayer === player && game.phase !== 'done';
   const exists      = game.playerSlots.includes(player);
+  const liveFace    = useLiveDiceFace(isActive && rolling);
   const pieces      = game.pieces.filter(p => p.player === player);
   // DZ board only: Arabic AND French corner-panel labels use the requested
   // position-based copy. Classic, Neon, and the shared/global name constants
@@ -535,7 +600,7 @@ const CornerDice = memo(function CornerDice({
     ? (boardStyle === 'dz' ? dzArabicNames[player] : E.PLAYER_NAMES_AR[player])
     : (boardStyle === 'dz' ? dzFrenchNames[player] : E.PLAYER_NAMES_FR[player]);
   const isRollingMe = rolling && isActive;
-  const diceVal     = isActive ? animDice : (lastDice[player] || 1);
+  const diceVal     = isRollingMe ? liveFace : (lastDice[player] || 1);
   const canTap      = canRoll && isActive;
   const isTop       = anchor === 'tl' || anchor === 'tr';
   const isClassic   = boardStyle === 'classic';
@@ -930,209 +995,8 @@ const CornerDice = memo(function CornerDice({
   );
 });
 
-// ─── Player chip (header bar — name + colour only, no dice) ───────────────────
-function PlayerChip({ game, player, isAI, lang, boardStyle }: {
-  game: E.GameState; player: number; isAI: boolean; lang: 'fr'|'ar'; boardStyle?: BoardStyle;
-}) {
-  const col       = E.PLAYER_COLORS[player];
-  const neon      = E.PLAYER_NEONS[player];
-  const isActive  = game.activePlayer === player && game.phase !== 'done';
-  const pieces    = game.pieces.filter(p => p.player === player);
-  const name      = lang === 'ar' ? E.PLAYER_NAMES_AR[player] : E.PLAYER_NAMES_FR[player];
-  const isClassic = boardStyle === 'classic';
-  const clSolid   = CL_SOLID[player as 0|1|2|3];
-  const clBorder  = CL_BORDER[player as 0|1|2|3];
-
-  return (
-    <motion.div
-      animate={{
-        scale: isActive ? 1.06 : 1,
-        boxShadow: isClassic
-          ? (isActive ? `0 3px 12px ${clSolid}55` : '0 1px 4px rgba(0,0,0,0.10)')
-          : (isActive
-            ? `0 0 12px ${neon}70, inset 0 0 6px ${col}18`
-            : '0 0 0px transparent'),
-      }}
-      transition={{ duration: 0.22 }}
-      style={isClassic ? {
-        background: isActive
-          ? `linear-gradient(150deg, ${clSolid} 0%, ${clBorder} 100%)`
-          : `linear-gradient(150deg, #FFFFFF 0%, #F4F4F4 100%)`,
-        border: `${isActive ? 2 : 1.5}px solid ${isActive ? clSolid : clSolid + 'AA'}`,
-        borderRadius: 12, padding: '5px 8px', minWidth: 52,
-        position: 'relative', overflow: 'hidden', flexShrink: 0,
-      } : {
-        background: `linear-gradient(135deg, ${col}18, ${col}08)`,
-        border: `1.5px solid ${isActive ? neon : col + '25'}`,
-        borderRadius: 12, padding: '5px 8px', minWidth: 52,
-        position: 'relative', overflow: 'hidden', flexShrink: 0,
-      }}>
-      {isActive && !isClassic && (
-        <motion.div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-          background: `linear-gradient(90deg, transparent, ${neon}, transparent)`,
-        }}
-          animate={{ opacity: [0.5, 1, 0.5] }}
-          transition={{ duration: 1.1, repeat: Infinity }}
-        />
-      )}
-      {isActive && isClassic && (
-        <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-          background: `linear-gradient(90deg, transparent, rgba(255,255,255,0.65), transparent)`,
-        }}/>
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-        <div style={{
-          width: 7, height: 7, borderRadius: '50%',
-          background: isClassic ? (isActive ? '#FFFFFF' : clSolid) : col,
-          boxShadow: isClassic ? 'none' : `0 0 4px ${neon}80`,
-          flexShrink: 0,
-        }}/>
-        <span style={{
-          fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 10,
-          color: isClassic
-            ? (isActive ? '#FFFFFF' : clSolid)
-            : (isActive ? '#fff' : 'rgba(255,255,255,0.50)'),
-          letterSpacing: '0.05em',
-        }}>
-          {name.slice(0,4).toUpperCase()}
-        </span>
-        {isAI && <Bot size={8} color={isClassic ? (isActive ? 'rgba(255,255,255,0.70)' : 'rgba(0,0,0,0.40)') : 'rgba(255,255,255,0.30)'}/>}
-      </div>
-      <div style={{ display: 'flex', gap: 2 }}>
-        {[0,1,2,3].map(i => {
-          const p  = pieces[i];
-          const st = !p ? 'none' : p.relPos === E.FINISHED_POS ? 'done' : p.relPos >= 0 ? 'on' : 'home';
-          return (
-            <div key={i} style={{
-              width: 5, height: 5, borderRadius: '50%',
-              background: isClassic
-                ? (st === 'done' ? (isActive ? '#FFFFFF' : clSolid) : st === 'on' ? (isActive ? '#FFFFFF' : clSolid) : (isActive ? 'rgba(255,255,255,0.30)' : `${clSolid}35`))
-                : (st === 'done' ? neon : st === 'on' ? col : `${col}40`),
-              border: isClassic
-                ? `0.5px solid ${isActive ? 'rgba(255,255,255,0.45)' : clSolid + '45'}`
-                : `0.5px solid ${col}30`,
-              boxShadow: (!isClassic && st === 'done') ? `0 0 4px ${neon}` : 'none',
-              transition: 'all 0.28s',
-            }}/>
-          );
-        })}
-      </div>
-    </motion.div>
-  );
-}
-
-// ─── Classic scoreboard strip (replaces PlayerChip row in Classic mode) ──────
-// One unified parchment ribbon — same ivory/gold vocabulary as the dice cards.
-// Divided into per-player sections by gilt vertical rules. The active player's
-// section carries a player-colour top bar that slides via layoutId as turns
-// change, a colour-saturated name, and a warm tint on the section background.
-// Inactive sections are muted parchment ink. Nothing loud, nothing accidental.
-function ClassicScoreStrip({ game, playerSlots, isComputer, lang }: {
-  game: E.GameState; playerSlots: number[]; isComputer: boolean; lang: 'fr'|'ar';
-}) {
-  return (
-    <div style={{
-      flex: 1, minWidth: 0,
-      position: 'relative',
-      borderRadius: 8,
-      border: '1.5px solid #a07820',
-      background: 'linear-gradient(170deg, #fefdf6 0%, #f0e4c6 100%)',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.85)',
-      overflow: 'hidden',
-      display: 'flex', flexDirection: 'row',
-    }}>
-      {/* Full-width gilt accent line across the top */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 2, zIndex: 2,
-        background: 'linear-gradient(90deg, rgba(160,120,32,0.08) 0%, rgba(201,162,39,0.68) 22%, rgba(201,162,39,0.68) 78%, rgba(160,120,32,0.08) 100%)',
-        pointerEvents: 'none',
-      }}/>
-
-      {playerSlots.map((slot, idx) => {
-        const isActive = game.activePlayer === slot && game.phase !== 'done';
-        const pieces   = game.pieces.filter(p => p.player === slot);
-        const name     = lang === 'ar' ? E.PLAYER_NAMES_AR[slot] : E.PLAYER_NAMES_FR[slot];
-        const clSolid  = CL_SOLID[slot  as 0|1|2|3];
-        const clBorder = CL_BORDER[slot as 0|1|2|3];
-        const clArrow  = CL_ARROW[slot  as 0|1|2|3];
-        const isAI     = isComputer && slot !== 0;
-
-        return (
-          <div key={slot} style={{
-            flex: 1, minWidth: 0,
-            position: 'relative',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            gap: 3,
-            padding: '8px 4px 6px',
-            borderLeft: idx === 0 ? 'none' : '0.5px solid rgba(160,120,32,0.30)',
-            background: isActive ? `${clSolid}10` : 'transparent',
-            transition: 'background 0.45s',
-          }}>
-            {/* Player-colour top bar — slides via layoutId as the active player changes */}
-            {isActive && (
-              <motion.div
-                layoutId="classic-active-bar"
-                style={{
-                  position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                  background: clSolid, zIndex: 1,
-                }}
-                transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-              />
-            )}
-
-            {/* Name row: colour pip + abbreviated name + optional AI icon */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              <div style={{
-                width: 5, height: 5, borderRadius: '50%',
-                background: clSolid,
-                opacity: isActive ? 1 : 0.52,
-                boxShadow: isActive ? `0 0 0 1px rgba(160,120,32,0.42)` : 'none',
-                flexShrink: 0, transition: 'opacity 0.4s',
-              }}/>
-              <span style={{
-                fontFamily: 'Rajdhani, sans-serif', fontWeight: 700, fontSize: 10,
-                color: isActive ? clArrow : 'rgba(100,70,20,0.42)',
-                letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1,
-                transition: 'color 0.4s',
-              }}>
-                {name.slice(0,4)}
-              </span>
-              {isAI && (
-                <Bot size={7}
-                  color={isActive ? clArrow : 'rgba(100,70,20,0.28)'}
-                  style={{ flexShrink: 0 }}/>
-              )}
-            </div>
-
-            {/* Pawn status pips — same palette as CornerDice progress dots */}
-            <div style={{ display: 'flex', gap: 3 }}>
-              {[0,1,2,3].map(i => {
-                const p  = pieces[i];
-                const st = !p ? 'none'
-                         : p.relPos === E.FINISHED_POS ? 'done'
-                         : p.relPos >= 0 ? 'on' : 'home';
-                return (
-                  <div key={i} style={{
-                    width: 5, height: 5, borderRadius: '50%',
-                    background: st === 'done' ? clSolid
-                              : st === 'on'   ? `${clSolid}bb`
-                              : st === 'home' ? `${clSolid}50`
-                              : 'rgba(180,140,40,0.10)',
-                    border: `0.5px solid ${st !== 'none' ? `${clBorder}72` : 'rgba(160,120,32,0.24)'}`,
-                    transition: 'all 0.3s',
-                  }}/>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+// ─── Hop animation constants ─────────────────────────────────────────────────
+// PlayerChip and ClassicScoreStrip were unused leftovers and have been removed.
 
 // ─── Hop animation constants ─────────────────────────────────────────────────
 interface HopStep { x: number; y: number }
@@ -3911,8 +3775,12 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const playerSlots = useMemo(() => config.players === 2 ? [0, 2] : Array.from({ length: config.players }, (_, i) => i), [config.players]);
   const [game, setGame]             = useState<E.GameState>(() => initialSnapshot?.game ?? E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
   const [rolling, setRolling]       = useState(false);
-  const [animDice, setAnimDice]     = useState(() => initialSnapshot?.game.dice || 1);
   const [justLanded, setJustLanded] = useState(false);
+  const diceFaceInitRef = useRef(false);
+  if (!diceFaceInitRef.current) {
+    diceFaceInitRef.current = true;
+    diceFaceValue = initialSnapshot?.game.dice || 1;
+  }
   const [lastDice, setLastDice]     = useState<number[]>(() => initialSnapshot?.lastDice ?? [0, 0, 0, 0]);
   const [animSpeed, setAnimSpeed]   = useState<AnimSpeed>(() => initialSnapshot?.animSpeed ?? 'normal');
   const [showSettings, setShowSettings] = useState(false);
@@ -4084,7 +3952,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
     let count = 0;
     const cycle = () => {
-      setAnimDice(Math.floor(Math.random() * 6) + 1);
+      publishDiceFace(Math.floor(Math.random() * 6) + 1);
       count++;
       // Ease out: fast ticks → slow ticks for satisfying deceleration
       const delay = count < Math.floor(cycles * 0.4)
@@ -4098,7 +3966,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
         const t = setTimeout(() => {
           setGame(prev => {
             const next = E.doRoll(prev);
-            setAnimDice(next.dice);
+            publishDiceFace(next.dice);
             setLastDice(ld => { const n = [...ld]; n[rollingPlayer] = next.dice; return n; });
             setRolling(false);
             setJustLanded(true);
@@ -4472,7 +4340,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     rollTimers.current.forEach(clearTimeout);
     rollTimers.current = [];
     setRolling(false);
-    setAnimDice(1);
+    publishDiceFace(1);
     setJustLanded(false);
     setLastDice([0,0,0,0]);
     unlockMoveInteraction();
@@ -4507,51 +4375,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   return (
     <motion.div key={restartKey}
       className="absolute inset-0 z-20 flex flex-col overflow-hidden select-none"
-      style={{ background: isClassic
-        ? [
-            // Cinematic vignette — edges fall to deep purple, centre stays warm
-            'radial-gradient(ellipse 105% 105% at 50% 50%, transparent 42%, rgba(8,3,18,0.72) 100%)',
-            // Gold stardust — sparse tiny glints at very low opacity
-            'radial-gradient(circle at 12% 22%, rgba(255,220,100,0.10) 0px, transparent 1.5px)',
-            'radial-gradient(circle at 80% 15%, rgba(255,220,100,0.08) 0px, transparent 1px)',
-            'radial-gradient(circle at 44% 75%, rgba(255,220,100,0.09) 0px, transparent 1.5px)',
-            'radial-gradient(circle at 90% 68%, rgba(255,220,100,0.07) 0px, transparent 1px)',
-            'radial-gradient(circle at 28% 90%, rgba(255,220,100,0.08) 0px, transparent 1.5px)',
-            'radial-gradient(circle at 67% 38%, rgba(255,220,100,0.06) 0px, transparent 1px)',
-            'radial-gradient(circle at 55% 8%,  rgba(255,220,100,0.07) 0px, transparent 1.5px)',
-            // Warm golden spotlight — soft ellipse behind the board like a light from above
-            'radial-gradient(ellipse 56% 50% at 50% 52%, rgba(255,200,60,0.065) 0%, transparent 72%)',
-            // Diamond grid — slightly more visible for premium texture
-            'repeating-linear-gradient(45deg,  rgba(201,162,39,0.10) 0px, rgba(201,162,39,0.10) 1px, transparent 1px, transparent 32px)',
-            'repeating-linear-gradient(-45deg, rgba(201,162,39,0.10) 0px, rgba(201,162,39,0.10) 1px, transparent 1px, transparent 32px)',
-            // Purple base
-            'radial-gradient(ellipse 90% 70% at 50% 42%, #3d2566 0%, #2d1b4e 45%, #1a0f30 100%)',
-          ].join(', ')
-        : isDz
-        ? [
-            // Velvet vignette — lets the board remain the focal point.
-            'radial-gradient(ellipse 110% 105% at 50% 48%, transparent 36%, rgba(0,18,9,0.68) 100%)',
-            // A diffuse ivory aurora — an artistic echo of Algeria’s white field,
-            // diffused through the emerald instead of rendered as a literal flag.
-            'radial-gradient(ellipse 72% 74% at 76% 46%, rgba(251,255,248,0.15) 0%, rgba(241,251,240,0.07) 34%, transparent 72%)',
-            // Crescent shadow and light: the shifted emerald cutout sits over a
-            // soft ivory moon, leaving an oversized, atmospheric crescent at right.
-            'radial-gradient(circle at 84.5% 61%, rgba(0,57,29,0.86) 0%, rgba(0,57,29,0.86) 12.1%, transparent 12.6%)',
-            'radial-gradient(circle at 80.5% 61%, rgba(247,255,247,0.16) 0%, rgba(231,249,234,0.09) 14.8%, transparent 15.4%)',
-            // Five restrained red glints form a star-like constellation beside the
-            // crescent, a nod to the national emblem without turning into an icon.
-            'radial-gradient(circle at 92.0% 50.0%, rgba(218,50,57,0.34) 0px, rgba(218,50,57,0.22) 1.5px, transparent 3px)',
-            'radial-gradient(circle at 89.4% 47.2%, rgba(218,50,57,0.30) 0px, rgba(218,50,57,0.18) 1.2px, transparent 2.8px)',
-            'radial-gradient(circle at 94.7% 47.2%, rgba(218,50,57,0.30) 0px, rgba(218,50,57,0.18) 1.2px, transparent 2.8px)',
-            'radial-gradient(circle at 90.4% 53.2%, rgba(218,50,57,0.27) 0px, rgba(218,50,57,0.16) 1.1px, transparent 2.6px)',
-            'radial-gradient(circle at 93.6% 53.2%, rgba(218,50,57,0.27) 0px, rgba(218,50,57,0.16) 1.1px, transparent 2.6px)',
-            // Fine ivory zellige lines add depth at the dice-card perimeter.
-            'repeating-linear-gradient(45deg, rgba(235,251,237,0.035) 0px, rgba(235,251,237,0.035) 1px, transparent 1px, transparent 42px)',
-            'repeating-linear-gradient(-45deg, rgba(235,251,237,0.035) 0px, rgba(235,251,237,0.035) 1px, transparent 1px, transparent 42px)',
-            // Green-and-ivory silk sweep — #006233 remains the prominent anchor.
-            'linear-gradient(112deg, #003c1f 0%, #006233 34%, #0b6e3b 47%, #174a2d 62%, #062d18 100%)',
-          ].join(', ')
-        : 'linear-gradient(175deg, #060f1d 0%, #09152a 55%, #050d18 100%)' }}
+      style={{ background: isClassic ? CLASSIC_PLAYFIELD_BG : isDz ? DZ_PLAYFIELD_BG : NEON_PLAYFIELD_BG }}
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.97 }}
@@ -4660,7 +4484,6 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             game={game}
             lang={lang}
             rolling={rolling && game.activePlayer === 0}
-            animDice={game.activePlayer === 0 ? animDice : (lastDice[0] || 1)}
             justLanded={justLanded && game.activePlayer === 0}
             lastDice={lastDice}
             onRoll={onRollStable}
@@ -4671,7 +4494,6 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             game={game}
             lang={lang}
             rolling={rolling && game.activePlayer === 1}
-            animDice={game.activePlayer === 1 ? animDice : (lastDice[1] || 1)}
             justLanded={justLanded && game.activePlayer === 1}
             lastDice={lastDice}
             onRoll={onRollStable}
@@ -4682,7 +4504,6 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             game={game}
             lang={lang}
             rolling={rolling && game.activePlayer === 2}
-            animDice={game.activePlayer === 2 ? animDice : (lastDice[2] || 1)}
             justLanded={justLanded && game.activePlayer === 2}
             lastDice={lastDice}
             onRoll={onRollStable}
@@ -4693,7 +4514,6 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             game={game}
             lang={lang}
             rolling={rolling && game.activePlayer === 3}
-            animDice={game.activePlayer === 3 ? animDice : (lastDice[3] || 1)}
             justLanded={justLanded && game.activePlayer === 3}
             lastDice={lastDice}
             onRoll={onRollStable}

@@ -57,5 +57,17 @@ export default defineConfig({
     // fix. If the real failure is the module script itself failing to
     // load (rather than failing to parse), this change won't address it.
     target: 'es2015',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+            return 'react';
+          }
+          if (id.includes('node_modules/framer-motion')) {
+            return 'motion';
+          }
+        },
+      },
+    },
   },
 });

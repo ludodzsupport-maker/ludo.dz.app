@@ -50,6 +50,20 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist', 'public'),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Keep React and Framer Motion cacheable/parallel-downloadable
+        // without changing what each screen renders.
+        manualChunks(id) {
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+            return 'react';
+          }
+          if (id.includes('node_modules/framer-motion')) {
+            return 'motion';
+          }
+        },
+      },
+    },
   },
   server: {
     port,

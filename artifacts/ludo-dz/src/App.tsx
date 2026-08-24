@@ -1,17 +1,37 @@
-import { useState, useEffect, useCallback, useTransition } from 'react';
-import { Toaster } from '@/components/ui/toaster';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { lazy, Suspense, useState, useEffect, useCallback, useTransition } from 'react';
 import { tryUnlockBgm } from '@/lib/sound-manager';
 import { SplashScreen } from '@/components/SplashScreen';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { GameModeScreen } from '@/components/GameModeScreen';
-import { SettingsScreen } from '@/components/SettingsScreen';
-import { AboutScreen } from '@/components/AboutScreen';
-import { GameBoardScreen } from '@/components/GameBoardScreen';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { AnimatePresence } from 'framer-motion';
 import type { GameConfig } from '@/components/GameConfigOverlay';
 import { clearSavedGame, type SavedGameSnapshot } from '@/lib/saved-game';
+
+// Heavy screens stay out of the splash/welcome parse path. They are prefetched
+// during splash (menus) and mode-select (board) so navigation still lands on
+// an already-warmed module — appearance and timing of each screen stay the same.
+const GameModeScreen = lazy(() =>
+  import('@/components/GameModeScreen').then((m) => ({ default: m.GameModeScreen })),
+);
+const SettingsScreen = lazy(() =>
+  import('@/components/SettingsScreen').then((m) => ({ default: m.SettingsScreen })),
+);
+const AboutScreen = lazy(() =>
+  import('@/components/AboutScreen').then((m) => ({ default: m.AboutScreen })),
+);
+const GameBoardScreen = lazy(() =>
+  import('@/components/GameBoardScreen').then((m) => ({ default: m.GameBoardScreen })),
+);
+
+function preloadMenuScreens() {
+  void import('@/components/GameModeScreen');
+  void import('@/components/SettingsScreen');
+  void import('@/components/AboutScreen');
+}
+
+function preloadGameBoard() {
+  void import('@/components/GameBoardScreen');
+}
 
 type Screen = 'welcome' | 'mode-select' | 'settings' | 'about' | 'preparing-match' | 'game';
 export type BoardStyle = 'neon' | 'classic' | 'dz';
@@ -91,6 +111,19 @@ function AppContent() {
     return () => { cancelled = true; };
   }, []);
 
+  // Warm the menu chunks while the splash is on screen, and the board chunk
+  // as soon as the player is heading toward a match. Prefetch only — no
+  // visual or navigation-timing change once the destination screen mounts.
+  useEffect(() => {
+    preloadMenuScreens();
+  }, []);
+
+  useEffect(() => {
+    if (screen === 'mode-select' || screen === 'preparing-match') {
+      preloadGameBoard();
+    }
+  }, [screen]);
+
   useEffect(() => {
     if (screen !== 'preparing-match') return;
     const timer = setTimeout(() => navigate('game'), PREPARING_MATCH_MS);
@@ -119,83 +152,83 @@ function AppContent() {
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
       <div className="w-full max-w-[430px] h-viewport-full h-viewport-capped-sm relative bg-deep-blue shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden text-white sm:rounded-[2rem] sm:border-[8px] sm:border-gray-900 mx-auto" style={SCREEN_LAYER_STYLE}>
-        <AnimatePresence mode="wait" presenceAffectsLayout={false}>
-          {showSplash ? (
-            <SplashScreen key="splash" lang={lang} onDismiss={handleSplashDismiss} />
-          ) : screen === 'welcome' ? (
-            <WelcomeScreen
-              key="welcome"
-              lang={lang}
-              onPlay={() => navigate('mode-select')}
-              onSettings={() => navigate('settings')}
-              onAbout={() => navigate('about')}
-            />
-          ) : screen === 'mode-select' ? (
-            <GameModeScreen
-              key="mode-select"
-              lang={lang}
-              onBack={() => navigate('welcome')}
-              onStart={handleStartGame}
-              onResume={handleResumeSavedGame}
-            />
-          ) : screen === 'settings' ? (
-            <SettingsScreen
-              key="settings"
-              lang={lang}
-              setLang={setLang}
-              boardStyle={boardStyle}
-              setBoardStyle={setBoardStyle}
-              onBack={() => navigate('welcome')}
-              onAbout={() => navigate('about')}
-            />
-          ) : screen === 'about' ? (
-            <AboutScreen
-              key="about"
-              lang={lang}
-              onBack={() => navigate('welcome')}
-            />
-          ) : screen === 'preparing-match' ? (
-            <LoadingOverlay
-              key="preparing-match"
-              boardStyle={boardStyle}
-              lang={lang}
-              variant="curtain"
-              label={lang === 'ar' ? 'جارٍ تحضير اللعبة' : 'Préparation de la partie'}
-            />
-          ) : screen === 'game' && gameConfig ? (
-            <GameBoardScreen
-              key="game"
-              config={gameConfig}
-              lang={lang}
-              boardStyle={boardStyle}
-              initialSnapshot={resumingSnapshot}
-              onBack={() => {
-                setResumingSnapshot(null);
-                navigate('mode-select');
-              }}
-            />
-          ) : null}
-        </AnimatePresence>
+        <Suspense fallback={null}>
+          <AnimatePresence mode="wait" presenceAffectsLayout={false}>
+            {showSplash ? (
+              <SplashScreen key="splash" lang={lang} onDismiss={handleSplashDismiss} />
+            ) : screen === 'welcome' ? (
+              <WelcomeScreen
+                key="welcome"
+                lang={lang}
+                onPlay={() => navigate('mode-select')}
+                onSettings={() => navigate('settings')}
+                onAbout={() => navigate('about')}
+              />
+            ) : screen === 'mode-select' ? (
+              <GameModeScreen
+                key="mode-select"
+                lang={lang}
+                onBack={() => navigate('welcome')}
+                onStart={handleStartGame}
+                onResume={handleResumeSavedGame}
+              />
+            ) : screen === 'settings' ? (
+              <SettingsScreen
+                key="settings"
+                lang={lang}
+                setLang={setLang}
+                boardStyle={boardStyle}
+                setBoardStyle={setBoardStyle}
+                onBack={() => navigate('welcome')}
+                onAbout={() => navigate('about')}
+              />
+            ) : screen === 'about' ? (
+              <AboutScreen
+                key="about"
+                lang={lang}
+                onBack={() => navigate('welcome')}
+              />
+            ) : screen === 'preparing-match' ? (
+              <LoadingOverlay
+                key="preparing-match"
+                boardStyle={boardStyle}
+                lang={lang}
+                variant="curtain"
+                label={lang === 'ar' ? 'جارٍ تحضير اللعبة' : 'Préparation de la partie'}
+              />
+            ) : screen === 'game' && gameConfig ? (
+              <GameBoardScreen
+                key="game"
+                config={gameConfig}
+                lang={lang}
+                boardStyle={boardStyle}
+                initialSnapshot={resumingSnapshot}
+                onBack={() => {
+                  setResumingSnapshot(null);
+                  navigate('mode-select');
+                }}
+              />
+            ) : null}
+          </AnimatePresence>
+        </Suspense>
       </div>
     </div>
   );
 }
 
 function App() {
-  return (
-    <TooltipProvider>
-      {/*
-        The game is a single-screen state machine. Previously AppContent was
-        behind a wouter <Route path="/"> with a catch-all NotFound route. Any
-        deployment that served the app at another path (for example
-        /index.html in an Android WebView or a Vercel preview/deep link) missed
-        that route before SplashScreen mounted, leaving #root empty. Render the
-        app shell directly so boot is not gated by the browser pathname.
-      */}
-      <AppContent />
-      <Toaster />
-    </TooltipProvider>
-  );
+  //
+  // The game is a single-screen state machine. Previously AppContent was
+  // behind a wouter <Route path="/"> with a catch-all NotFound route. Any
+  // deployment that served the app at another path (for example
+  // /index.html in an Android WebView or a Vercel preview/deep link) missed
+  // that route before SplashScreen mounted, leaving #root empty. Render the
+  // app shell directly so boot is not gated by the browser pathname.
+  //
+  // Unused shadcn TooltipProvider / Toaster wrappers were removed: nothing
+  // in the game mounts a tooltip or toast, and they pulled Radix into the
+  // critical path for zero on-screen effect.
+  return <AppContent />;
 }
 
 export default App;
