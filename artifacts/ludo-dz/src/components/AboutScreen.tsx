@@ -174,6 +174,7 @@ export function AboutScreen({ lang, onBack }: AboutScreenProps) {
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <motion.div
           className="absolute -top-10 -right-10 opacity-[0.15] w-32 h-32 blur-[3px]"
+          style={{ willChange: 'transform' }}
           animate={driftAnimation}
           transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
         >
@@ -188,6 +189,7 @@ export function AboutScreen({ lang, onBack }: AboutScreenProps) {
         </motion.div>
         <motion.div
           className="absolute -bottom-8 right-5 opacity-[0.14] w-24 h-24 blur-[3px]"
+          style={{ willChange: 'transform' }}
           animate={shouldReduceMotion ? {} : { y: [0, -26, 0], rotate: [0, 36, 0] }}
           transition={{ duration: 15, repeat: Infinity, ease: "easeInOut", delay: 6 }}
         >

@@ -57,7 +57,7 @@ const itemVariants = {
 };
 
 // ─── Reusable shimmer strip ───────────────────────────────────────────────────
-function Shimmer() {
+const Shimmer = memo(function Shimmer() {
   return (
     <motion.div
       className="absolute inset-0 pointer-events-none"
@@ -70,10 +70,10 @@ function Shimmer() {
       transition={{ duration: 3, repeat: Infinity, repeatDelay: 2, ease: "easeInOut" }}
     />
   );
-}
+});
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScreenProps) {
+export const WelcomeScreen = memo(function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScreenProps) {
   const logoPath = import.meta.env.BASE_URL + "ludo-logo.png";
   const clipId   = useId();
   const pfxId    = useId();
@@ -130,6 +130,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <motion.div
           className="absolute -top-8 -right-8 opacity-20 w-28 h-28 blur-[2px]"
+          style={{ willChange: 'transform' }}
           animate={{ y: [0, 35, 0], rotate: [0, 40, 0], x: [0, -15, 0] }}
           transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
         >
@@ -137,6 +138,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
         </motion.div>
         <motion.div
           className="absolute top-1/3 -left-14 opacity-15 w-36 h-36 blur-[3px]"
+          style={{ willChange: 'transform' }}
           animate={{ y: [0, -45, 0], rotate: [0, -25, 0] }}
           transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 3 }}
         >
@@ -144,6 +146,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
         </motion.div>
         <motion.div
           className="absolute -bottom-10 right-1/4 opacity-20 w-24 h-24 blur-[2px]"
+          style={{ willChange: 'transform' }}
           animate={{ y: [0, 25, 0], rotate: [0, 60, 0] }}
           transition={{ duration: 13, repeat: Infinity, ease: "easeInOut", delay: 7 }}
         >
@@ -617,4 +620,4 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
       </div>
     </motion.div>
   );
-}
+});

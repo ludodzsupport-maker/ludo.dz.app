@@ -274,6 +274,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
         {/* Top-right — blue pawn, drifts down-left */}
         <motion.div
           className="absolute -top-10 -right-10 opacity-[0.14] w-28 h-28 blur-[3px]"
+          style={{ willChange: 'transform' }}
           animate={{ y: [0, 38, 0], x: [0, -18, 0], rotate: [0, 35, 0] }}
           transition={{ duration: 17, repeat: Infinity, ease: "easeInOut" }}
         >
@@ -283,6 +284,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
         {/* Top-left — red pawn, drifts down-right */}
         <motion.div
           className="absolute -top-6 -left-12 opacity-[0.12] w-32 h-32 blur-[4px]"
+          style={{ willChange: 'transform' }}
           animate={{ y: [0, 45, 0], x: [0, 22, 0], rotate: [0, -28, 0] }}
           transition={{ duration: 21, repeat: Infinity, ease: "easeInOut", delay: 4 }}
         >
@@ -292,6 +294,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
         {/* Mid-right — green pawn, floats vertically */}
         <motion.div
           className="absolute top-[42%] -right-14 opacity-[0.13] w-24 h-24 blur-[3px]"
+          style={{ willChange: 'transform' }}
           animate={{ y: [0, -40, 0], x: [0, -12, 0], rotate: [0, 50, 0] }}
           transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 2 }}
         >
@@ -301,6 +304,7 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
         {/* Bottom-left — gold pawn, rises gently */}
         <motion.div
           className="absolute -bottom-8 -left-8 opacity-[0.15] w-26 h-26 blur-[3px]"
+          style={{ willChange: 'transform' }}
           animate={{ y: [0, -32, 0], x: [0, 18, 0], rotate: [0, -45, 0] }}
           transition={{ duration: 19, repeat: Infinity, ease: "easeInOut", delay: 7 }}
         >

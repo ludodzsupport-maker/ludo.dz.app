@@ -4,7 +4,7 @@
 // • Middle lane only colored; outer strips neutral
 // • Animation speed setting (Fast / Normal / Slow)
 
-import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { memo, useState, useEffect, useRef, useCallback, useMemo, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence, useAnimationControls, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, Bot, Save, Settings, Trash2, X, Zap } from 'lucide-react';
 import { GamePiece } from './GamePiece';
@@ -241,7 +241,7 @@ const AmbientDecorations = memo(function AmbientDecorations() {
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
       {AMBIENT_DECORATIONS.map(({ color, size, delay, ...pos }, i) => (
         <motion.div key={i} className="absolute opacity-[0.06]"
-          style={{ ...pos, width: size, height: size*1.5 }}
+          style={{ ...pos, width: size, height: size*1.5, willChange: 'transform' }}
           animate={{ y: [0,16,0], rotate: [0,25,0] }}
           transition={{ duration: 13+i*3, repeat: Infinity, ease: 'easeInOut', delay }}>
           <GamePiece color={color}/>
@@ -993,7 +993,23 @@ const CornerDice = memo(function CornerDice({
     </motion.div>
     </div>
   );
-});
+}, (prev, next) => (
+  prev.player === next.player
+  && prev.anchor === next.anchor
+  && prev.isAI === next.isAI
+  && prev.lang === next.lang
+  && prev.boardStyle === next.boardStyle
+  && prev.rolling === next.rolling
+  && prev.justLanded === next.justLanded
+  && prev.canRoll === next.canRoll
+  && prev.onRoll === next.onRoll
+  && prev.panelLayout === next.panelLayout
+  && prev.lastDice === next.lastDice
+  && prev.game.activePlayer === next.game.activePlayer
+  && prev.game.phase === next.game.phase
+  && prev.game.playerSlots === next.game.playerSlots
+  && prev.game.pieces === next.game.pieces
+));
 
 // ─── Hop animation constants ─────────────────────────────────────────────────
 // PlayerChip and ClassicScoreStrip were unused leftovers and have been removed.
@@ -1834,6 +1850,99 @@ type PieceAnim = {
   onArrival?: () => void;
 };
 
+// Module-level VFX lists: hop/dust/sparkle spawn must not re-render
+// GameBoardScreen (or rebuild BoardSVG). Layers subscribe locally.
+function createIdListStore<T extends { id: number }>() {
+  let items: T[] = [];
+  const listeners = new Set<() => void>();
+  const emit = () => { listeners.forEach((fn) => fn()); };
+  return {
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+    getSnapshot() { return items; },
+    add(item: T) { items = [...items, item]; emit(); },
+    remove(id: number) {
+      const next = items.filter((item) => item.id !== id);
+      if (next.length === items.length) return;
+      items = next;
+      emit();
+    },
+    clear() {
+      if (items.length === 0) return;
+      items = [];
+      emit();
+    },
+  };
+}
+
+const hopBurstStore = createIdListStore<HopBurstEvent>();
+const dustPuffStore = createIdListStore<DustPuffEvent>();
+const dzSparkleStore = createIdListStore<DzSparkleEvent>();
+let hopBurstSeq = 0;
+let dustPuffSeq = 0;
+let dzSparkleSeq = 0;
+
+function spawnHopBurst(x: number, y: number, neon: string) {
+  hopBurstStore.add({ x, y, neon, id: ++hopBurstSeq });
+}
+function spawnDustPuff(x: number, y: number) {
+  dustPuffStore.add({ x, y, id: ++dustPuffSeq });
+}
+function spawnDzSparkle(x: number, y: number) {
+  dzSparkleStore.add({ x, y, id: ++dzSparkleSeq });
+}
+
+const HopBurstLayer = memo(function HopBurstLayer() {
+  const hopBursts = useSyncExternalStore(hopBurstStore.subscribe, hopBurstStore.getSnapshot, hopBurstStore.getSnapshot);
+  return (
+    <>
+      {hopBursts.map((b) => (
+        <HopBurstEffect
+          key={b.id}
+          x={b.x}
+          y={b.y}
+          neon={b.neon}
+          onDone={() => hopBurstStore.remove(b.id)}
+        />
+      ))}
+    </>
+  );
+});
+
+const DustPuffLayer = memo(function DustPuffLayer() {
+  const dustPuffs = useSyncExternalStore(dustPuffStore.subscribe, dustPuffStore.getSnapshot, dustPuffStore.getSnapshot);
+  return (
+    <>
+      {dustPuffs.map((puff) => (
+        <DustPuffEffect
+          key={puff.id}
+          x={puff.x}
+          y={puff.y}
+          onDone={() => dustPuffStore.remove(puff.id)}
+        />
+      ))}
+    </>
+  );
+});
+
+const DzSparkleLayer = memo(function DzSparkleLayer() {
+  const dzSparkles = useSyncExternalStore(dzSparkleStore.subscribe, dzSparkleStore.getSnapshot, dzSparkleStore.getSnapshot);
+  return (
+    <>
+      {dzSparkles.map((sparkle) => (
+        <DzSparkleTrailEffect
+          key={sparkle.id}
+          x={sparkle.x}
+          y={sparkle.y}
+          onDone={() => dzSparkleStore.remove(sparkle.id)}
+        />
+      ))}
+    </>
+  );
+});
+
 // ─── BoardSVG — pure game board ───────────────────────────────────────────────
 interface BoardSVGProps {
   game: E.GameState;
@@ -1847,19 +1956,8 @@ interface BoardSVGProps {
   homeImpact: HomeImpactEvent | null;
   homeFinishVFX: ShockwaveEvent | null;
   onHomeFinishDone: () => void;
-  // Neon-only per-step hop light bursts — list (not a single slot) because a
-  // multi-cell move can have several in flight at once. Owned by GameBoardScreen.
-  hopBursts: HopBurstEvent[];
-  onHopBurstDone: (id: number) => void;
   onHopStepLand: (x: number, y: number, neon: string) => void;
-  // Classic-only per-step dust puffs — list because a multi-cell move can have
-  // several puffs alive at once. Owned by GameBoardScreen.
-  dustPuffs: DustPuffEvent[];
-  onDustPuffDone: (id: number) => void;
   onDustStep: (x: number, y: number) => void;
-  // DZ-only per-step sparkle trail — list permits overlapping glints on long moves.
-  dzSparkles: DzSparkleEvent[];
-  onDzSparkleDone: (id: number) => void;
   onDzSparkleStep: (x: number, y: number) => void;
   boardStyle?: BoardStyle;
 }
@@ -1868,9 +1966,7 @@ const BoardSVG = memo(function BoardSVG({
   game, onPieceClick, springCfg, hopMs,
   pieceAnims, shockwave, onShockwaveDone,
   homeImpact, homeFinishVFX, onHomeFinishDone,
-  hopBursts, onHopBurstDone, onHopStepLand,
-  dustPuffs, onDustPuffDone, onDustStep,
-  dzSparkles, onDzSparkleDone, onDzSparkleStep,
+  onHopStepLand, onDustStep, onDzSparkleStep,
   boardStyle,
 }: BoardSVGProps) {
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
@@ -3186,16 +3282,6 @@ const BoardSVG = memo(function BoardSVG({
         </g>
       ))}
 
-      {/* ── Movable-piece tile highlights ── */}
-      {movableHighlights.map(({ col, row, neon }, i) => (
-        <motion.rect key={`hi-${i}`}
-          x={col} y={row} width={1} height={1} rx={0.10}
-          fill={neon} filter="url(#tile-glow)"
-          animate={{ opacity: [0.06, 0.24, 0.06] }}
-          transition={{ duration: 0.88, repeat: Infinity, ease: 'easeInOut', delay: i*0.14 }}
-        />
-      ))}
-
       {/* ── Center 3×3 — triangles point toward each player's home column ── */}
       {!isDz && (
         <>
@@ -3406,13 +3492,24 @@ const BoardSVG = memo(function BoardSVG({
       )}
 
     </>
-  ), [activeNeon, boardStyle, game, homeImpact, isClassic, isDz, movableHighlights, animatingHomeSlots, safeCellOccupancy]);
+  ), [activeNeon, boardStyle, game.playerSlots, game.activePlayer, game.pieces, game.phase === 'done', homeImpact, isClassic, isDz, animatingHomeSlots, safeCellOccupancy]);
 
   return (
     <svg viewBox="0 0 15 15"
       style={{ width: '100%', height: '100%', display: 'block' }}
       xmlns="http://www.w3.org/2000/svg">
       {boardStatic}
+
+      {/* Movable highlights sit outside boardStatic so a dice resolve that
+          only changes `movable` does not rebuild the ornate static board. */}
+      {movableHighlights.map(({ col, row, neon }, i) => (
+        <motion.rect key={`hi-${i}`}
+          x={col} y={row} width={1} height={1} rx={0.10}
+          fill={neon} filter="url(#tile-glow)"
+          animate={{ opacity: [0.06, 0.24, 0.06] }}
+          transition={{ duration: 0.88, repeat: Infinity, ease: 'easeInOut', delay: i*0.14 }}
+        />
+      ))}
 
       {/* ── Shockwave burst — rendered above board, below pieces ── */}
       {shockwave && (
@@ -3436,36 +3533,9 @@ const BoardSVG = memo(function BoardSVG({
         />
       )}
 
-      {/* ── Hop-step light bursts — Neon board only, one per landed cell ── */}
-      {hopBursts.map(b => (
-        <HopBurstEffect
-          key={b.id}
-          x={b.x}
-          y={b.y}
-          neon={b.neon}
-          onDone={() => onHopBurstDone(b.id)}
-        />
-      ))}
-
-      {/* ── Dust puffs — Classic board only, one per vacated cell ── */}
-      {dustPuffs.map(p => (
-        <DustPuffEffect
-          key={p.id}
-          x={p.x}
-          y={p.y}
-          onDone={() => onDustPuffDone(p.id)}
-        />
-      ))}
-
-      {/* ── DZ gilt sparkle trail — one quiet glint per vacated hop cell ── */}
-      {dzSparkles.map(sparkle => (
-        <DzSparkleTrailEffect
-          key={sparkle.id}
-          x={sparkle.x}
-          y={sparkle.y}
-          onDone={() => onDzSparkleDone(sparkle.id)}
-        />
-      ))}
+      <HopBurstLayer />
+      <DustPuffLayer />
+      <DzSparkleLayer />
 
       {/* ── Pieces ── each PawnToken manages its own dual-control animation ── */}
       {piecePositions.map(({ player, index, xy: [fx, fy], stackScale, showSafeStar }) => {
@@ -3808,39 +3878,6 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const [shockwave,     setShockwave]     = useState<ShockwaveEvent | null>(null);
   const [homeImpact,    setHomeImpact]    = useState<HomeImpactEvent | null>(null);
   const [homeFinishVFX, setHomeFinishVFX] = useState<ShockwaveEvent | null>(null);
-  // Neon-only per-step hop light bursts — a list because a multi-cell move can
-  // have several bursts alive at once (each self-removes via onDone).
-  const [hopBursts,     setHopBursts]     = useState<HopBurstEvent[]>([]);
-  const hopBurstIdRef = useRef(0);
-  const spawnHopBurst = useCallback((x: number, y: number, neon: string) => {
-    const id = ++hopBurstIdRef.current;
-    setHopBursts(prev => [...prev, { x, y, neon, id }]);
-  }, []);
-  const removeHopBurst = useCallback((id: number) => {
-    setHopBursts(prev => prev.filter(b => b.id !== id));
-  }, []);
-  // Classic-only per-step dust puffs — a list because a multi-cell move can
-  // have several puffs alive at once (each self-removes via onDone).
-  const [dustPuffs,     setDustPuffs]     = useState<DustPuffEvent[]>([]);
-  const dustPuffIdRef = useRef(0);
-  const spawnDustPuff = useCallback((x: number, y: number) => {
-    const id = ++dustPuffIdRef.current;
-    setDustPuffs(prev => [...prev, { x, y, id }]);
-  }, []);
-  const removeDustPuff = useCallback((id: number) => {
-    setDustPuffs(prev => prev.filter(p => p.id !== id));
-  }, []);
-  // DZ-only per-step sparkle trail — separate state prevents either Classic or
-  // Neon from receiving a new effect or a changed animation path.
-  const [dzSparkles, setDzSparkles] = useState<DzSparkleEvent[]>([]);
-  const dzSparkleIdRef = useRef(0);
-  const spawnDzSparkle = useCallback((x: number, y: number) => {
-    const id = ++dzSparkleIdRef.current;
-    setDzSparkles(prev => [...prev, { x, y, id }]);
-  }, []);
-  const removeDzSparkle = useCallback((id: number) => {
-    setDzSparkles(prev => prev.filter(sparkle => sparkle.id !== id));
-  }, []);
   const clearShockwave = useCallback(() => setShockwave(null), []);
   const clearHomeFinishVFX = useCallback(() => setHomeFinishVFX(null), []);
 
@@ -4006,7 +4043,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     // Neon is active (see PawnToken's per-step guard), so exactly one of the
     // three handle*Step callbacks fires per physical hop regardless of theme.
     vibratePawnStep();
-  }, [isNeon, spawnHopBurst, cfg.hopMs]);
+  }, [isNeon, cfg.hopMs]);
 
   // Mirrors handleNeonHopLand above, but hooks the existing Classic-only dust
   // puff callback instead. It does not alter the hop sequence, move
@@ -4019,7 +4056,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     // Classic is active (see PawnToken's per-step guard), so exactly one of
     // the three handle*Step callbacks fires per physical hop regardless of theme.
     vibratePawnStep();
-  }, [isClassic, spawnDustPuff, cfg.hopMs]);
+  }, [isClassic, cfg.hopMs]);
 
   // Mirrors handleNeonHopLand/handleClassicDustStep above, but hooks the
   // existing DZ-only sparkle callback instead. It does not alter the hop
@@ -4033,7 +4070,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     // DZ is active (see PawnToken's per-step guard), so exactly one of the
     // three handle*Step callbacks fires per physical hop regardless of theme.
     vibratePawnStep();
-  }, [isDz, spawnDzSparkle, cfg.hopMs]);
+  }, [isDz, cfg.hopMs]);
 
   // ── triggerMove — async-safe, decoupled animation from state resolution ──
   // Uses refs for game/isAnimating so it is stable (no deps) and never stale.
@@ -4348,6 +4385,9 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     setShockwave(null);
     setHomeImpact(null);
     setHomeFinishVFX(null);
+    hopBurstStore.clear();
+    dustPuffStore.clear();
+    dzSparkleStore.clear();
     const newGame = E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots);
     setGame(newGame);
     dangerPiecesRef.current = getDangerSet(newGame.pieces, newGame.playerSlots);
@@ -4465,14 +4505,8 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
               homeImpact={homeImpact}
               homeFinishVFX={homeFinishVFX}
               onHomeFinishDone={clearHomeFinishVFX}
-              hopBursts={hopBursts}
-              onHopBurstDone={removeHopBurst}
               onHopStepLand={handleNeonHopLand}
-              dustPuffs={dustPuffs}
-              onDustPuffDone={removeDustPuff}
               onDustStep={handleClassicDustStep}
-              dzSparkles={dzSparkles}
-              onDzSparkleDone={removeDzSparkle}
               onDzSparkleStep={handleDzSparkleStep}
               boardStyle={boardStyle}
             />

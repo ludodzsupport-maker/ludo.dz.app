@@ -117,6 +117,14 @@
   [role='button'] {
     touch-action: manipulation;
   }
+
+  /* Contain layout/style recalc to the active phone-frame screen.
+     Paint is not contained — overflow decorations and corner dice
+     must still draw outside their boxes. */
+  .screen-paint-root {
+    isolation: isolate;
+    contain: layout style;
+  }
   
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading;

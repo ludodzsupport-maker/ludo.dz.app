@@ -830,6 +830,7 @@ export function GameModeScreen({ lang, onBack, onStart, onResume }: GameModeScre
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <motion.div
           className="absolute -top-8 -right-8 opacity-20 w-28 h-28 blur-[2px]"
+          style={{ willChange: 'transform' }}
           animate={{ y: [0, 35, 0], rotate: [0, 40, 0], x: [0, -15, 0] }}
           transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
         >
@@ -837,6 +838,7 @@ export function GameModeScreen({ lang, onBack, onStart, onResume }: GameModeScre
         </motion.div>
         <motion.div
           className="absolute top-1/3 -left-14 opacity-15 w-36 h-36 blur-[3px]"
+          style={{ willChange: 'transform' }}
           animate={{ y: [0, -45, 0], rotate: [0, -25, 0] }}
           transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 3 }}
         >
@@ -844,6 +846,7 @@ export function GameModeScreen({ lang, onBack, onStart, onResume }: GameModeScre
         </motion.div>
         <motion.div
           className="absolute -bottom-10 right-1/4 opacity-20 w-24 h-24 blur-[2px]"
+          style={{ willChange: 'transform' }}
           animate={{ y: [0, 25, 0], rotate: [0, 60, 0] }}
           transition={{ duration: 13, repeat: Infinity, ease: "easeInOut", delay: 7 }}
         >

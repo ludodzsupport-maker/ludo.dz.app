@@ -1,15 +1,17 @@
 import { memo } from "react";
-import { motion } from "framer-motion";
 
 interface GamePieceProps {
   color?: string;
   className?: string;
 }
 
+// Plain SVG: every caller that needs motion already wraps this in a
+// motion.div. Using motion.svg here added a Framer subscriber with no
+// animate props of its own — extra work, identical pixels.
 export const GamePiece = memo(function GamePiece({ color = "#DC143C", className = "" }: GamePieceProps) {
   const id = color.replace('#', '');
   return (
-    <motion.svg
+    <svg
       viewBox="0 0 100 160"
       className={className}
       fill="none"
@@ -118,6 +120,6 @@ export const GamePiece = memo(function GamePiece({ color = "#DC143C", className 
       <circle cx="60" cy="36" r="4.5" fill="white" opacity="0.58"/>
       {/* Micro rim glint */}
       <circle cx="22" cy="60" r="2.5" fill="white" opacity="0.45"/>
-    </motion.svg>
+    </svg>
   );
 });
