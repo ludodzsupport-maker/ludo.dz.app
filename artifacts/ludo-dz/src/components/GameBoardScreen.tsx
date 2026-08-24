@@ -3942,10 +3942,12 @@ function ExitConfirmationModal({ lang, isNeon, isClassic, isDz, onSaveExit, onDi
 // ─── Main GameBoardScreen ─────────────────────────────────────────────────────
 export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onBack }: Props) {
   const playerSlots = useMemo(() => {
-    if (config.humanColor === undefined && config.players === 2) return [0, 2];
-    const humanColor = config.humanColor ?? 0;
-    const available = Array.from({ length: 4 }, (_, i) => i).filter(slot => slot !== humanColor);
-    return [humanColor, ...available].slice(0, config.players);
+    if (config.humanColor === undefined && config.excludedColor === undefined && config.players === 2) return [0, 2];
+    const humanColor = config.humanColor;
+    const excludedColor = config.excludedColor;
+    const available = Array.from({ length: 4 }, (_, i) => i).filter(slot => slot !== excludedColor && slot !== humanColor);
+    const ordered = humanColor === undefined ? available : [humanColor, ...available];
+    return ordered.slice(0, config.players);
   }, [config.players, config.humanColor]);
   const [game, setGame]             = useState<E.GameState>(() => initialSnapshot?.game ?? E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
   const [rolling, setRolling]       = useState(false);
