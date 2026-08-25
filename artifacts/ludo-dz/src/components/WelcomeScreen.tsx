@@ -1,7 +1,7 @@
-import { memo } from "react";
-import { motion } from "framer-motion";
+import { memo, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { GamePiece } from "./GamePiece";
-import { Settings, Trophy, Info } from "lucide-react";
+import { Info, Settings, Trophy, X } from "lucide-react";
 import { playIconTap, playPrimaryAction } from "../lib/sound-manager";
 
 interface WelcomeScreenProps {
@@ -72,6 +72,317 @@ function Shimmer() {
   );
 }
 
+const LEADERBOARD_NEON = "#FFD700";
+const LEADERBOARD_CARD_BG = "linear-gradient(145deg,#1a1200 0%,#352400 100%)";
+
+const LEADERBOARD_COMING_SOON_COPY = {
+  fr: {
+    wip: "En développement",
+    title: "Bientôt disponible",
+    description:
+      "Le classement réunira bientôt les meilleurs joueurs de Ludo DZ. Gagnez des parties, gravissez les rangs et visez la première place !",
+    close: "Compris",
+    closeLabel: "Fermer",
+  },
+  ar: {
+    wip: "قيد التطوير",
+    title: "قريباً",
+    description:
+      "سيجمع التصنيف قريباً أفضل لاعبي Ludo DZ. اربح المباريات، وتقدّم في المراتب، ونافس على المركز الأول!",
+    close: "حسناً",
+    closeLabel: "إغلاق",
+  },
+} as const;
+
+// A deliberately indistinct ranking silhouette: it reads as a feature taking
+// shape behind frosted glass, rather than as a second panel competing for focus.
+function LeaderboardPreview({ reduceMotion }: { reduceMotion: boolean }) {
+  const rows = [
+    { rank: "01", width: "76%" },
+    { rank: "02", width: "61%" },
+    { rank: "03", width: "48%" },
+  ];
+
+  return (
+    <motion.div
+      aria-hidden="true"
+      className="absolute inset-x-4 top-[112px] h-[220px] pointer-events-none overflow-hidden"
+      initial={reduceMotion ? false : { opacity: 0 }}
+      animate={
+        reduceMotion
+          ? { opacity: 0.17, y: 0 }
+          : { opacity: [0.14, 0.22, 0.14], y: [4, -2, 4] }
+      }
+      transition={
+        reduceMotion
+          ? { duration: 0 }
+          : { duration: 6.5, repeat: Infinity, ease: "easeInOut" }
+      }
+      style={{
+        WebkitMaskImage:
+          "linear-gradient(to bottom, transparent 0%, black 24%, black 70%, transparent 100%)",
+        maskImage:
+          "linear-gradient(to bottom, transparent 0%, black 24%, black 70%, transparent 100%)",
+      }}
+    >
+      <div
+        className="absolute inset-x-3 top-5 space-y-2 rounded-2xl p-3"
+        dir="ltr"
+        style={{
+          background: "linear-gradient(145deg, rgba(255,215,0,0.16), rgba(255,255,255,0.035))",
+          border: "1px solid rgba(255,215,0,0.28)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10), 0 14px 32px rgba(0,0,0,0.30)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          filter: "blur(0.45px)",
+          transform: "rotate(-3deg)",
+        }}
+      >
+        {rows.map((row, index) => (
+          <div
+            key={row.rank}
+            className="flex h-9 items-center gap-2.5 rounded-lg px-2.5"
+            style={{
+              background: index === 0 ? "rgba(255,215,0,0.20)" : "rgba(255,255,255,0.08)",
+              border: `1px solid ${index === 0 ? "rgba(255,215,0,0.30)" : "rgba(255,255,255,0.10)"}`,
+            }}
+          >
+            <span className="w-5 font-heading text-[9px] font-bold text-dz-gold/80">
+              {row.rank}
+            </span>
+            <div
+              className="h-5 w-5 flex-shrink-0 rounded-full"
+              style={{
+                background: "radial-gradient(circle at 35% 30%, rgba(255,255,255,0.50), rgba(255,215,0,0.34) 42%, rgba(255,215,0,0.08) 75%)",
+                border: "1px solid rgba(255,215,0,0.28)",
+              }}
+            />
+            <div className="flex-1 space-y-1.5">
+              <div
+                className="h-1.5 rounded-full"
+                style={{ width: row.width, background: "rgba(255,255,255,0.24)" }}
+              />
+              <div
+                className="h-1 rounded-full"
+                style={{ width: `${42 - index * 7}%`, background: "rgba(255,215,0,0.16)" }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Soft veil keeps the glimpse atmospheric and protects text contrast. */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at center, transparent 35%, rgba(26,18,0,0.22) 72%, rgba(26,18,0,0.55) 100%)",
+          backdropFilter: "blur(0.75px)",
+          WebkitBackdropFilter: "blur(0.75px)",
+        }}
+      />
+    </motion.div>
+  );
+}
+
+// ─── Leaderboard Coming Soon Popup ────────────────────────────────────────────
+function LeaderboardComingSoonPopup({
+  lang,
+  onClose,
+}: {
+  lang: "fr" | "ar";
+  onClose: () => void;
+}) {
+  const copy = LEADERBOARD_COMING_SOON_COPY[lang];
+  const reduceMotion = useReducedMotion() ?? false;
+
+  return (
+    <motion.div
+      className="absolute inset-0 z-50 flex items-center justify-center px-5"
+      initial={reduceMotion ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: reduceMotion ? 0 : 0.18 }}
+      onClick={() => { playIconTap(); onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="leaderboard-coming-soon-title"
+      aria-describedby="leaderboard-coming-soon-description"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0"
+        style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(5px)" }}
+      />
+
+      {/* Card */}
+      <motion.div
+        className="relative w-full max-w-xs overflow-hidden rounded-3xl"
+        initial={reduceMotion ? false : { scale: 0.88, y: 28, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={reduceMotion ? { opacity: 0 } : { scale: 0.88, y: 28, opacity: 0 }}
+        transition={
+          reduceMotion
+            ? { duration: 0 }
+            : { type: "spring", stiffness: 300, damping: 26 }
+        }
+        onClick={event => event.stopPropagation()}
+        style={{
+          background: LEADERBOARD_CARD_BG,
+          boxShadow: `0 24px 64px rgba(0,0,0,0.72), 0 0 0 1px ${LEADERBOARD_NEON}40`,
+        }}
+      >
+        {/* Top accent stripe */}
+        <div
+          className="absolute left-0 right-0 top-0 h-[3px]"
+          style={{ background: `linear-gradient(90deg, transparent, ${LEADERBOARD_NEON}, transparent)` }}
+        />
+
+        {/* Corner glow */}
+        <div
+          className="pointer-events-none absolute left-0 top-0 h-48 w-48 rounded-full"
+          style={{ background: `radial-gradient(circle at top left, ${LEADERBOARD_NEON}16, transparent 65%)` }}
+        />
+
+        <LeaderboardPreview reduceMotion={reduceMotion} />
+
+        {/* Close button */}
+        <button
+          onClick={() => { playIconTap(); onClose(); }}
+          className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full"
+          style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}
+          aria-label={copy.closeLabel}
+        >
+          <X className="h-4 w-4 text-white/50" />
+        </button>
+
+        {/* Content */}
+        <div className="relative z-10 flex flex-col items-center gap-4 px-6 pb-7 pt-8">
+          {/* Themed icon */}
+          <motion.div
+            className="flex h-[84px] w-[84px] items-center justify-center rounded-2xl"
+            style={{
+              background: `radial-gradient(circle, ${LEADERBOARD_NEON}18, transparent 75%)`,
+              border: `1px solid ${LEADERBOARD_NEON}30`,
+            }}
+            animate={
+              reduceMotion
+                ? { boxShadow: `0 0 22px ${LEADERBOARD_NEON}35` }
+                : {
+                    boxShadow: [
+                      `0 0 22px ${LEADERBOARD_NEON}35`,
+                      `0 0 44px ${LEADERBOARD_NEON}58`,
+                      `0 0 22px ${LEADERBOARD_NEON}35`,
+                    ],
+                  }
+            }
+            transition={
+              reduceMotion
+                ? { duration: 0 }
+                : { duration: 2.6, repeat: Infinity, ease: "easeInOut" }
+            }
+          >
+            <Trophy
+              className="h-[48px] w-[48px]"
+              strokeWidth={1.7}
+              style={{
+                color: LEADERBOARD_NEON,
+                filter: `drop-shadow(0 0 8px ${LEADERBOARD_NEON}90)`,
+              }}
+            />
+          </motion.div>
+
+          {/* WIP pill */}
+          <div
+            className="rounded-full px-3 py-1 font-heading font-bold uppercase"
+            style={{
+              fontSize: "9px",
+              letterSpacing: "0.18em",
+              background: `${LEADERBOARD_NEON}18`,
+              color: LEADERBOARD_NEON,
+              border: `1px solid ${LEADERBOARD_NEON}38`,
+            }}
+          >
+            {copy.wip}
+          </div>
+
+          {/* Title */}
+          <h2
+            id="leaderboard-coming-soon-title"
+            className="text-center font-heading font-bold leading-none text-white"
+            style={{
+              fontSize: "clamp(22px, 6vw, 26px)",
+              letterSpacing: "0.08em",
+              textShadow: `0 0 24px ${LEADERBOARD_NEON}55`,
+            }}
+          >
+            {copy.title}
+          </h2>
+
+          {/* Neon rule / progress dot */}
+          <div className="flex w-40 items-center gap-2">
+            <div
+              className="h-px flex-1"
+              style={{ background: `linear-gradient(90deg, transparent, ${LEADERBOARD_NEON}60)` }}
+            />
+            <motion.div
+              className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+              style={{ background: LEADERBOARD_NEON }}
+              animate={
+                reduceMotion
+                  ? { boxShadow: `0 0 5px ${LEADERBOARD_NEON}` }
+                  : {
+                      boxShadow: [
+                        `0 0 5px ${LEADERBOARD_NEON}`,
+                        `0 0 12px ${LEADERBOARD_NEON}`,
+                        `0 0 5px ${LEADERBOARD_NEON}`,
+                      ],
+                    }
+              }
+              transition={
+                reduceMotion
+                  ? { duration: 0 }
+                  : { duration: 1.8, repeat: Infinity }
+              }
+            />
+            <div
+              className="h-px flex-1"
+              style={{ background: `linear-gradient(270deg, transparent, ${LEADERBOARD_NEON}60)` }}
+            />
+          </div>
+
+          {/* Subtitle */}
+          <p
+            id="leaderboard-coming-soon-description"
+            className="text-center font-sans leading-relaxed text-white/55"
+            style={{ fontSize: "12px" }}
+          >
+            {copy.description}
+          </p>
+
+          {/* Dismiss button */}
+          <motion.button
+            whileHover={reduceMotion ? undefined : { scale: 1.03 }}
+            whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+            onClick={() => { playIconTap(); onClose(); }}
+            className="mt-1 w-full rounded-xl py-3 font-heading font-bold"
+            style={{
+              background: `linear-gradient(135deg, ${LEADERBOARD_NEON}28, ${LEADERBOARD_NEON}14)`,
+              border: `1px solid ${LEADERBOARD_NEON}44`,
+              color: LEADERBOARD_NEON,
+              letterSpacing: "0.10em",
+              fontSize: "13px",
+              boxShadow: `0 0 18px ${LEADERBOARD_NEON}20`,
+            }}
+          >
+            {copy.close}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScreenProps) {
   const logoPath        = import.meta.env.BASE_URL + "ludo-logo.png";
@@ -79,7 +390,8 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
   const pawnCharWebp    = import.meta.env.BASE_URL + "pawn-character.webp";
   const pawnHerPath     = import.meta.env.BASE_URL + "pawn-character-female.png";
   const pawnHerWebp     = import.meta.env.BASE_URL + "pawn-character-female.webp";
-  const dir          = lang === "ar" ? "rtl" : "ltr";
+  const dir             = lang === "ar" ? "rtl" : "ltr";
+  const [showLeaderboardComingSoon, setShowLeaderboardComingSoon] = useState(false);
 
   const t = {
     play:        lang === "fr" ? "Jouer"      : "العب",
@@ -103,9 +415,9 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
     {
       Icon:    Trophy,
       label:   t.leaderboard,
-      neon:    "#FFD700",
-      cardBg:  "linear-gradient(145deg,#1a1200 0%,#352400 100%)",
-      onClick: undefined as (() => void) | undefined,
+      neon:    LEADERBOARD_NEON,
+      cardBg:  LEADERBOARD_CARD_BG,
+      onClick: () => { playIconTap(); setShowLeaderboardComingSoon(true); },
     },
     {
       Icon:    Info,
@@ -517,6 +829,17 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
           v1.0.0
         </motion.p>
       </div>
+
+      {/* ── Coming Soon Popup (Leaderboard) ── */}
+      <AnimatePresence>
+        {showLeaderboardComingSoon && (
+          <LeaderboardComingSoonPopup
+            key="leaderboard-coming-soon"
+            lang={lang}
+            onClose={() => setShowLeaderboardComingSoon(false)}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
