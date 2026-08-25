@@ -371,9 +371,11 @@ function LeaderboardComingSoonPopup({
               }}
             />
 
-            {/* Corner "En développement" badge — matches the mode-select WIP cards */}
+            {/* Corner "En développement" badge — straddles the tile's outer
+                top-right corner (same pattern as the WIP mode cards), so it
+                overlaps only the corner edge and never covers the trophy. */}
             <div
-              className="pointer-events-none absolute right-1.5 top-1.5 z-20 rounded-full px-1.5 py-0.5 font-heading font-semibold"
+              className="pointer-events-none absolute -right-2 -top-2 z-20 whitespace-nowrap rounded-full px-1.5 py-0.5 font-heading font-semibold"
               style={{
                 fontSize: "8px",
                 letterSpacing: "0.04em",
