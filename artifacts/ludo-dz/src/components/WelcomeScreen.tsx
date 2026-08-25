@@ -94,14 +94,45 @@ const LEADERBOARD_COMING_SOON_COPY = {
   },
 } as const;
 
+// Podium accents for the top 3. Ranks 4–5 stay neutral/plain.
+const PODIUM: Record<number, { ring: string; glow: string; row: string; avatar: string }> = {
+  1: {
+    ring:   "rgba(255,215,0,0.55)",
+    glow:   "rgba(255,215,0,0.35)",
+    row:    "rgba(255,215,0,0.20)",
+    avatar: "rgba(255,215,0,0.34)",
+  },
+  2: {
+    ring:   "rgba(200,206,214,0.50)",
+    glow:   "rgba(200,206,214,0.30)",
+    row:    "rgba(200,206,214,0.14)",
+    avatar: "rgba(200,206,214,0.30)",
+  },
+  3: {
+    ring:   "rgba(205,127,50,0.55)",
+    glow:   "rgba(205,127,50,0.32)",
+    row:    "rgba(205,127,50,0.16)",
+    avatar: "rgba(205,127,50,0.32)",
+  },
+};
+
 // A deliberately indistinct ranking silhouette: it reads as a feature taking
 // shape behind frosted glass, rather than as a second panel competing for focus.
+// Positions reveal one at a time, 5th down to 1st, each with a soft scale "pop".
 function LeaderboardPreview({ reduceMotion }: { reduceMotion: boolean }) {
+  // index 0 = 5th place (revealed first) … index 4 = 1st place (revealed last).
   const rows = [
-    { rank: "01", width: "76%" },
-    { rank: "02", width: "61%" },
-    { rank: "03", width: "48%" },
+    { rank: 5, label: "05", bar: "40%", sub: "20%" },
+    { rank: 4, label: "04", bar: "50%", sub: "26%" },
+    { rank: 3, label: "03", bar: "58%", sub: "32%" },
+    { rank: 2, label: "02", bar: "66%", sub: "38%" },
+    { rank: 1, label: "01", bar: "76%", sub: "42%" },
   ];
+
+  // Total loop length. Each row waits its turn, pops in, holds, then the whole
+  // board fades and resets — a slow, foggy countdown, not a sharp finished UI.
+  const CYCLE = 7.5; // seconds
+  const STEP  = 0.9; // seconds between successive ranks appearing
 
   return (
     <motion.div
@@ -126,7 +157,7 @@ function LeaderboardPreview({ reduceMotion }: { reduceMotion: boolean }) {
       }}
     >
       <div
-        className="absolute inset-x-3 top-5 space-y-2 rounded-2xl p-3"
+        className="absolute inset-x-3 top-3 space-y-1.5 rounded-2xl p-2.5"
         dir="ltr"
         style={{
           background: "linear-gradient(145deg, rgba(255,215,0,0.16), rgba(255,255,255,0.035))",
@@ -138,37 +169,86 @@ function LeaderboardPreview({ reduceMotion }: { reduceMotion: boolean }) {
           transform: "rotate(-3deg)",
         }}
       >
-        {rows.map((row, index) => (
-          <div
-            key={row.rank}
-            className="flex h-9 items-center gap-2.5 rounded-lg px-2.5"
-            style={{
-              background: index === 0 ? "rgba(255,215,0,0.20)" : "rgba(255,255,255,0.08)",
-              border: `1px solid ${index === 0 ? "rgba(255,215,0,0.30)" : "rgba(255,255,255,0.10)"}`,
-            }}
-          >
-            <span className="w-5 font-heading text-[9px] font-bold text-dz-gold/80">
-              {row.rank}
-            </span>
-            <div
-              className="h-5 w-5 flex-shrink-0 rounded-full"
+        {rows.map((row, index) => {
+          const podium = PODIUM[row.rank];
+          const start  = index * STEP;
+          const end    = CYCLE;
+          const popIn  = start + 0.28;
+          const settle = start + 0.62;
+
+          return (
+            <motion.div
+              key={row.rank}
+              className="flex h-[30px] items-center gap-2 rounded-md px-2"
+              initial={reduceMotion ? false : { opacity: 0, scale: 0.86 }}
+              animate={
+                reduceMotion
+                  ? { opacity: 1, scale: 1 }
+                  : {
+                      opacity: [0, 0, 1, 1, 1, 0],
+                      scale:   [0.86, 0.86, 1.06, 1, 1, 0.92],
+                    }
+              }
+              transition={
+                reduceMotion
+                  ? { duration: 0 }
+                  : {
+                      duration: CYCLE,
+                      repeat: Infinity,
+                      ease: "easeOut",
+                      times: [
+                        0,
+                        start / CYCLE,
+                        popIn / CYCLE,
+                        settle / CYCLE,
+                        (end - 0.4) / CYCLE,
+                        1,
+                      ],
+                    }
+              }
               style={{
-                background: "radial-gradient(circle at 35% 30%, rgba(255,255,255,0.50), rgba(255,215,0,0.34) 42%, rgba(255,215,0,0.08) 75%)",
-                border: "1px solid rgba(255,215,0,0.28)",
+                transformOrigin: "center center",
+                background: podium ? podium.row : "rgba(255,255,255,0.08)",
+                border: `1px solid ${
+                  podium ? podium.ring : "rgba(255,255,255,0.10)"
+                }`,
+                boxShadow: podium
+                  ? `0 0 10px ${podium.glow}, inset 0 0 8px ${podium.glow}`
+                  : "none",
               }}
-            />
-            <div className="flex-1 space-y-1.5">
+            >
+              <span
+                className="w-4 font-heading text-[9px] font-bold"
+                style={{
+                  color: podium ? podium.ring : "rgba(255,215,0,0.80)",
+                }}
+              >
+                {row.label}
+              </span>
               <div
-                className="h-1.5 rounded-full"
-                style={{ width: row.width, background: "rgba(255,255,255,0.24)" }}
+                className="h-4 w-4 flex-shrink-0 rounded-full"
+                style={{
+                  background: `radial-gradient(circle at 35% 30%, rgba(255,255,255,0.50), ${
+                    podium ? podium.avatar : "rgba(255,215,0,0.34)"
+                  } 42%, rgba(255,215,0,0.08) 75%)`,
+                  border: `1px solid ${
+                    podium ? podium.ring : "rgba(255,215,0,0.28)"
+                  }`,
+                }}
               />
-              <div
-                className="h-1 rounded-full"
-                style={{ width: `${42 - index * 7}%`, background: "rgba(255,215,0,0.16)" }}
-              />
-            </div>
-          </div>
-        ))}
+              <div className="flex-1 space-y-1">
+                <div
+                  className="h-1.5 rounded-full"
+                  style={{ width: row.bar, background: "rgba(255,255,255,0.24)" }}
+                />
+                <div
+                  className="h-1 rounded-full"
+                  style={{ width: row.sub, background: "rgba(255,215,0,0.16)" }}
+                />
+              </div>
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* Soft veil keeps the glimpse atmospheric and protects text contrast. */}
@@ -401,6 +481,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
     leaderboard: lang === "fr" ? "Classement" : "التصنيف",
     about:       lang === "fr" ? "À propos"   : "حول",
     tagline:     lang === "fr" ? "Le Ludo Algérien" : "لعبة الجزائر",
+    wip:         LEADERBOARD_COMING_SOON_COPY[lang].wip,
   };
 
   // Secondary button definitions
@@ -417,6 +498,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
       label:   t.leaderboard,
       neon:    LEADERBOARD_NEON,
       cardBg:  LEADERBOARD_CARD_BG,
+      wip:     true,
       onClick: () => { playIconTap(); setShowLeaderboardComingSoon(true); },
     },
     {
@@ -785,6 +867,24 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
                   className="absolute inset-0 pointer-events-none"
                   style={{ background: `radial-gradient(circle at top left, ${btn.neon}18, transparent 65%)` }}
                 />
+                {/* WIP corner pill (Classement only) — same size/placement as
+                    the mode-select WIP cards, tinted with the tile's gold. */}
+                {btn.wip && (
+                  <div
+                    className="pointer-events-none absolute right-2 top-2 z-20 rounded-full px-1.5 py-0.5 font-heading font-semibold"
+                    style={{
+                      fontSize: "8px",
+                      letterSpacing: "0.04em",
+                      background: "rgba(0,0,0,0.38)",
+                      border: `1px solid ${btn.neon}40`,
+                      color: btn.neon,
+                      backdropFilter: "blur(6px)",
+                      WebkitBackdropFilter: "blur(6px)",
+                    }}
+                  >
+                    {t.wip}
+                  </div>
+                )}
                 {/* icon badge */}
                 <motion.div
                   className="relative z-10 w-10 h-10 rounded-xl flex items-center justify-center"
