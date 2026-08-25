@@ -340,7 +340,7 @@ function LeaderboardComingSoonPopup({
         <div className="relative z-10 flex flex-col items-center gap-4 px-6 pb-7 pt-8">
           {/* Themed icon */}
           <motion.div
-            className="relative z-10 flex h-[84px] w-[84px] items-center justify-center rounded-2xl"
+            className="flex h-[84px] w-[84px] items-center justify-center rounded-2xl"
             style={{
               background: `radial-gradient(circle, ${LEADERBOARD_NEON}18, transparent 75%)`,
               border: `1px solid ${LEADERBOARD_NEON}30`,
@@ -370,28 +370,6 @@ function LeaderboardComingSoonPopup({
                 filter: `drop-shadow(0 0 8px ${LEADERBOARD_NEON}90)`,
               }}
             />
-
-            {/* Corner "En développement" badge — small pill anchored to the
-                tile's outer top-right corner (same corner-pill pattern as the
-                WIP "En Ligne"/"Amis" cards). It overlaps only the corner edge
-                and extends outward to the side, leaving the centered trophy
-                glyph fully visible. */}
-            <div
-              className="pointer-events-none absolute z-20 whitespace-nowrap rounded-full px-1.5 py-0.5 font-heading font-semibold"
-              style={{
-                top: "-10px",
-                left: "calc(100% - 14px)",
-                fontSize: "8px",
-                letterSpacing: "0.04em",
-                background: "rgba(0,0,0,0.38)",
-                border: "1px solid rgba(255,255,255,0.13)",
-                color: "rgba(255,255,255,0.42)",
-                backdropFilter: "blur(6px)",
-                WebkitBackdropFilter: "blur(6px)",
-              }}
-            >
-              {copy.wip}
-            </div>
           </motion.div>
 
           {/* WIP pill */}
@@ -503,6 +481,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
     leaderboard: lang === "fr" ? "Classement" : "التصنيف",
     about:       lang === "fr" ? "À propos"   : "حول",
     tagline:     lang === "fr" ? "Le Ludo Algérien" : "لعبة الجزائر",
+    wip:         LEADERBOARD_COMING_SOON_COPY[lang].wip,
   };
 
   // Secondary button definitions
@@ -519,6 +498,7 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
       label:   t.leaderboard,
       neon:    LEADERBOARD_NEON,
       cardBg:  LEADERBOARD_CARD_BG,
+      wip:     true,
       onClick: () => { playIconTap(); setShowLeaderboardComingSoon(true); },
     },
     {
@@ -887,6 +867,24 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
                   className="absolute inset-0 pointer-events-none"
                   style={{ background: `radial-gradient(circle at top left, ${btn.neon}18, transparent 65%)` }}
                 />
+                {/* WIP corner pill (Classement only) — same size/placement as
+                    the mode-select WIP cards, tinted with the tile's gold. */}
+                {btn.wip && (
+                  <div
+                    className="pointer-events-none absolute right-2 top-2 z-20 rounded-full px-1.5 py-0.5 font-heading font-semibold"
+                    style={{
+                      fontSize: "8px",
+                      letterSpacing: "0.04em",
+                      background: "rgba(0,0,0,0.38)",
+                      border: `1px solid ${btn.neon}40`,
+                      color: btn.neon,
+                      backdropFilter: "blur(6px)",
+                      WebkitBackdropFilter: "blur(6px)",
+                    }}
+                  >
+                    {t.wip}
+                  </div>
+                )}
                 {/* icon badge */}
                 <motion.div
                   className="relative z-10 w-10 h-10 rounded-xl flex items-center justify-center"
