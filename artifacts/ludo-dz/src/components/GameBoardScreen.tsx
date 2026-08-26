@@ -5,7 +5,7 @@
 // • Continuous animation-speed sliders (dice roll + pawn movement)
 
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence, useAnimationControls, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence, useAnimationControls, useReducedMotion, type Transition } from 'framer-motion';
 import { ArrowLeft, Bot, Save, Settings, Trash2, X } from 'lucide-react';
 import { GamePiece } from './GamePiece';
 import { VictoryScreen } from './VictoryScreen';
@@ -383,10 +383,11 @@ function cubeFaceTransform(fv: number, half: number): string {
 }
 
 function DieFace({
-  value, neon, col, size, rolling, justLanded, dim, classic, dz,
+  value, neon, col, size, rolling, justLanded, dim, classic, dz, paused,
 }: {
   value: number; neon: string; col: string; size: number;
   rolling?: boolean; justLanded?: boolean; dim?: boolean; classic?: boolean; dz?: boolean;
+  paused?: boolean; // Neon exit-modal pause: freeze the tumble. Always false for Classic/DZ.
 }) {
   const opacity = dim ? 0.82 : 1;
   const ctrl    = useAnimationControls();
@@ -395,8 +396,14 @@ function DieFace({
   // ── Rolling: multi-axis 3D tumble — 9 keyframes that each cycle ends at
   //    (720°, −720°, 0°) so the cube is visually at the neutral orientation
   //    at the end of every loop, ready for a clean landing interrupt.
+  // Neon exit-modal pause: while the modal is open the tumble is stopped so
+  // the die does not keep spinning behind the modal's semi-transparent
+  // backdrop. If the roll is still in flight when the modal closes, the
+  // tumble restarts. The roll itself (ticks, final value, landing) is
+  // untouched — `paused` is only ever true on the Neon board.
   useEffect(() => {
     if (!rolling) return;
+    if (paused) { ctrl.stop(); return; }
     ctrl.start({
       rotateX: [0, 90, 180, 270, 360, 450, 540, 630, 720],
       rotateY: [0, -90, -180, -360, -270, -450, -360, -630, -720],
@@ -404,7 +411,7 @@ function DieFace({
       scale:   [1.0, 1.20, 0.97, 1.18, 1.0, 1.16, 0.98, 1.15, 1.0],
       transition: { duration: 0.62, repeat: Infinity, ease: 'linear' },
     });
-  }, [rolling]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rolling, paused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Landing: snap cube to neutral, then spin to the correct face with
   //    a squash-and-stretch bounce so the landing feels physical.
@@ -518,7 +525,7 @@ type PanelLayout = {
 const CornerDice = memo(function CornerDice({
   player, anchor, game, isAI, lang, boardStyle,
   rolling, animDice, justLanded, lastDice,
-  onRoll, canRoll, panelLayout,
+  onRoll, canRoll, panelLayout, paused,
 }: {
   player: number;
   anchor: 'tl' | 'tr' | 'bl' | 'br';
@@ -527,6 +534,7 @@ const CornerDice = memo(function CornerDice({
   onRoll: () => void; canRoll: boolean;
   boardStyle?: BoardStyle;
   panelLayout: PanelLayout;
+  paused?: boolean; // Neon exit-modal pause (see SETTLE_TRANSITION). Always false for Classic/DZ.
 }) {
   const col         = E.PLAYER_COLORS[player];
   const neon        = E.PLAYER_NEONS[player];
@@ -644,23 +652,33 @@ const CornerDice = memo(function CornerDice({
       } : {
         scale: isActive ? 1.08 : 0.88,
         opacity: isActive ? 1 : 0.68,
-        boxShadow: isActive ? [
-          `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
-          `0 0 28px ${neon}65, inset 0 0 18px ${col}28`,
-          `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
-        ] : `0 2px 12px rgba(0,0,0,0.55), 0 0 8px ${col}28`,
+        boxShadow: isActive
+          ? (paused
+              ? `0 0 14px ${col}40, inset 0 0 10px ${col}14`
+              : [
+                  `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
+                  `0 0 28px ${neon}65, inset 0 0 18px ${col}28`,
+                  `0 0 14px ${col}40, inset 0 0 10px ${col}14`,
+                ])
+          : `0 2px 12px rgba(0,0,0,0.55), 0 0 8px ${col}28`,
       }}
-      transition={(isClassic || isDz)
+      transition={paused
         ? {
             scale:     { type: 'spring', stiffness: 260, damping: 28 },
             opacity:   { duration: 0.38, ease: 'easeOut' },
-            boxShadow: { duration: isActive ? 1.6 : 0.3, repeat: isActive ? Infinity : 0, ease: 'easeInOut' },
+            boxShadow: SETTLE_TRANSITION,
           }
-        : {
-            scale:     { type: 'spring', stiffness: 260, damping: 28 },
-            opacity:   { duration: 0.38, ease: 'easeOut' },
-            boxShadow: { duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' },
-          }}
+        : (isClassic || isDz)
+          ? {
+              scale:     { type: 'spring', stiffness: 260, damping: 28 },
+              opacity:   { duration: 0.38, ease: 'easeOut' },
+              boxShadow: { duration: isActive ? 1.6 : 0.3, repeat: isActive ? Infinity : 0, ease: 'easeInOut' },
+            }
+          : {
+              scale:     { type: 'spring', stiffness: 260, damping: 28 },
+              opacity:   { duration: 0.38, ease: 'easeOut' },
+              boxShadow: { duration: 1.8, repeat: isActive ? Infinity : 0, ease: 'easeInOut' },
+            }}
       style={{
         width: '100%', height: '100%',
         display: 'flex', flexDirection: 'column',
@@ -727,8 +745,8 @@ const CornerDice = memo(function CornerDice({
           background: `linear-gradient(90deg, transparent, ${neon}cc, transparent)`,
           pointerEvents: 'none',
         }}
-          animate={{ opacity: [0.4, 1, 0.4] }}
-          transition={{ duration: 1.4, repeat: Infinity }}
+          animate={paused ? { opacity: 0.4 } : { opacity: [0.4, 1, 0.4] }}
+          transition={paused ? SETTLE_TRANSITION : { duration: 1.4, repeat: Infinity }}
         />
       )}
       {/* Active edge shimmer — DZ gold */}
@@ -823,9 +841,11 @@ const CornerDice = memo(function CornerDice({
         ) : (
           <motion.div
             animate={isClassic ? {} : (isActive
-              ? { boxShadow: [`0 0 3px ${neon}80`, `0 0 10px ${neon}`, `0 0 3px ${neon}80`] }
+              ? (paused
+                  ? { boxShadow: `0 0 3px ${neon}80` }
+                  : { boxShadow: [`0 0 3px ${neon}80`, `0 0 10px ${neon}`, `0 0 3px ${neon}80`] })
               : {})}
-            transition={{ duration: 1.4, repeat: Infinity }}
+            transition={paused ? SETTLE_TRANSITION : { duration: 1.4, repeat: Infinity }}
             style={{
               width: 6, height: 6, borderRadius: '50%',
               background: isClassic ? clSolid : col,
@@ -859,8 +879,8 @@ const CornerDice = memo(function CornerDice({
             border: `1.5px solid ${isClassic ? clBorder : isDz ? DZ.BORDER_GOLD : neon}`,
             pointerEvents: 'none',
           }}
-            animate={{ scale: [1, 1.22, 1], opacity: [0.80, 0, 0.80] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
+            animate={paused ? { scale: 1, opacity: 0.80 } : { scale: [1, 1.22, 1], opacity: [0.80, 0, 0.80] }}
+            transition={paused ? SETTLE_TRANSITION : { duration: 1.5, repeat: Infinity }}
           />
         )}
         <DieFace
@@ -871,6 +891,7 @@ const CornerDice = memo(function CornerDice({
           dim={!isActive}
           classic={isClassic}
           dz={isDz}
+          paused={paused}
         />
       </div>
 
@@ -1197,7 +1218,7 @@ function buildHopPath(
 const PawnToken = memo(function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
   onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand, onDustStep, onDzSparkleStep,
-  stackScale, showSafeStar,
+  stackScale, showSafeStar, paused,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
@@ -1217,6 +1238,7 @@ const PawnToken = memo(function PawnToken({
   onDzSparkleStep?: (x: number, y: number) => void; // DZ-only: gold glint left at every vacated hop cell
   stackScale?: number; // Universal premium stacking (all themes): 1 = full size, <1 shrinks when sharing a cell. Defaults to 1.
   showSafeStar?: boolean; // Neon-only: this pawn is alone on a safe-star cell → renders its own glowing badge on the pawn. Classic/DZ ignore this prop — their safe-space icons are permanent cell fixtures that never attach to a pawn. Defaults to false.
+  paused?: boolean; // Neon exit-modal pause: freeze the piece (see SETTLE_TRANSITION). Always false for Classic/DZ.
 }) {
   const baseCtrl  = useAnimationControls();
   const arcCtrl   = useAnimationControls();
@@ -1247,6 +1269,28 @@ const PawnToken = memo(function PawnToken({
   useEffect(() => {
     scaleCtrl.start({ scale: stackScaleVal, transition: { type: 'spring', ...springCfgRef.current } });
   }, [stackScaleVal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Effect 0b: Neon exit-modal pause — freeze the piece in place ──────────
+  // While the "save before quit?" modal is open, no pawn may keep hopping
+  // behind its semi-transparent backdrop. Invalidating seqKeyRef stops the
+  // in-flight hop loop at its next await, and the control stops freeze any
+  // step that is currently mid-animation. The parent re-applies the move's
+  // resolution when the modal closes (see resumePausedMove), after which this
+  // piece springs to its resolved position via Effect 2. On unpause the arc
+  // resets to its neutral offset and the stack-scale spring re-converges, so
+  // a pause that catches either mid-flight cannot leave the piece frozen off-
+  // position; for Classic/DZ (paused never true) both are no-ops.
+  useEffect(() => {
+    if (!paused) {
+      arcCtrl.set({ y: 0, rotate: 0, scaleX: 1, scaleY: 1 });
+      scaleCtrl.start({ scale: stackScaleVal, transition: { type: 'spring', ...springCfgRef.current } });
+      return;
+    }
+    seqKeyRef.current += 1;
+    baseCtrl.stop();
+    arcCtrl.stop();
+    scaleCtrl.stop();
+  }, [paused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Effect 1: hop sequence or defeat arc ────────────────────────────────────
   useEffect(() => {
@@ -1601,8 +1645,8 @@ const PawnToken = memo(function PawnToken({
         {isMovable && (
           <motion.polygon points={pulsePts}
             fill="none" stroke={neon} strokeWidth="0.076"
-            animate={{ opacity: [0.15, 0.88, 0.15] }}
-            transition={{ duration: 0.88, repeat: Infinity, ease: 'easeInOut' }}
+            animate={paused ? { opacity: 0.15 } : { opacity: [0.15, 0.88, 0.15] }}
+            transition={paused ? SETTLE_TRANSITION : { duration: 0.88, repeat: Infinity, ease: 'easeInOut' }}
           />
         )}
 
@@ -1957,6 +2001,20 @@ const DzSparkleTrailEffect = memo(function DzSparkleTrailEffect({
   );
 }, (prev, next) => prev.x === next.x && prev.y === next.y);
 
+// ─── Neon exit-modal pause support ────────────────────────────────────────────
+// While the "Save before quit?" modal is open, the Neon board must be fully
+// still behind the modal's semi-transparent backdrop: its bright neon pulses
+// and in-flight VFX otherwise shine through the blurred overlay as a visible
+// flicker. Each pulsing animation is retargeted to its resting (first
+// keyframe) value with a short ease-out settle (SETTLE_TRANSITION, replacing
+// the site's original infinite-repeat transition for the duration of the
+// pause). When the pause lifts, the original keyframes restart from exactly
+// that resting value, so the pulse resumes with no visible phase jump. Only
+// ever used while `paused` is true (Neon + exit modal) — Classic and DZ keep
+// their exact original animate targets and transitions.
+const SETTLE_MS = 0.3;
+const SETTLE_TRANSITION: Transition = { duration: SETTLE_MS, ease: 'easeOut' };
+
 // ─── Shared animation types (used by BoardSVG and GameBoardScreen) ────────────
 type ShockwaveEvent = { x: number; y: number; neon: string; id: number };
 type HomeImpactEvent = { player: number; index: number; id: number };
@@ -2005,6 +2063,11 @@ interface BoardSVGProps {
   onDzSparkleDone: (id: number) => void;
   onDzSparkleStep: (x: number, y: number) => void;
   boardStyle?: BoardStyle;
+  // Neon exit-modal pause (see SETTLE_TRANSITION above): while the "save before quit?"
+  // modal is open, the board's bright continuous animations settle to their
+  // dim resting values so nothing pulses through the modal's semi-transparent
+  // backdrop. Always false for Classic and DZ.
+  paused?: boolean;
 }
 
 const BoardSVG = memo(function BoardSVG({
@@ -2014,12 +2077,14 @@ const BoardSVG = memo(function BoardSVG({
   hopBursts, onHopBurstDone, onHopStepLand,
   dustPuffs, onDustPuffDone, onDustStep,
   dzSparkles, onDzSparkleDone, onDzSparkleStep,
-  boardStyle,
+  boardStyle, paused,
 }: BoardSVGProps) {
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   const isClassic   = boardStyle === 'classic';
   const isDz        = boardStyle === 'dz';
+  // Neon exit-modal pause — always false for Classic/DZ (see BoardSVGProps).
+  const isPaused = paused === true;
   // Classic palette: uses module-level CL_SOLID / CL_LIGHT / CL_BORDER / CL_ARROW
   // DZ palette: uses ../lib/board-theme-dz (Phase 1 — base colors only)
   const pieces      = game.pieces;
@@ -2847,8 +2912,8 @@ const BoardSVG = memo(function BoardSVG({
               <motion.rect
                 x={zc} width="6" height="0.18"
                 fill={neon} fillOpacity="0.10"
-                animate={{ y: [zr+0.07, zr+5.75] }}
-                transition={{ duration: 2.8, repeat: Infinity, ease: 'linear', repeatDelay: 1.0 }}
+                animate={isPaused ? { y: zr + 0.07 } : { y: [zr+0.07, zr+5.75] }}
+                transition={isPaused ? SETTLE_TRANSITION : { duration: 2.8, repeat: Infinity, ease: 'linear', repeatDelay: 1.0 }}
               />
             )}
 
@@ -2926,8 +2991,8 @@ const BoardSVG = memo(function BoardSVG({
                     points={`${x1},${y1} ${x2},${y2} ${x3},${y3}`}
                     fill="none" stroke={neon}
                     strokeWidth="0.056" strokeLinecap="square" strokeLinejoin="miter"
-                    animate={{ strokeOpacity: [0.70, 1.0, 0.70] }}
-                    transition={{ duration: 1.15, repeat: Infinity, ease: 'easeInOut' }}
+                    animate={isPaused ? { strokeOpacity: 0.70 } : { strokeOpacity: [0.70, 1.0, 0.70] }}
+                    transition={isPaused ? SETTLE_TRANSITION : { duration: 1.15, repeat: Infinity, ease: 'easeInOut' }}
                   />
                 ) : (
                   <polyline key={i}
@@ -3107,8 +3172,8 @@ const BoardSVG = memo(function BoardSVG({
                     {exitActive && (
                       <motion.rect x={c+0.035} y={r+0.035} width="0.93" height="0.93" rx="0.06"
                         fill="none" stroke={E.PLAYER_NEONS[player]} strokeWidth="0.055"
-                        animate={{ strokeOpacity: [0.45, 1, 0.45] }}
-                        transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
+                        animate={isPaused ? { strokeOpacity: 0.45 } : { strokeOpacity: [0.45, 1, 0.45] }}
+                        transition={isPaused ? SETTLE_TRANSITION : { duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
                       />
                     )}
                     {/* Neon direction portal — double-chevron pointing in the exit direction */}
@@ -3116,15 +3181,15 @@ const BoardSVG = memo(function BoardSVG({
                       <motion.path
                         d={`M ${c+0.28},${r+0.26} L ${c+0.48},${r+0.50} L ${c+0.28},${r+0.74}`}
                         fill="none" stroke={starNeon} strokeWidth="0.060" strokeLinecap="round" strokeLinejoin="round"
-                        animate={{ strokeOpacity: [0.28, 0.55, 0.28] }}
-                        transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
+                        animate={isPaused ? { strokeOpacity: 0.28 } : { strokeOpacity: [0.28, 0.55, 0.28] }}
+                        transition={isPaused ? SETTLE_TRANSITION : { duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
                         filter="url(#star-glow)"
                       />
                       <motion.path
                         d={`M ${c+0.46},${r+0.26} L ${c+0.66},${r+0.50} L ${c+0.46},${r+0.74}`}
                         fill="none" stroke={starNeon} strokeWidth="0.060" strokeLinecap="round" strokeLinejoin="round"
-                        animate={{ strokeOpacity: [0.65, 1.0, 0.65] }}
-                        transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
+                        animate={isPaused ? { strokeOpacity: 0.65 } : { strokeOpacity: [0.65, 1.0, 0.65] }}
+                        transition={isPaused ? SETTLE_TRANSITION : { duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
                         filter="url(#star-glow)"
                       />
                     </g>
@@ -3259,15 +3324,15 @@ const BoardSVG = memo(function BoardSVG({
                       {/* soft ambient halo */}
                       <motion.circle cx="0.5" cy="0.5" r="0.28"
                         fill="white" fillOpacity="0.10"
-                        animate={{ opacity: [0.08, 0.22, 0.08] }}
-                        transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                        animate={isPaused ? { opacity: 0.08 } : { opacity: [0.08, 0.22, 0.08] }}
+                        transition={isPaused ? SETTLE_TRANSITION : { duration: 2.2, repeat: Infinity, ease: 'easeInOut', delay: seed }}
                       />
                       {/* 5-pointed star — R=0.30, r=0.12, tip pointing up */}
                       <motion.polygon
                         points="0.500,0.200 0.571,0.403 0.785,0.407 0.614,0.537 0.676,0.743 0.500,0.620 0.324,0.743 0.386,0.537 0.215,0.407 0.429,0.403"
                         fill="white" fillOpacity="0.92"
-                        animate={{ opacity: [0.78, 1, 0.78], scale: [0.93, 1.02, 0.93] }}
-                        transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                        animate={isPaused ? { opacity: 0.78, scale: 0.93 } : { opacity: [0.78, 1, 0.78], scale: [0.93, 1.02, 0.93] }}
+                        transition={isPaused ? SETTLE_TRANSITION : { duration: 1.8, repeat: Infinity, ease: 'easeInOut', delay: seed }}
                         style={{ transformOrigin: '0.5px 0.5px' }}
                       />
                       {/* white-hot core */}
@@ -3281,8 +3346,8 @@ const BoardSVG = memo(function BoardSVG({
                   {occCount > 0 && (
                     <motion.rect x="0.045" y="0.045" width="0.91" height="0.91" rx="0.09"
                       fill="none" stroke="#ffffff" strokeWidth="0.052"
-                      animate={{ strokeOpacity: [0.32, 0.82, 0.32] }}
-                      transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut', delay: seed }}
+                      animate={isPaused ? { strokeOpacity: 0.32 } : { strokeOpacity: [0.32, 0.82, 0.32] }}
+                      transition={isPaused ? SETTLE_TRANSITION : { duration: 1.9, repeat: Infinity, ease: 'easeInOut', delay: seed }}
                     />
                   )}
                 </g>
@@ -3334,8 +3399,8 @@ const BoardSVG = memo(function BoardSVG({
         <motion.rect key={`hi-${i}`}
           x={col} y={row} width={1} height={1} rx={0.10}
           fill={neon} filter="url(#tile-glow)"
-          animate={{ opacity: [0.06, 0.24, 0.06] }}
-          transition={{ duration: 0.88, repeat: Infinity, ease: 'easeInOut', delay: i*0.14 }}
+          animate={isPaused ? { opacity: 0.06 } : { opacity: [0.06, 0.24, 0.06] }}
+          transition={isPaused ? SETTLE_TRANSITION : { duration: 0.88, repeat: Infinity, ease: 'easeInOut', delay: i*0.14 }}
         />
       ))}
 
@@ -3539,17 +3604,19 @@ const BoardSVG = memo(function BoardSVG({
       ) : (
         <motion.rect x="0.05" y="0.05" width="14.90" height="14.90"
           fill="none" rx="0.20"
-          animate={{
-            stroke: activeNeon,
-            strokeOpacity: [0.40, 0.78, 0.40],
-            strokeWidth:   [0.08, 0.12, 0.08],
-          }}
-          transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+          animate={isPaused
+            ? { stroke: activeNeon, strokeOpacity: 0.40, strokeWidth: 0.08 }
+            : {
+                stroke: activeNeon,
+                strokeOpacity: [0.40, 0.78, 0.40],
+                strokeWidth:   [0.08, 0.12, 0.08],
+              }}
+          transition={isPaused ? SETTLE_TRANSITION : { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
         />
       )}
 
     </>
-  ), [activeNeon, boardStyle, game, homeImpact, isClassic, isDz, movableHighlights, animatingHomeSlots, safeCellOccupancy]);
+  ), [activeNeon, boardStyle, game, homeImpact, isClassic, isDz, movableHighlights, animatingHomeSlots, safeCellOccupancy, isPaused]);
 
   return (
     <svg viewBox="0 0 15 15"
@@ -3637,6 +3704,7 @@ const BoardSVG = memo(function BoardSVG({
             onDzSparkleStep={onDzSparkleStep}
             stackScale={stackScale}
             showSafeStar={showSafeStar}
+            paused={isPaused}
           />
         );
       })}
@@ -3965,6 +4033,14 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
   const moveRecoveryTimer = useRef<NodeJS.Timeout | null>(null);
   const moveSequenceRef = useRef(0);
+  // How the most recently started move resolves. Recorded by triggerMove so
+  // the Neon exit-modal pause (below) can re-apply the exact same resolution
+  // when the modal closes — the in-flight commit is invalidated while the
+  // board is paused, so without this the move would never complete.
+  const moveCommitRef = useRef<{
+    commit: () => void;
+    captured: { pid: string; player: number; index: number } | null;
+  } | null>(null);
 
   // ── Match stats (additive, local to this screen) — feeds VictoryScreen ────
   // Tracked here rather than in ludo-engine.ts so the pure engine stays
@@ -4039,11 +4115,49 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     setIsAnimating(false);
   }, [clearMoveRecoveryTimer]);
 
+  // Re-apply the move that was in flight when the Neon exit modal paused the
+  // board: commit the pre-computed outcome now (the moving pawn springs to
+  // its final square; if the move captured, the victim plays the defeat arc
+  // as usual). No-op when the move already resolved or none was in flight.
+  const resumePausedMove = useCallback(() => {
+    const pending = moveCommitRef.current;
+    if (!pending) return;
+    if (!isAnimatingRef.current) { moveCommitRef.current = null; return; }
+    pending.commit();
+    if (pending.captured) {
+      const { pid, player, index } = pending.captured;
+      setPieceAnims({
+        [pid]: {
+          steps: 'defeat',
+          onArrival: () => {
+            setHomeImpact({ player, index, id: Date.now() });
+            setTimeout(() => setHomeImpact(null), 750);
+            unlockMoveInteraction();
+            setPieceAnims({});
+            moveCommitRef.current = null;
+          },
+        },
+      });
+    } else {
+      setPieceAnims({});
+      unlockMoveInteraction();
+      moveCommitRef.current = null;
+    }
+  }, [unlockMoveInteraction]);
+
   const isComputer  = config.modeId === 'computer';
   const humanPlayer = config.humanColor ?? playerSlots[0];
   const isClassic   = boardStyle === 'classic';
   const isDz        = boardStyle === 'dz';
   const isNeon      = boardStyle === 'neon';
+  // Neon only: fully pause the board while the exit-confirmation modal is
+  // open. The modal's backdrop is intentionally semi-transparent, and the
+  // Neon board's bright continuous animations (plus any in-flight hop/VFX)
+  // would otherwise bleed through it as a visible flicker. Classic and DZ
+  // boards are static enough under the same backdrop that they need no
+  // pause — this flag is therefore always false outside Neon, keeping their
+  // behaviour byte-for-byte unchanged (see SETTLE_TRANSITION / the `paused` props).
+  const exitPause = isNeon && showExitConfirm;
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   // The frame pulse only changes when the active player changes. Reusing the
@@ -4253,6 +4367,16 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       return np?.relPos === -1;
     }) ?? null;
     const capturedPid = capturedP ? E.pieceId(capturedP.player, capturedP.index) : null;
+
+    // Record this move's resolution for the Neon exit-modal pause path: when
+    // the modal opens mid-move, the commit below is invalidated and re-applied
+    // verbatim on close (see resumePausedMove). Overwritten by each new move.
+    moveCommitRef.current = {
+      commit: () => setGame(nextState),
+      captured: capturedPid && capturedP
+        ? { pid: capturedPid, player: capturedP.player, index: capturedP.index }
+        : null,
+    };
 
     // ── Match stats — increments exactly once per real move (this function
     // already returned early above for non-movable pids), regardless of
@@ -4518,6 +4642,39 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     clearMoveRecoveryTimer();
   }, [clearMoveRecoveryTimer]);
 
+  // ── Neon only: fully pause the board while the exit modal is open ─────────
+  // The modal's backdrop is intentionally semi-transparent (the board shows
+  // through, blurred and dimmed). On the Neon board, bright light animations
+  // are perpetually running underneath — border/frame pulses, glowing exit
+  // chevrons, tile glows, scan sweep, panel glows — plus any in-flight hop /
+  // VFX / dice roll; they bleed through the overlay as the visible flicker.
+  // The Classic and DZ boards are nearly static under the same backdrop, so
+  // no pause is needed there and this whole path is gated to Neon.
+  //
+  // While the modal is open:
+  //   • the board's continuous animations settle to their dim resting values
+  //     (the `paused` props → SETTLE_TRANSITION),
+  //   • in-flight VFX are cleared so no new flash can mount,
+  //   • the in-flight move's commit and self-heal recovery are invalidated
+  //     (the moveSequenceRef bump), so no game state changes under the modal.
+  // When it closes, the pulses resume from their resting keyframes and the
+  // paused move resolves exactly as it would have (resumePausedMove), so the
+  // game never appears stuck — even if the modal is dismissed within a
+  // second of being opened mid-move.
+  useEffect(() => {
+    if (!isNeon) return;
+    if (showExitConfirm) {
+      moveSequenceRef.current += 1;
+      clearMoveRecoveryTimer();
+      setShockwave(null);
+      setHomeImpact(null);
+      setHomeFinishVFX(null);
+      setHopBursts([]);
+    } else {
+      resumePausedMove();
+    }
+  }, [showExitConfirm, isNeon, clearMoveRecoveryTimer, resumePausedMove]);
+
   // ── Restart ───────────────────────────────────────────────────────────────
   const handleRestart = useCallback(() => {
     rollTimers.current.forEach(clearTimeout);
@@ -4668,8 +4825,10 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
               : 'radial-gradient(ellipse 120% 100% at 50% 50%, #0e2647 0%, #030b16 70%)',
             border: (isClassic || isDz) ? 'none' : '1px solid rgba(255,255,255,0.07)',
           }}
-          animate={boardShadowAnimation}
-          transition={boardShadowTransition}>
+          animate={exitPause
+            ? { boxShadow: boardShadowAnimation.boxShadow[0] }
+            : boardShadowAnimation}
+          transition={exitPause ? SETTLE_TRANSITION : boardShadowTransition}>
 
           {/* Inner felt — live SVG board, clipped to the rounded frame */}
           <div style={{
@@ -4702,6 +4861,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
               onDzSparkleDone={removeDzSparkle}
               onDzSparkleStep={handleDzSparkleStep}
               boardStyle={boardStyle}
+              paused={exitPause}
             />
           </div>
 
@@ -4716,7 +4876,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 0}
-            player={0} anchor="tl" isAI={isComputer && 0 !== humanPlayer} boardStyle={boardStyle} panelLayout={panelLayout}/>
+            player={0} anchor="tl" isAI={isComputer && 0 !== humanPlayer} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause}/>
           {/* Blue  → top-right   (player 1) */}
           <CornerDice
             game={game}
@@ -4727,7 +4887,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 1}
-            player={1} anchor="tr" isAI={isComputer && humanPlayer !== 1} boardStyle={boardStyle} panelLayout={panelLayout}/>
+            player={1} anchor="tr" isAI={isComputer && humanPlayer !== 1} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause}/>
           {/* Yellow → bottom-right (player 2) */}
           <CornerDice
             game={game}
@@ -4738,7 +4898,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 2}
-            player={2} anchor="br" isAI={isComputer && humanPlayer !== 2} boardStyle={boardStyle} panelLayout={panelLayout}/>
+            player={2} anchor="br" isAI={isComputer && humanPlayer !== 2} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause}/>
           {/* Green  → bottom-left  (player 3) */}
           <CornerDice
             game={game}
@@ -4749,7 +4909,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 3}
-            player={3} anchor="bl" isAI={isComputer && humanPlayer !== 3} boardStyle={boardStyle} panelLayout={panelLayout}/>
+            player={3} anchor="bl" isAI={isComputer && humanPlayer !== 3} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause}/>
         </motion.div>
       </div>
 
