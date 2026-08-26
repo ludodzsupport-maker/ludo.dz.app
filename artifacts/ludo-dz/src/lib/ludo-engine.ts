@@ -53,6 +53,10 @@ export const HOME_BASES: readonly (readonly [number, number][])[] = [
 // relPos 51 → piece turns into the home column (TRACK_SIZE = 51).
 export const PLAYER_STARTS = [0, 13, 26, 39] as const;
 
+// Canonical clockwise seat order. Turn sequencing must always follow this
+// order and must never depend on which colour the human picked at match start.
+export const CLOCKWISE_PLAYER_ORDER = [0, 1, 2, 3] as const;
+
 // ── Safe squares (absolute track index) ───────────────────────────────────
 // Safe squares = player-start tiles (0,13,26,39) + 4 mid-path stars (11,24,37,50)
 export const SAFE_SET = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
@@ -74,7 +78,7 @@ export interface GameState {
   pieces:          Piece[];
   activePlayer:    number;
   numPlayers:      number;
-  playerSlots:     readonly number[]; // turn-order list of active color indices (e.g. [0,2] for diagonal 2-player)
+  playerSlots:     readonly number[]; // turn-order list of active colour indices in canonical clockwise order
   dice:            number;
   diceRolled:      boolean;
   winner:          number | null;
@@ -86,6 +90,58 @@ export interface GameState {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+function isPlayerIndex(value: number): value is typeof CLOCKWISE_PLAYER_ORDER[number] {
+  return Number.isInteger(value) && value >= 0 && value < CLOCKWISE_PLAYER_ORDER.length;
+}
+
+export function normalizePlayerSlots(playerSlots: readonly number[] | undefined, numPlayers?: number): number[] {
+  const requestedCount = Math.max(
+    0,
+    Math.min(CLOCKWISE_PLAYER_ORDER.length, numPlayers ?? playerSlots?.length ?? CLOCKWISE_PLAYER_ORDER.length),
+  );
+  const active = new Set((playerSlots ?? CLOCKWISE_PLAYER_ORDER).filter(isPlayerIndex));
+  return CLOCKWISE_PLAYER_ORDER.filter(player => active.has(player)).slice(0, requestedCount);
+}
+
+export function resolvePlayerSlots(numPlayers: number, humanColor?: number, excludedColor?: number): number[] {
+  // Existing 2-player local mode intentionally uses the diagonal Red/Yellow
+  // pairing. Keep that participant set, but every other configuration is still
+  // normalized to the fixed clockwise turn order below.
+  if (numPlayers === 2 && humanColor === undefined && excludedColor === undefined) return [0, 2];
+
+  const prioritized = humanColor === undefined
+    ? [...CLOCKWISE_PLAYER_ORDER]
+    : [humanColor, ...CLOCKWISE_PLAYER_ORDER];
+
+  const picked: number[] = [];
+  for (const player of prioritized) {
+    if (!isPlayerIndex(player) || player === excludedColor || picked.includes(player)) continue;
+    picked.push(player);
+    if (picked.length >= numPlayers) break;
+  }
+
+  return normalizePlayerSlots(picked, numPlayers);
+}
+
+export function normalizeGameState(state: GameState, playerSlots?: readonly number[]): GameState {
+  const slots = normalizePlayerSlots(playerSlots ?? state.playerSlots, state.numPlayers);
+  const fallbackActivePlayer = slots.includes(0) ? 0 : (slots[0] ?? 0);
+  const activePlayer = slots.includes(state.activePlayer) ? state.activePlayer : fallbackActivePlayer;
+  const hasSameSlots = slots.length === state.playerSlots.length
+    && slots.every((slot, index) => slot === state.playerSlots[index]);
+  const movable = activePlayer === state.activePlayer
+    ? state.movable
+    : (state.phase === 'selecting' && state.diceRolled ? calcMovable(state.pieces, activePlayer, state.dice) : []);
+
+  return activePlayer === state.activePlayer && hasSameSlots
+    ? state
+    : {
+        ...state,
+        activePlayer,
+        playerSlots: slots,
+        movable,
+      };
+}
 export function pieceId(player: number, index: number): string {
   return `${player}:${index}`;
 }
@@ -122,13 +178,15 @@ function nextPlayer(pieces: Piece[], current: number, slots: readonly number[]):
 
 // ── Game lifecycle ─────────────────────────────────────────────────────────
 export function createGame(numPlayers: number, pawnsPerPlayer = 4, playerSlots?: readonly number[]): GameState {
-  const slots = playerSlots ?? Array.from({ length: numPlayers }, (_, i) => i);
+  const rawSlots = playerSlots ?? Array.from({ length: numPlayers }, (_, i) => i);
+  const slots = normalizePlayerSlots(rawSlots, numPlayers);
+  const startingPlayer = slots.includes(0) ? 0 : (slots[0] ?? 0);
   const pieces: Piece[] = [];
-  for (let p = 0; p < numPlayers; p++) {
+  for (let p = 0; p < slots.length; p++) {
     for (let i = 0; i < pawnsPerPlayer; i++) pieces.push({ player: slots[p], index: i, relPos: -1 });
   }
   return {
-    pieces, activePlayer: slots[0], numPlayers,
+    pieces, activePlayer: startingPlayer, numPlayers,
     playerSlots: slots,
     dice: 0, diceRolled: false, winner: null,
     phase: 'rolling', movable: [],

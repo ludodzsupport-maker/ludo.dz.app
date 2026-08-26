@@ -413,6 +413,16 @@ function DieFace({
     });
   }, [rolling, paused]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Safety stop: if a roll is cancelled or force-resolved without the normal
+  // landing sequence, explicitly halt any in-flight infinite tumble so the die
+  // can never visually keep spinning forever.
+  useEffect(() => {
+    if (rolling || justLanded) return;
+    const [rx, ry] = FACE_SHOW[Math.max(1, Math.min(6, value))] ?? [0, 0];
+    ctrl.stop();
+    ctrl.set({ rotateX: rx, rotateY: ry, rotateZ: 0, scale: 1 });
+  }, [rolling, justLanded, value]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Landing: snap cube to neutral, then spin to the correct face with
   //    a squash-and-stretch bounce so the landing feels physical.
   useEffect(() => {
@@ -4009,15 +4019,15 @@ function ExitConfirmationModal({ lang, isNeon, isClassic, isDz, onSaveExit, onDi
 
 // ─── Main GameBoardScreen ─────────────────────────────────────────────────────
 export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onBack }: Props) {
-  const playerSlots = useMemo(() => {
-    if (config.humanColor === undefined && config.excludedColor === undefined && config.players === 2) return [0, 2];
-    const humanColor = config.humanColor;
-    const excludedColor = config.excludedColor;
-    const available = Array.from({ length: 4 }, (_, i) => i).filter(slot => slot !== excludedColor && slot !== humanColor);
-    const ordered = humanColor === undefined ? available : [humanColor, ...available];
-    return ordered.slice(0, config.players);
-  }, [config.players, config.humanColor]);
-  const [game, setGame]             = useState<E.GameState>(() => initialSnapshot?.game ?? E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots));
+  const playerSlots = useMemo(
+    () => E.resolvePlayerSlots(config.players, config.humanColor, config.excludedColor),
+    [config.players, config.humanColor, config.excludedColor],
+  );
+  const initialGame = useMemo(() => {
+    if (initialSnapshot?.game) return E.normalizeGameState(initialSnapshot.game, playerSlots);
+    return E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots);
+  }, [initialSnapshot, config.players, config.rule, playerSlots]);
+  const [game, setGame]             = useState<E.GameState>(() => initialGame);
   const [rolling, setRolling]       = useState(false);
   const [animDice, setAnimDice]     = useState(() => initialSnapshot?.game.dice || 1);
   const [justLanded, setJustLanded] = useState(false);
@@ -4031,6 +4041,8 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [restartKey, setRestartKey] = useState(0);
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
+  const rollSequenceRef = useRef(0);
+  const rollingRef = useRef(false);
   const moveRecoveryTimer = useRef<NodeJS.Timeout | null>(null);
   const moveSequenceRef = useRef(0);
   // How the most recently started move resolves. Recorded by triggerMove so
@@ -4102,6 +4114,11 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const isAnimatingRef = useRef(isAnimating);
   gameRef.current        = game;
   isAnimatingRef.current = isAnimating;
+
+  const clearRollTimers = useCallback(() => {
+    rollTimers.current.forEach(clearTimeout);
+    rollTimers.current = [];
+  }, []);
 
   const clearMoveRecoveryTimer = useCallback(() => {
     if (!moveRecoveryTimer.current) return;
@@ -4227,60 +4244,103 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
   // ── Roll handler ──────────────────────────────────────────────────────────
   const handleRoll = useCallback(() => {
-    if (rolling || game.phase !== 'rolling' || game.winner) return;
-    const rollingPlayer = game.activePlayer; // capture now — must not close over future state
+    const currentGame = gameRef.current;
+    if (rollingRef.current || currentGame.phase !== 'rolling' || currentGame.winner) return;
+
+    const rollingPlayer = currentGame.activePlayer; // capture now — must not close over future state
+    const rollSeq = ++rollSequenceRef.current;
+    rollingRef.current = true;
+    clearRollTimers();
+
     // Read timing before triggering audio so the shared Classic/DZ sample and
     // this cycle() share an exact duration. The local slow-end override
     // remains dice-roll-only; slider values and Neon timing stay untouched.
     const { cycles, baseMs, stepMs } =
       (isClassic || isDz) && diceSpeed <= CLASSIC_SLOW_DICE_MAX_SPEED ? CLASSIC_SLOW_DICE_TIMING : diceTiming;
-    if (isNeon) playNeonDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
-    else if (isClassic) playClassicDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
-    else if (isDz) playDzDiceRoll(getRollDurationMs({ cycles, baseMs, stepMs }));
+    const rollDurationMs = getRollDurationMs({ cycles, baseMs, stepMs });
+
+    if (isNeon) playNeonDiceRoll(rollDurationMs);
+    else if (isClassic) playClassicDiceRoll(rollDurationMs);
+    else if (isDz) playDzDiceRoll(rollDurationMs);
     // Haptics are theme-independent (unlike the synthesized cues above), so
     // every roll gets a pulse regardless of which board style is active.
     vibrateDiceRoll();
     setRolling(true);
     setJustLanded(false);
 
-    let count = 0;
-    const cycle = () => {
-      setAnimDice(Math.floor(Math.random() * 6) + 1);
-      count++;
-      // Ease out: fast ticks → slow ticks for satisfying deceleration
-      const delay = count < Math.floor(cycles * 0.4)
-        ? baseMs
-        : baseMs + (count - Math.floor(cycles * 0.4)) * stepMs;
+    const resolveRoll = (reason: 'normal' | 'failsafe') => {
+      if (rollSequenceRef.current !== rollSeq || !rollingRef.current) return;
+      clearRollTimers();
 
-      if (count < cycles) {
-        const t = setTimeout(cycle, delay);
-        rollTimers.current.push(t);
-      } else {
-        const t = setTimeout(() => {
-          setGame(prev => {
-            const next = E.doRoll(prev);
-            setAnimDice(next.dice);
-            setLastDice(ld => { const n = [...ld]; n[rollingPlayer] = next.dice; return n; });
-            setRolling(false);
-            setJustLanded(true);
-            const clear = setTimeout(() => setJustLanded(false), 560);
-            rollTimers.current.push(clear);
-            return next;
-          });
-        }, delay);
-        rollTimers.current.push(t);
+      const latestGame = gameRef.current;
+      let landed = false;
+      if (latestGame.phase === 'rolling' && !latestGame.winner) {
+        const next = E.doRoll(latestGame);
+        setGame(next);
+        setAnimDice(next.dice > 0 ? next.dice : 1);
+        setLastDice(ld => {
+          const n = [...ld];
+          n[rollingPlayer] = next.dice > 0 ? next.dice : 1;
+          return n;
+        });
+        landed = true;
+      } else if (reason === 'failsafe') {
+        console.warn('[dice] forced roll cleanup skipped logical resolution because game state already advanced', {
+          rollSeq,
+          rollingPlayer,
+          phase: latestGame.phase,
+          activePlayer: latestGame.activePlayer,
+        });
+      }
+
+      rollingRef.current = false;
+      setRolling(false);
+      setJustLanded(landed);
+      if (landed) {
+        const clear = setTimeout(() => setJustLanded(false), 560);
+        rollTimers.current.push(clear);
       }
     };
-    cycle();
-  }, [rolling, game.phase, game.winner, game.activePlayer, diceSpeed, diceTiming, isNeon, isClassic, isDz]);
 
-  // Perf (roll-start jank): handleRoll's identity changes whenever `rolling`
-  // flips (it's a dep above), which — passed directly as the memoized corner
-  // panels' onRoll prop — forced all four CornerDice to re-render on the very
-  // frame the roll begins. This ref-dispatcher keeps the prop identity stable
-  // forever while always invoking the latest handleRoll, so the guards,
-  // timing, sounds, and dice logic are byte-for-byte the same. The AI-roll
-  // effect below intentionally keeps using handleRoll directly (unchanged).
+    const failsafe = setTimeout(() => {
+      console.warn('[dice] roll resolution fallback fired', {
+        rollSeq,
+        rollingPlayer,
+        phase: gameRef.current.phase,
+        activePlayer: gameRef.current.activePlayer,
+      });
+      resolveRoll('failsafe');
+    }, rollDurationMs + 1500);
+    rollTimers.current.push(failsafe);
+
+    let count = 0;
+    const cycle = () => {
+      if (rollSequenceRef.current !== rollSeq || !rollingRef.current) return;
+      setAnimDice(Math.floor(Math.random() * 6) + 1);
+      count++;
+      const threshold = Math.floor(cycles * 0.4);
+      // Ease out: fast ticks → slow ticks for satisfying deceleration
+      const delay = count < threshold
+        ? baseMs
+        : baseMs + (count - threshold) * stepMs;
+
+      const t = setTimeout(() => {
+        if (rollSequenceRef.current !== rollSeq || !rollingRef.current) return;
+        if (count < cycles) cycle();
+        else resolveRoll('normal');
+      }, delay);
+      rollTimers.current.push(t);
+    };
+
+    cycle();
+  }, [clearRollTimers, diceSpeed, diceTiming, isNeon, isClassic, isDz]);
+
+  // Perf (roll-start jank): keep the prop passed into the memoized corner
+  // panels permanently stable while still dispatching to the latest roll
+  // handler. The handler itself now reads live game/rolling state from refs,
+  // so this indirection preserves the existing behaviour without coupling the
+  // panel renders to transient roll-state changes. The AI-roll effect below
+  // intentionally keeps using handleRoll directly.
   const handleRollRef = useRef(handleRoll);
   handleRollRef.current = handleRoll;
   const onRollStable = useCallback(() => handleRollRef.current(), []);
@@ -4638,9 +4698,11 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
   useEffect(() => () => {
-    rollTimers.current.forEach(clearTimeout);
+    rollSequenceRef.current += 1;
+    rollingRef.current = false;
+    clearRollTimers();
     clearMoveRecoveryTimer();
-  }, [clearMoveRecoveryTimer]);
+  }, [clearMoveRecoveryTimer, clearRollTimers]);
 
   // ── Neon only: fully pause the board while the exit modal is open ─────────
   // The modal's backdrop is intentionally semi-transparent (the board shows
@@ -4677,8 +4739,9 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
   // ── Restart ───────────────────────────────────────────────────────────────
   const handleRestart = useCallback(() => {
-    rollTimers.current.forEach(clearTimeout);
-    rollTimers.current = [];
+    rollSequenceRef.current += 1;
+    rollingRef.current = false;
+    clearRollTimers();
     setRolling(false);
     setAnimDice(1);
     setJustLanded(false);
@@ -4701,7 +4764,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     setCaptureCounts([0, 0, 0, 0]);
     setMatchDurationMs(0);
     matchStartRef.current = Date.now();
-  }, [config.players, config.rule, playerSlots, unlockMoveInteraction]);
+  }, [clearRollTimers, config.players, config.rule, playerSlots, unlockMoveInteraction]);
 
   // ── Status text ───────────────────────────────────────────────────────────
   const statusMsg =
