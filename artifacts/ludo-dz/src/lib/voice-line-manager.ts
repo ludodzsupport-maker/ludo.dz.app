@@ -1,7 +1,33 @@
 import { setSfxDucking } from './sound-manager';
 
-export const VOICE_LINE_EVENTS = [
-  'game_start',
+// ─────────────────────────────────────────────────────────────────────────────
+// Event-isolated voice commentary
+//
+// Every event owns one dedicated folder under `src/assets/audio/voice/<event>/`.
+// Every audio file inside that folder is the event's clip pool, and no clip is
+// ever shared between events. Selecting a line is a uniform random pick from
+// that event's own pool — no weights, no mood tags, no cross-event eligibility.
+// The only anti-repetition rule is: never play the exact same clip twice in a
+// row within the same event's pool.
+//
+// Events are registered one at a time. `VOICE_EVENTS` is the single source of
+// truth; adding an event here (with its Arabic key + folder) is all that's
+// needed to bring its pool online.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Registered voice events. The key is the Arabic folder name under `voice/`. */
+export const VOICE_EVENTS = ['بداية_اللعبة'] as const;
+export type VoiceLineEvent = (typeof VOICE_EVENTS)[number];
+
+/** Arabic display label for each registered event. */
+export const VOICE_EVENT_LABELS: Readonly<Record<VoiceLineEvent, string>> = {
+  'بداية_اللعبة': 'بداية اللعبة',
+};
+
+// Trigger identifiers still referenced by existing game logic that have not
+// been migrated to an isolated Arabic pool yet. They resolve to an empty pool,
+// so triggering them is a safe no-op until their event is registered above.
+const UNMIGRATED_EVENTS = [
   'win',
   'opponent_near_win',
   'rolled_six',
@@ -27,57 +53,8 @@ export const VOICE_LINE_EVENTS = [
   'opponent_captured',
 ] as const;
 
-// Kept as an alias so existing settings/UI imports remain source-compatible.
-export const VOICE_LINE_CATEGORIES = VOICE_LINE_EVENTS;
-export type VoiceLineEvent = typeof VOICE_LINE_EVENTS[number];
-export type VoiceLineCategory = VoiceLineEvent;
-
-export const VOICE_MOODS = [
-  'triumphant',
-  'aggressive',
-  'mocking',
-  'anxious',
-  'disappointed',
-  'encouraging',
-  'informational',
-  'surprised',
-  'humorous',
-] as const;
-export type VoiceMood = typeof VOICE_MOODS[number];
-
-export const EVENT_MOODS: Readonly<Record<VoiceLineEvent, readonly VoiceMood[]>> = {
-  game_start: ['informational', 'triumphant'],
-  win: ['triumphant'],
-  opponent_near_win: ['anxious', 'encouraging'],
-  rolled_six: ['informational', 'aggressive'],
-  consecutive_sixes_2: ['humorous', 'informational'],
-  forfeit_three_sixes: ['disappointed'],
-  no_valid_moves: ['disappointed', 'informational'],
-  extra_turn: ['triumphant', 'aggressive'],
-  piece_exited_home: ['informational', 'encouraging'],
-  piece_home: ['triumphant'],
-  capture_by_me: ['aggressive', 'triumphant'],
-  captured_by_opponent: ['disappointed', 'anxious'],
-  laugh_mock: ['mocking'],
-  near_miss: ['surprised', 'anxious'],
-  blocked_path: ['disappointed', 'mocking'],
-  perfect_escape: ['encouraging', 'surprised'],
-  danger: ['anxious'],
-  danger_escape: ['encouraging', 'surprised'],
-  safe_gathering: ['informational', 'encouraging'],
-  safe_zone_entry: ['informational'],
-  turn_reminder: ['informational'],
-  ai_thinking: ['informational', 'encouraging'],
-  final_stretch: ['aggressive', 'triumphant'],
-  opponent_captured: ['mocking', 'surprised'],
-};
-
-const EXCLUSIVE_EVENTS = new Set<VoiceLineEvent>(['win', 'game_start', 'piece_home']);
-
-/** Number of successfully selected clips protected across all events. */
-export const GLOBAL_VOICE_COOLDOWN_EVENTS = 3;
-/** Number of successfully selected clips protected for the same event. */
-export const PER_EVENT_VOICE_COOLDOWN_EVENTS = 1;
+/** Accepted trigger identifiers: registered events + not-yet-migrated ones. */
+export type VoiceLineTrigger = VoiceLineEvent | (typeof UNMIGRATED_EVENTS)[number];
 
 const VOICE_FILES = import.meta.glob('../assets/audio/voice/**/*.{mp3,ogg,wav,m4a,aac,webm}', {
   eager: true,
@@ -87,45 +64,24 @@ const VOICE_FILES = import.meta.glob('../assets/audio/voice/**/*.{mp3,ogg,wav,m4
 
 const MAX_QUEUE_SIZE = 2;
 const DEFAULT_VOICE_VOLUME = 0.9;
-const PRIMARY_MOOD_WEIGHT = 3;
-const SECONDARY_MOOD_WEIGHT = 1;
 const VOICE_ENABLED_STORAGE_KEY = 'ludo-dz:voice-commentary-enabled';
 const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
 
-export interface ParsedVoiceFilename {
-  moods: readonly VoiceMood[];
-  sequence: number;
-}
-
-interface VoiceClip extends ParsedVoiceFilename {
+interface VoiceClip {
   path: string;
   url: string;
 }
 
-/** Parses `{name}_{emotion}{n}` and `{name}_{emotion1}_{emotion2}{n}` names. */
-export function parseVoiceFilename(path: string): ParsedVoiceFilename | null {
-  const filename = path.split('/').pop()?.replace(/\.[^.]+$/, '');
-  if (!filename) return null;
+// One isolated pool per registered event, built from that event's folder only.
+const eventPools = new Map<VoiceLineEvent, VoiceClip[]>();
+const lastPlayed = new Map<VoiceLineEvent, string>();
 
-  const moods: VoiceMood[] = [];
-  let sequence: number | null = null;
-  for (const segment of filename.split('_')) {
-    const match = segment.match(/^([a-z]+?)(\d+)?$/i);
-    if (!match) continue;
-    const mood = match[1].toLowerCase() as VoiceMood;
-    if (!VOICE_MOODS.includes(mood)) continue;
-    if (!moods.includes(mood)) moods.push(mood);
-    if (match[2]) sequence = Number(match[2]);
-  }
-
-  // Per convention, trailing digits belong to the last matched mood segment.
-  const lastMoodSegment = [...filename.split('_')].reverse().find(segment => {
-    const mood = segment.replace(/\d+$/, '').toLowerCase() as VoiceMood;
-    return VOICE_MOODS.includes(mood);
-  });
-  const trailingSequence = lastMoodSegment?.match(/(\d+)$/)?.[1];
-  if (!moods.length || !trailingSequence || sequence === null) return null;
-  return { moods, sequence: Number(trailingSequence) };
+for (const event of VOICE_EVENTS) {
+  const pool = Object.entries(VOICE_FILES)
+    .filter(([path]) => path.includes(`/voice/${event}/`))
+    .map(([path, url]) => ({ path, url }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+  eventPools.set(event, pool);
 }
 
 function clampVoiceVolume(volume: number): number {
@@ -155,50 +111,27 @@ function readStoredVoiceVolume(): number {
 
 let voiceLinesEnabled = readStoredVoiceEnabled();
 let voiceLineVolume = readStoredVoiceVolume();
-const clips: VoiceClip[] = [];
-const globalHistory: string[] = [];
-const eventHistory = new Map<VoiceLineEvent, string[]>();
 let activeAudio: HTMLAudioElement | null = null;
-let queue: VoiceLineEvent[] = [];
+let queue: VoiceLineTrigger[] = [];
 
-Object.entries(VOICE_FILES).forEach(([path, url]) => {
-  const parsed = parseVoiceFilename(path);
-  if (parsed) clips.push({ path, url, ...parsed });
-});
-clips.sort((a, b) => a.path.localeCompare(b.path) || a.sequence - b.sequence);
-
-function weightedRandom(candidates: VoiceClip[], primaryMood: VoiceMood): VoiceClip {
-  const weighted = candidates.map(clip => ({
-    clip,
-    weight: clip.moods.includes(primaryMood) ? PRIMARY_MOOD_WEIGHT : SECONDARY_MOOD_WEIGHT,
-  }));
-  let roll = Math.random() * weighted.reduce((sum, item) => sum + item.weight, 0);
-  for (const item of weighted) {
-    roll -= item.weight;
-    if (roll < 0) return item.clip;
-  }
-  return weighted[weighted.length - 1].clip;
+function isRegisteredEvent(event: VoiceLineTrigger): event is VoiceLineEvent {
+  return (VOICE_EVENTS as readonly string[]).includes(event);
 }
 
-function pickRandomFile(event: VoiceLineEvent): string | null {
-  const accepted = EVENT_MOODS[event];
-  const primary = accepted[0];
-  const eligible = clips.filter(clip => EXCLUSIVE_EVENTS.has(event)
-    ? clip.moods.length === 1 && clip.moods[0] === primary
-    : clip.moods.some(mood => accepted.includes(mood)));
-  if (!eligible.length) return null;
+/** Uniform random pick from the event's own pool, skipping the last clip played. */
+function pickRandomClip(event: VoiceLineEvent): VoiceClip | null {
+  const pool = eventPools.get(event) ?? [];
+  if (pool.length === 0) return null;
+  if (pool.length === 1) {
+    lastPlayed.set(event, pool[0].url);
+    return pool[0];
+  }
 
-  const recentForEvent = eventHistory.get(event) ?? [];
-  const cooled = eligible.filter(clip =>
-    !globalHistory.includes(clip.url) && !recentForEvent.includes(clip.url));
-  const picked = weightedRandom(cooled.length ? cooled : eligible, primary);
-
-  globalHistory.unshift(picked.url);
-  globalHistory.splice(GLOBAL_VOICE_COOLDOWN_EVENTS);
-  const nextEventHistory = [picked.url, ...recentForEvent];
-  nextEventHistory.splice(PER_EVENT_VOICE_COOLDOWN_EVENTS);
-  eventHistory.set(event, nextEventHistory);
-  return picked.url;
+  const previous = lastPlayed.get(event);
+  const candidates = previous ? pool.filter(clip => clip.url !== previous) : pool;
+  const picked = candidates[Math.floor(Math.random() * candidates.length)];
+  lastPlayed.set(event, picked.url);
+  return picked;
 }
 
 function playNextQueued(): void {
@@ -207,17 +140,18 @@ function playNextQueued(): void {
   if (next) playVoiceLine(next);
 }
 
-/** Plays one mood-matched Algerian Darija narrator line without overlap. */
-export function playVoiceLine(event: VoiceLineEvent): void {
+/** Plays one line from the event's own isolated pool without overlap. */
+export function playVoiceLine(event: VoiceLineTrigger): void {
   if (!voiceLinesEnabled || voiceLineVolume <= 0 || typeof Audio === 'undefined') return;
   if (activeAudio) {
     if (queue.length < MAX_QUEUE_SIZE) queue.push(event);
     return;
   }
+  if (!isRegisteredEvent(event)) return;
 
-  const file = pickRandomFile(event);
-  if (!file) return;
-  const audio = new Audio(file);
+  const clip = pickRandomClip(event);
+  if (!clip) return;
+  const audio = new Audio(clip.url);
   audio.preload = 'auto';
   audio.volume = voiceLineVolume;
   activeAudio = audio;
@@ -260,11 +194,4 @@ export function setVoiceLineVolume(volume: number): void {
   if (voiceLineVolume <= 0) stopVoiceLines();
   if (typeof window === 'undefined') return;
   try { window.localStorage.setItem(VOICE_VOLUME_STORAGE_KEY, String(voiceLineVolume)); } catch { /* ignore */ }
-}
-
-export function getVoiceLineFiles(event: VoiceLineEvent): readonly string[] {
-  const accepted = EVENT_MOODS[event];
-  return clips.filter(clip => EXCLUSIVE_EVENTS.has(event)
-    ? clip.moods.length === 1 && clip.moods[0] === accepted[0]
-    : clip.moods.some(mood => accepted.includes(mood))).map(clip => clip.url);
 }
