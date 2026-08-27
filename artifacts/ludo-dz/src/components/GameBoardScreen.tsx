@@ -4283,6 +4283,11 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
           n[rollingPlayer] = next.dice > 0 ? next.dice : 1;
           return n;
         });
+        // Commentary observes the resolved roll only; it never participates in
+        // roll generation, move availability, or turn resolution.
+        if (next.dice === 6 && next.consecutiveSixes === 2) playVoiceLine('consecutive_sixes_2');
+        else if (next.dice === 6) playVoiceLine('rolled_six');
+        if (next.movable.length === 0) playVoiceLine('no_valid_moves');
         landed = true;
       } else if (reason === 'failsafe') {
         console.warn('[dice] forced roll cleanup skipped logical resolution because game state already advanced', {
@@ -4455,10 +4460,33 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     const hasNewDanger = Array.from(nextDanger).some(dangerPid => !previousDanger.has(dangerPid));
     const safeGathering = !hasMixedColorSafeGathering(currentGame.pieces) && hasMixedColorSafeGathering(nextState.pieces);
     const capturedPlayer = capturedP?.player ?? null;
+    const movedPiece = nextState.pieces.find(p => p.player === ps && p.index === is)!;
+    const enteredSafeStar = !isSafeStarPiece(piece) && isSafeStarPiece(movedPiece);
+    const enteredFinalStretch = pFrom < E.TRACK_SIZE && pTo >= E.TRACK_SIZE && pTo < E.FINISHED_POS;
+    const exitedHome = pFrom === -1 && pTo === 0;
+    const earnedExtraTurn = !nextState.winner && nextState.activePlayer === currentGame.activePlayer;
+    const forfeitedThreeSixes = currentGame.dice === 6 && currentGame.consecutiveSixes >= 3;
+    const movedAbs = pTo >= 0 && pTo < E.TRACK_SIZE
+      ? (E.PLAYER_STARTS[ps] + pTo) % E.MAIN_PATH_SIZE
+      : null;
+    const nearMiss = movedAbs !== null && nextState.pieces.some(opponent => {
+      if (opponent.player === ps || opponent.relPos < 0 || opponent.relPos >= E.TRACK_SIZE) return false;
+      const opponentAbs = (E.PLAYER_STARTS[opponent.player] + opponent.relPos) % E.MAIN_PATH_SIZE;
+      const distance = Math.abs(opponentAbs - movedAbs);
+      return distance === 1 || distance === E.MAIN_PATH_SIZE - 1;
+    });
+    const opponentBecameNearWin = nextState.playerSlots.some(player => {
+      if (isComputer && player === humanPlayer) return false;
+      const before = currentGame.pieces.filter(p => p.player === player && p.relPos === E.FINISHED_POS).length;
+      const after = nextState.pieces.filter(p => p.player === player && p.relPos === E.FINISHED_POS).length;
+      return before < 3 && after === 3;
+    });
 
     const playResolvedVoiceLines = () => {
       if (capturedPid) {
-        playVoiceLine(Math.random() < 0.5 ? 'capture_by_me' : 'captured_by_opponent');
+        if (!isComputer || ps === humanPlayer) playVoiceLine('capture_by_me');
+        else if (capturedPlayer === humanPlayer) playVoiceLine('captured_by_opponent');
+        else playVoiceLine('opponent_captured');
         const captorStreak = captureStreakRef.current?.kind === 'captor' && captureStreakRef.current.player === ps
           ? captureStreakRef.current.count + 1
           : 1;
@@ -4473,9 +4501,16 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       } else {
         captureStreakRef.current = null;
       }
-      if (escapedDanger) playVoiceLine('danger_escape');
+      if (escapedDanger) playVoiceLine(enteredSafeStar ? 'perfect_escape' : 'danger_escape');
+      else if (enteredSafeStar) playVoiceLine('safe_zone_entry');
       if (safeGathering) playVoiceLine('safe_gathering');
+      if (exitedHome) playVoiceLine('piece_exited_home');
+      if (enteredFinalStretch) playVoiceLine('final_stretch');
       if (isHomeFinish) playVoiceLine('piece_home');
+      if (nearMiss) playVoiceLine('near_miss');
+      if (opponentBecameNearWin) playVoiceLine('opponent_near_win');
+      if (forfeitedThreeSixes) playVoiceLine('forfeit_three_sixes');
+      else if (earnedExtraTurn) playVoiceLine('extra_turn');
       if (hasNewDanger) playVoiceLine('danger');
       dangerPiecesRef.current = nextDanger;
     };
@@ -4658,6 +4693,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   useEffect(() => {
     if (showExitConfirm || !isComputer || game.activePlayer === humanPlayer) return;
     if (game.phase !== 'rolling' || rolling || game.winner) return;
+    playVoiceLine('ai_thinking');
     const t = setTimeout(handleRoll, 620 + Math.random() * 320);
     return () => clearTimeout(t);
   }, [showExitConfirm, isComputer, game.activePlayer, game.phase, rolling, game.winner, handleRoll]);
