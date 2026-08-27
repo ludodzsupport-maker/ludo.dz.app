@@ -4651,7 +4651,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     if (isNeon) playNeonWelcomeJingle();
     else if (isClassic) playClassicWelcomeJingle();
     else if (isDz) playDzWelcomeJingle();
-    playVoiceLine('game_start');
+    playVoiceLine('بداية_اللعبة');
     dangerPiecesRef.current = getDangerSet(gameRef.current.pieces, gameRef.current.playerSlots);
     return () => { stopVoiceLines(); resumeBgmForMenu(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -4792,7 +4792,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     dangerPiecesRef.current = getDangerSet(newGame.pieces, newGame.playerSlots);
     captureStreakRef.current = null;
     stopVoiceLines();
-    playVoiceLine('game_start');
+    playVoiceLine('بداية_اللعبة');
     setRestartKey(k => k + 1);
     // Reset match stats for the new match — this instance never unmounts on
     // restart (same key="game" in App.tsx), so these must be cleared here.
