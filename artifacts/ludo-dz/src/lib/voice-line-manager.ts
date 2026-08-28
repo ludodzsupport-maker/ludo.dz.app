@@ -70,23 +70,47 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
 // ─────────────────────────────────────────────────────────────────────────────
 // Reply (ردود) commentary
 //
-// A reply is an optional secondary line that may play *after* a registered
-// event's primary line. It reuses the same isolated-folder model: the reply
-// pool lives under `voice/ردود/<event>/` and is shared across all players (the
-// audio content is generic; only the speaking indicator is tied to a specific
-// player). No clip is shared between events, nor between an event and its own
-// replies, and the no-immediate-repeat rule applies within each reply pool.
+// A reply is a guaranteed secondary line that plays *immediately after* a
+// replyable event's primary line, as a direct back-and-forth. There is no
+// probability gate: every primary line for a replyable event is answered. It
+// reuses the same isolated-folder model: the reply pool lives under
+// `voice/ردود/<event>/` and is shared across all players (the audio content is
+// generic; only the speaking indicator is tied to a specific player). No clip is
+// shared between events, nor between an event and its own replies, and the
+// no-immediate-repeat rule applies within each reply pool.
+//
+// The only randomness in a reply is (a) which clip is picked from the pool and
+// (b) which player answers — a uniform pick among the players currently in the
+// game, excluding whoever just acted. Exactly one of them is chosen every time.
 //
 // To enable replies for a new event, add its key to `REPLYABLE_EVENTS` and drop
 // clips into `voice/ردود/<event>/` — nothing else changes. The pool is auto-built
-// and the chance/delay constants below apply uniformly to every replyable event.
+// and the gap constants below apply uniformly to every replyable event.
+//
+// Scheduling model (see the "reply reservation" section further down):
+// the reply is decided and *preloaded* the moment its primary line starts, but
+// it is fired from the primary line's own end-of-playback callback — never from
+// a wall-clock timer racing the primary, and never as an ordinary, droppable
+// queue entry. That is what makes it land right after the primary regardless of
+// what the player is doing (rolling, moving pawns, tapping UI) in between.
+//
+// The only ways a reply does not happen are the two structural no-ops it has
+// always had: an empty `voice/ردود/<event>/` folder, and no eligible responder
+// (the caller passed no `playersInGame`, or the acting player is the only one).
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Probability that a reply fires after the primary line plays (tune here). */
-export const REPLY_CHANCE = 0.35;
+// Conversational beat between the primary line ending and the reply starting.
+// Measured from the primary's END (not its start), so it is a real pause in the
+// dialogue rather than a race against the primary's own length.
+const REPLY_GAP_MIN_MS = 180;
+const REPLY_GAP_MAX_MS = 420;
 
-const REPLY_DELAY_MIN_MS = 500; // earliest a reply may start after the primary
-const REPLY_DELAY_MAX_MS = 1000; // latest a reply may start after the primary
+// Safety net so the queue can never wedge: if an element never fires `ended`
+// (decode error, an OS-level audio-focus interruption on Android, a stalled
+// media fetch), this drains the queue anyway shortly after the clip's own
+// duration has elapsed.
+const VOICE_WATCHDOG_GRACE_MS = 600;
+const VOICE_WATCHDOG_FALLBACK_MS = 15000; // used only while duration is unknown
 
 /** Events that may produce a reply after their primary line plays. */
 const REPLYABLE_EVENTS: Readonly<Partial<Record<VoiceLineEvent, boolean>>> = {
@@ -97,7 +121,10 @@ const REPLYABLE_EVENTS: Readonly<Partial<Record<VoiceLineEvent, boolean>>> = {
 // The visual "someone is speaking" state. Whenever a line starts playing for a
 // specific player, a single speaker is broadcast; when it ends (or a line with
 // no speaker plays), the speaker is cleared. UI subscribes via `subscribeSpeaking`.
-export type SpeakingState = { player: number } | null;
+// `kind` lets the UI treat a reply ("this player is answering back") with a
+// stronger, duel-flavoured treatment than an ordinary primary line.
+export type SpeakingKind = 'primary' | 'reply';
+export type SpeakingState = { player: number; kind: SpeakingKind } | null;
 type SpeakingListener = (state: SpeakingState) => void;
 const speakingListeners = new Set<SpeakingListener>();
 let currentSpeaking: SpeakingState = null;
@@ -113,7 +140,7 @@ export interface VoiceLineContext {
 /**
  * Subscribe to speaking-state changes. The listener is invoked immediately with
  * any in-progress speaker and then on every change; returns an unsubscribe fn.
- * The state is `{ player }` while a line for that player is audible, else `null`.
+ * The state is `{ player, kind }` while a line for that player is audible, else `null`.
  */
 export function subscribeSpeaking(listener: SpeakingListener): () => void {
   speakingListeners.add(listener);
@@ -122,7 +149,7 @@ export function subscribeSpeaking(listener: SpeakingListener): () => void {
 }
 
 function notifySpeaking(state: SpeakingState): void {
-  if (currentSpeaking?.player === state?.player) return;
+  if (currentSpeaking?.player === state?.player && currentSpeaking?.kind === state?.kind) return;
   currentSpeaking = state;
   speakingListeners.forEach(listener => listener(state));
 }
@@ -184,6 +211,7 @@ function readStoredVoiceVolume(): number {
 let voiceLinesEnabled = readStoredVoiceEnabled();
 let voiceLineVolume = readStoredVoiceVolume();
 let activeAudio: HTMLAudioElement | null = null;
+let activeWatchdog: ReturnType<typeof setTimeout> | null = null;
 
 // A queued line is either a registered/unmigrated event, or a reply line. Both
 // carry their options so the speaking indicator and reply targeting still work
@@ -193,8 +221,59 @@ type QueuedLine =
   | { kind: 'reply'; replyEvent: VoiceLineEvent; options: VoiceLineContext };
 
 let queue: QueuedLine[] = [];
-// Pending reply timers, so `stopVoiceLines` can cancel anything still in flight.
-const pendingReplyTimers = new Set<ReturnType<typeof setTimeout>>();
+
+// ─── Reply reservation ────────────────────────────────────────────────────────
+// The reply is not a queue entry. It is a slot reserved on the primary line
+// itself (`owner`), decided + preloaded at the primary's start and consumed by
+// the primary's end callback. Two consequences that matter:
+//   • it can never be dropped by MAX_QUEUE_SIZE, and never has to wait behind
+//     unrelated lines that happen to be queued;
+//   • the short gap between primary and reply counts as "voice busy", so a
+//     gameplay-triggered line firing in that window queues instead of stealing
+//     the slot, and the SFX duck holds across the whole exchange.
+interface PendingReply {
+  event: VoiceLineEvent;
+  speaker: number;
+  clip: VoiceClip;
+  /** Element created (and `load()`-ed) up front so the reply starts instantly. */
+  audio: HTMLAudioElement;
+  /** The primary element whose end fires this reply. */
+  owner: HTMLAudioElement;
+}
+let pendingReply: PendingReply | null = null;
+let replyGapTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** True while a line is audible, or while the primary→reply gap is running. */
+function isVoiceBusy(): boolean {
+  return activeAudio !== null || replyGapTimer !== null;
+}
+
+/**
+ * Keep the SFX duck aligned with voice activity. Ducking is level-based (not a
+ * per-clip on/off), so back-to-back lines and the primary→reply gap hold one
+ * continuous duck instead of bouncing the game's sound effects up and down.
+ */
+function syncDucking(): void {
+  setSfxDucking(isVoiceBusy());
+}
+
+function clearWatchdog(): void {
+  if (activeWatchdog === null) return;
+  clearTimeout(activeWatchdog);
+  activeWatchdog = null;
+}
+
+function clearPendingReply(): void {
+  if (!pendingReply) return;
+  try { pendingReply.audio.pause(); } catch { /* nothing to pause */ }
+  pendingReply = null;
+}
+
+function clearReplyGap(): void {
+  if (replyGapTimer === null) return;
+  clearTimeout(replyGapTimer);
+  replyGapTimer = null;
+}
 
 function isRegisteredEvent(event: VoiceLineTrigger): event is VoiceLineEvent {
   return (VOICE_EVENTS as readonly string[]).includes(event);
@@ -236,75 +315,143 @@ function isReplyable(event: VoiceLineTrigger): event is VoiceLineEvent {
   return isRegisteredEvent(event) && REPLYABLE_EVENTS[event] === true;
 }
 
-/** Schedule a delayed reply after a replyable event's primary line. */
-function maybeScheduleReply(event: VoiceLineEvent, options: VoiceLineContext): void {
-  if (Math.random() >= REPLY_CHANCE) return;
+/**
+ * Reserve + preload the reply for a primary line that is starting now. A reply
+ * is unconditional: there is no probability roll, so every replyable primary
+ * line gets one as long as the pool has a clip and at least one other player is
+ * in the game. The randomness is limited to which clip plays and which player
+ * answers (uniform among everyone in the game except whoever just acted).
+ *
+ * Nothing is scheduled on a clock here: the reservation is handed to the
+ * primary's end callback (`finishLine`). Preloading at this point means the clip
+ * is already buffered when the primary ends, so the reply starts on the spot
+ * instead of waiting on a media fetch in the middle of a dice roll or pawn
+ * animation.
+ */
+function prepareReply(event: VoiceLineEvent, options: VoiceLineContext, owner: HTMLAudioElement): void {
+  clearPendingReply();
 
   const acting = options.speaker;
   const candidates = (options.playersInGame ?? [])
     .filter(player => (acting === undefined ? true : player !== acting));
-  if (candidates.length === 0) return;
+  if (candidates.length === 0) return; // nobody left to answer = safe no-op
 
-  const replySpeaker = candidates[Math.floor(Math.random() * candidates.length)];
-  const delay = REPLY_DELAY_MIN_MS + Math.random() * (REPLY_DELAY_MAX_MS - REPLY_DELAY_MIN_MS);
+  const clip = pickRandomReply(event); // empty folder = safe no-op
+  if (!clip) return;
 
-  const timer = setTimeout(() => {
-    pendingReplyTimers.delete(timer);
-    if (!voiceLinesEnabled || voiceLineVolume <= 0) return;
-    const replyPool = eventReplyPools.get(event);
-    if (!replyPool || replyPool.length === 0) return; // empty folder = safe no-op
-    // Respect the same no-overlap queue as normal lines.
-    if (activeAudio) {
-      if (queue.length < MAX_QUEUE_SIZE) queue.push({ kind: 'reply', replyEvent: event, options: { speaker: replySpeaker } });
+  const speaker = candidates[Math.floor(Math.random() * candidates.length)];
+  const audio = new Audio(clip.url);
+  audio.preload = 'auto';
+  try { audio.load(); } catch { /* preload is best-effort */ }
+  pendingReply = { event, speaker, clip, audio, owner };
+}
+
+/** Fire the reserved reply after a short conversational beat. */
+function startReplyGap(): void {
+  clearReplyGap();
+  const gap = REPLY_GAP_MIN_MS + Math.random() * (REPLY_GAP_MAX_MS - REPLY_GAP_MIN_MS);
+  replyGapTimer = setTimeout(() => {
+    replyGapTimer = null;
+    const reply = pendingReply;
+    pendingReply = null;
+    if (!reply || !voiceLinesEnabled || voiceLineVolume <= 0) {
+      playNextQueued();
+      syncDucking();
       return;
     }
-    const clip = pickRandomReply(event);
-    if (!clip) return;
-    playClip({ kind: 'reply', replyEvent: event, options: { speaker: replySpeaker } }, clip);
-  }, delay);
-  pendingReplyTimers.add(timer);
+    playClip(
+      { kind: 'reply', replyEvent: reply.event, options: { speaker: reply.speaker } },
+      reply.clip,
+      reply.audio,
+    );
+  }, gap);
+  // The gap itself counts as busy: holds the duck and reserves the slot.
+  syncDucking();
+}
+
+/**
+ * Guarantee the end callback runs even when `ended` never does. Re-armed once
+ * metadata lands so the timeout tracks the clip's real length.
+ */
+function armWatchdog(audio: HTMLAudioElement, onExpire: () => void): void {
+  const schedule = () => {
+    clearWatchdog();
+    if (activeAudio !== audio) return;
+    const durationMs = Number.isFinite(audio.duration) && audio.duration > 0
+      ? audio.duration * 1000
+      : null;
+    const remainingMs = durationMs === null
+      ? VOICE_WATCHDOG_FALLBACK_MS
+      : Math.max(0, durationMs - audio.currentTime * 1000);
+    activeWatchdog = setTimeout(onExpire, remainingMs + VOICE_WATCHDOG_GRACE_MS);
+  };
+  schedule();
+  audio.addEventListener('loadedmetadata', schedule, { once: true });
 }
 
 /** Start (or, via the caller, enqueue) one clip and drive the speaking state. */
-function playClip(line: QueuedLine, clip: VoiceClip): void {
-  const audio = new Audio(clip.url);
+function playClip(line: QueuedLine, clip: VoiceClip, preloaded?: HTMLAudioElement): void {
+  const audio = preloaded ?? new Audio(clip.url);
   audio.preload = 'auto';
   audio.volume = voiceLineVolume;
   activeAudio = audio;
-  setSfxDucking(true);
-  notifySpeaking(line.options.speaker === undefined ? null : { player: line.options.speaker });
+  syncDucking();
+  notifySpeaking(line.options.speaker === undefined
+    ? null
+    : { player: line.options.speaker, kind: line.kind === 'reply' ? 'reply' : 'primary' });
 
   const finish = () => {
     if (activeAudio !== audio) return;
+    clearWatchdog();
     activeAudio = null;
-    setSfxDucking(false);
     notifySpeaking(null);
-    playNextQueued();
+    finishLine(audio);
   };
   audio.addEventListener('ended', finish, { once: true });
   audio.addEventListener('error', finish, { once: true });
+  armWatchdog(audio, finish);
   audio.play()?.catch(finish);
 
-  // Only a registered event's primary line can schedule a reply — never a reply.
+  // Only a registered event's primary line can reserve a reply — never a reply.
   if (line.kind === 'event' && isReplyable(line.event)) {
-    maybeScheduleReply(line.event, line.options);
+    prepareReply(line.event, line.options, audio);
   }
 }
 
-function playNextQueued(): void {
-  if (activeAudio || queue.length === 0) return;
-  const next = queue.shift();
-  if (!next) return;
+/**
+ * Single drain point, run when a clip ends for any reason. A reply reserved by
+ * the clip that just ended always wins the next slot; otherwise the ordinary
+ * queue drains and the duck is released if nothing else is speaking.
+ */
+function finishLine(owner: HTMLAudioElement): void {
+  if (pendingReply && pendingReply.owner === owner) {
+    startReplyGap();
+    return;
+  }
+  clearPendingReply(); // a reservation from an older line can never apply here
+  playNextQueued();
+  syncDucking();
+}
 
-  if (next.kind === 'event') {
-    if (!isRegisteredEvent(next.event)) return;
-    const clip = pickRandomClip(next.event);
-    if (!clip) return;
-    playClip(next, clip);
-  } else {
+function playNextQueued(): void {
+  // Loops rather than returning on the first unplayable entry: a queued line
+  // whose pool is empty must not stall everything behind it.
+  while (!isVoiceBusy() && queue.length > 0) {
+    const next = queue.shift();
+    if (!next) return;
+
+    if (next.kind === 'event') {
+      if (!isRegisteredEvent(next.event)) continue;
+      const clip = pickRandomClip(next.event);
+      if (!clip) continue;
+      playClip(next, clip);
+      return;
+    }
+
     const clip = pickRandomReply(next.replyEvent);
-    if (!clip) return;
+    if (!clip) continue;
     playClip(next, clip);
+    return;
   }
 }
 
@@ -312,7 +459,7 @@ function playNextQueued(): void {
 export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContext): void {
   if (!voiceLinesEnabled || voiceLineVolume <= 0 || typeof Audio === 'undefined') return;
   if (!isRegisteredEvent(event)) return; // unmigrated event = safe no-op
-  if (activeAudio) {
+  if (isVoiceBusy()) {
     if (queue.length < MAX_QUEUE_SIZE) queue.push({ kind: 'event', event, options: context ?? {} });
     return;
   }
@@ -324,12 +471,16 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
 
 export function stopVoiceLines(): void {
   queue = [];
+  clearWatchdog();
+  clearReplyGap();
+  clearPendingReply();
   if (activeAudio) {
-    activeAudio.pause();
+    const audio = activeAudio;
+    // Null first: the `pause` below must not be mistaken for a natural end by
+    // the element's own handlers.
     activeAudio = null;
+    audio.pause();
   }
-  pendingReplyTimers.forEach(clearTimeout);
-  pendingReplyTimers.clear();
   setSfxDucking(false);
   notifySpeaking(null);
 }
