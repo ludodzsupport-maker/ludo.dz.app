@@ -16,12 +16,13 @@ import { setSfxDucking } from './sound-manager';
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Registered voice events. The key is the Arabic folder name under `voice/`. */
-export const VOICE_EVENTS = ['بداية_اللعبة'] as const;
+export const VOICE_EVENTS = ['بداية_اللعبة', 'إخراج_بيدق'] as const;
 export type VoiceLineEvent = (typeof VOICE_EVENTS)[number];
 
 /** Arabic display label for each registered event. */
 export const VOICE_EVENT_LABELS: Readonly<Record<VoiceLineEvent, string>> = {
   'بداية_اللعبة': 'بداية اللعبة',
+  'إخراج_بيدق': 'إخراج بيدق',
 };
 
 // Trigger identifiers still referenced by existing game logic that have not
@@ -35,7 +36,6 @@ const UNMIGRATED_EVENTS = [
   'forfeit_three_sixes',
   'no_valid_moves',
   'extra_turn',
-  'piece_exited_home',
   'piece_home',
   'capture_by_me',
   'captured_by_opponent',
