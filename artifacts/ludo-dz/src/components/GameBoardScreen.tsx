@@ -653,6 +653,7 @@ const CornerDice = memo(function CornerDice({
           panels gaze up. */}
       <CornerMascot
         player={player}
+        anchor={anchor}
         isClassic={isClassic}
         isDz={isDz}
         isNeon={isNeon}
@@ -4259,8 +4260,11 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const [speaking, setSpeaking] = useState<SpeakingState>(null);
   // One-shot mascot reactions, targeted at a single corner. Raised by the roll
   // / capture logic below and consumed by CornerDice → CornerMascot (which
-  // self-clears after the celebration/consolation plays out).
-  const [mascotEvent, setMascotEvent] = useState<MascotEvent>(null);
+  // self-clears after the celebration/consolation plays out). Kept PER CORNER:
+  // a capture raises two events in the same tick (captor celebrates, victim
+  // consoles), and a single shared slot would let the second call overwrite
+  // the first before it ever renders — the captor's reaction would be lost.
+  const [mascotEvents, setMascotEvents] = useState<Record<number, MascotEvent>>({});
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
   const rollSequenceRef = useRef(0);
   const rollingRef = useRef(false);
@@ -4331,7 +4335,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   // Raise a one-shot mascot reaction at a single corner. Each event carries a
   // fresh id so an identical reaction (e.g. back-to-back sixes) still retriggers.
   const raiseMascotEvent = useCallback((player: number, kind: 'six' | 'capture' | 'captured') => {
-    setMascotEvent({ player, kind, id: Date.now() });
+    setMascotEvents(prev => ({ ...prev, [player]: { player, kind, id: Date.now() } }));
   }, []);
 
   // Stable refs so triggerMove closures always see the latest values
@@ -5214,7 +5218,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 0}
-            player={0} anchor="tl" isAI={isComputer && 0 !== humanPlayer} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 0 ? speaking.kind : null} mascotEvent={mascotEvent}/>
+            player={0} anchor="tl" isAI={isComputer && 0 !== humanPlayer} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 0 ? speaking.kind : null} mascotEvent={mascotEvents[0] ?? null}/>
           {/* Blue  → top-right   (player 1) */}
           <CornerDice
             game={game}
@@ -5225,7 +5229,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 1}
-            player={1} anchor="tr" isAI={isComputer && humanPlayer !== 1} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 1 ? speaking.kind : null} mascotEvent={mascotEvent}/>
+            player={1} anchor="tr" isAI={isComputer && humanPlayer !== 1} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 1 ? speaking.kind : null} mascotEvent={mascotEvents[1] ?? null}/>
           {/* Yellow → bottom-right (player 2) */}
           <CornerDice
             game={game}
@@ -5236,7 +5240,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 2}
-            player={2} anchor="br" isAI={isComputer && humanPlayer !== 2} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 2 ? speaking.kind : null} mascotEvent={mascotEvent}/>
+            player={2} anchor="br" isAI={isComputer && humanPlayer !== 2} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 2 ? speaking.kind : null} mascotEvent={mascotEvents[2] ?? null}/>
           {/* Green  → bottom-left  (player 3) */}
           <CornerDice
             game={game}
@@ -5247,7 +5251,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 3}
-            player={3} anchor="bl" isAI={isComputer && humanPlayer !== 3} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 3 ? speaking.kind : null} mascotEvent={mascotEvent}/>
+            player={3} anchor="bl" isAI={isComputer && humanPlayer !== 3} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 3 ? speaking.kind : null} mascotEvent={mascotEvents[3] ?? null}/>
         </motion.div>
       </div>
 
