@@ -42,6 +42,7 @@ import {
   resumeBgmForMenu,
 } from '../lib/sound-manager';
 import { playVoiceLine, stopVoiceLines, subscribeSpeaking } from '../lib/voice-line-manager';
+import type { SpeakingKind, SpeakingState } from '../lib/voice-line-manager';
 import { vibrateDiceRoll, vibratePawnStep, vibrateCaptureOrWin } from '../lib/haptics-manager';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -545,7 +546,7 @@ const CornerDice = memo(function CornerDice({
   boardStyle?: BoardStyle;
   panelLayout: PanelLayout;
   paused?: boolean; // Neon exit-modal pause (see SETTLE_TRANSITION). Always false for Classic/DZ.
-  speaking?: boolean; // This player's voice line is currently audible.
+  speaking?: SpeakingKind | null; // Which kind of voice line this player is currently speaking.
 }) {
   const col         = E.PLAYER_COLORS[player];
   const neon        = E.PLAYER_NEONS[player];
@@ -573,8 +574,15 @@ const CornerDice = memo(function CornerDice({
   const dzColor     = DZ.HOME_COLORS[player as 0|1|2|3];
   // Speaking-indicator accent — follows each theme's "active" vocabulary so the
   // cue reads as native rather than bolted on (Classic: player solid, DZ: gold,
-  // Neon: neon).
+  // Neon: neon). The aura pairs it with the player's own colour for the halo so
+  // the corner is still identifiable at a glance in every theme.
   const speechColor = isClassic ? clSolid : isDz ? DZ.BORDER_GOLD : neon;
+  const speechBloom = isClassic ? clSolid : isDz ? dzColor : col;
+  // Panel geometry shared by the card itself and its speaking aura, so the two
+  // scale and round identically instead of drifting apart.
+  const panelScale  = isActive ? 1.08 : 0.88;
+  const panelRadius = isClassic ? 10 : 12;
+  const panelOrigin = { tl: 'top left', tr: 'top right', bl: 'bottom left', br: 'bottom right' }[anchor];
   // Shadow module-level px constants with viewport-scaled values so panels
   // grow/shrink proportionally with the board on all phone sizes.
   // eslint-disable-next-line @typescript-eslint/no-shadow
@@ -624,6 +632,18 @@ const CornerDice = memo(function CornerDice({
 
   return (
     <div style={{ position: 'absolute', ...pos, width: PANEL_W, height: PANEL_H, zIndex: 12 }}>
+      {/* Speaking aura — sits behind the card, mirrors its scale/origin */}
+      <SpeakingAura
+        active={!!speaking}
+        kind={speaking ?? 'primary'}
+        ringColor={speechColor}
+        bloomColor={speechBloom}
+        panelW={PANEL_W}
+        panelRadius={panelRadius}
+        panelScale={panelScale}
+        panelOrigin={panelOrigin}
+        paused={paused}
+      />
       {/* Connector tail — visually anchors the panel to its board corner */}
       <div style={{
         position: 'absolute', left: '50%', transform: 'translateX(-50%)', ...tailPos,
@@ -645,7 +665,7 @@ const CornerDice = memo(function CornerDice({
       } : undefined}
       whileTap={canTap ? (isClassic ? { scale: 1.02 } : { scale: 0.91 }) : {}}
       animate={isClassic ? {
-        scale: isActive ? 1.08 : 0.88,
+        scale: panelScale,
         opacity: isActive ? 1 : 0.72,
         boxShadow: isActive
           ? [
@@ -655,7 +675,7 @@ const CornerDice = memo(function CornerDice({
             ]
           : `0 2px 8px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.65)`,
       } : isDz ? {
-        scale: isActive ? 1.08 : 0.88,
+        scale: panelScale,
         opacity: isActive ? 1 : 0.74,
         boxShadow: isActive
           ? [
@@ -665,7 +685,7 @@ const CornerDice = memo(function CornerDice({
             ]
           : `0 0 0 1px ${DZ.BORDER_GOLD}52, 0 0 0 2px ${DZ.BORDER_DEEP}88, 0 3px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,238,190,0.14)`,
       } : {
-        scale: isActive ? 1.08 : 0.88,
+        scale: panelScale,
         opacity: isActive ? 1 : 0.68,
         boxShadow: isActive
           ? (paused
@@ -699,7 +719,10 @@ const CornerDice = memo(function CornerDice({
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'space-evenly',
         padding: isClassic ? '10px 4px 6px' : '6px 4px',
-        borderRadius: isClassic ? 10 : 12,
+        borderRadius: panelRadius,
+        // Positioned so the speaking aura (zIndex 0, same wrapper) stays behind
+        // the card instead of washing over its face.
+        position: 'relative', zIndex: 1,
         cursor: canTap ? 'pointer' : 'default',
         background: isClassic
           ? `linear-gradient(168deg, #fefdf6 0%, #f6e9c6 45%, #ead5a0 100%)`
@@ -725,7 +748,7 @@ const CornerDice = memo(function CornerDice({
         // handler, animation, or hit area.
         touchAction: 'manipulation',
         // Scale grows toward the board corner so the active card "leans in" to the game
-        transformOrigin: { tl: 'top left', tr: 'top right', bl: 'bottom left', br: 'bottom right' }[anchor],
+        transformOrigin: panelOrigin,
       }}
     >
       {/* DZ — zellige diamond lattice texture + corner najma rivets */}
@@ -974,14 +997,132 @@ const CornerDice = memo(function CornerDice({
   );
 });
 
-// ─── Speaking indicator ───────────────────────────────────────────────────────
-// A compact, tasteful "this player is talking" cue shown on a player's corner
-// panel while their voice line actually plays. A tiny three-bar equalizer that
-// gently pulses (staggered so it reads as a waveform, not a strobe), tinted to
-// the active board theme's accent and soft-glow so it never competes with the
-// player colour or the active-turn glow. Fades in/out with the audio and scales
-// with the panel via its own flex layout — no fixed px beyond the bars so it
-// stays crisp on small Cordova screens.
+// ─── Speaking cue ─────────────────────────────────────────────────────────────
+// Two layers, one hierarchy: the aura (dominant) and the equalizer (supporting).
+//
+// SpeakingAura is the primary "this player has the floor" signal — a glowing
+// ring plus a soft halo wrapped around the whole corner panel, in that player's
+// own theme colour, breathing for as long as the clip is audible. It enters
+// with a quick scale pop and a one-shot expanding ring so the eye is pulled to
+// the corner the instant a line starts; a reply (a player answering back) gets
+// a hotter ring, a faster breath, and a second burst, which is what gives the
+// exchange its "stepping up to answer" duel read.
+//
+// Everything is derived from the live panel geometry (`panelLayout`), never
+// hard-coded px, so it scales with the board on every phone size. The aura
+// mirrors the panel's own scale/transform-origin animation so ring and panel
+// stay concentric while the active-player card leans in.
+const SPEAK_RING_RATIO  = 0.085; // ring offset outside the panel, share of panel width
+const SPEAK_BLOOM_RATIO = 0.26;  // soft halo reach, share of panel width
+const SPEAK_BREATH_S    = { primary: 1.2, reply: 0.86 }; // pulse period per line kind
+
+const SpeakingAura = memo(function SpeakingAura({
+  active, kind, ringColor, bloomColor, panelW, panelRadius, panelScale, panelOrigin, paused,
+}: {
+  active: boolean;
+  kind: SpeakingKind;
+  ringColor: string;
+  bloomColor: string;
+  panelW: number;
+  panelRadius: number;
+  panelScale: number;
+  panelOrigin: string;
+  paused?: boolean; // Neon exit-modal stillness (see SETTLE_TRANSITION)
+}) {
+  // `still` covers both reasons to hold the aura at a resting frame: the user's
+  // reduced-motion preference and the Neon exit-modal pause. Either way the ring
+  // and halo stay fully visible — only the looping motion stops.
+  const shouldReduceMotion = useReducedMotion() || !!paused;
+  const isReply = kind === 'reply';
+  const ring    = Math.max(3, Math.round(panelW * SPEAK_RING_RATIO));
+  const bloom   = Math.max(9, Math.round(panelW * SPEAK_BLOOM_RATIO));
+  const breath  = isReply ? SPEAK_BREATH_S.reply : SPEAK_BREATH_S.primary;
+  const near    = isReply ? 14 : 10;
+  const far     = isReply ? 30 : 22;
+
+  return (
+    <AnimatePresence>
+      {active && (
+        <motion.div key="speaking-aura" aria-hidden
+          initial={{ opacity: 0, scale: panelScale }}
+          animate={{ opacity: 1, scale: panelScale }}
+          exit={{ opacity: 0, scale: panelScale }}
+          transition={{
+            opacity: { duration: shouldReduceMotion ? 0.16 : 0.2, ease: 'easeOut' },
+            scale:   { type: 'spring', stiffness: 260, damping: 28 },
+          }}
+          style={{
+            position: 'absolute', inset: 0, zIndex: 0,
+            pointerEvents: 'none', transformOrigin: panelOrigin,
+          }}>
+          {/* Entrance pop — one quick overshoot, then the breathing takes over */}
+          <motion.div
+            initial={{ scale: shouldReduceMotion ? 1 : 0.8 }}
+            animate={{ scale: shouldReduceMotion ? 1 : [0.8, 1.08, 1] }}
+            transition={shouldReduceMotion
+              ? { duration: 0.16 }
+              : { duration: 0.38, times: [0, 0.45, 1], ease: 'easeOut' }}
+            style={{ position: 'absolute', inset: 0 }}>
+
+            {/* Halo — gives the glow mass so it reads from across the board */}
+            <motion.div
+              animate={shouldReduceMotion
+                ? { opacity: 0.55 }
+                : { opacity: [0.34, 0.72, 0.34], scale: [1, 1.05, 1] }}
+              transition={shouldReduceMotion
+                ? { duration: 0.16 }
+                : { duration: breath, repeat: Infinity, ease: 'easeInOut' }}
+              style={{
+                position: 'absolute', inset: -bloom,
+                borderRadius: panelRadius + bloom,
+                background: `radial-gradient(closest-side, ${bloomColor}70 0%, ${bloomColor}2e 58%, ${bloomColor}00 100%)`,
+              }}/>
+
+            {/* Ring — the dominant cue, in the player's theme accent */}
+            <motion.div
+              animate={shouldReduceMotion
+                ? { boxShadow: `0 0 0 2px ${ringColor}99, 0 0 ${near}px ${ringColor}aa, 0 0 ${far}px ${ringColor}55` }
+                : {
+                    boxShadow: [
+                      `0 0 0 1px ${ringColor}55, 0 0 ${near}px ${ringColor}77, 0 0 ${far}px ${ringColor}33`,
+                      `0 0 0 ${isReply ? 3 : 2}px ${ringColor}aa, 0 0 ${Math.round(near * 1.7)}px ${ringColor}cc, 0 0 ${Math.round(far * 1.5)}px ${ringColor}66`,
+                      `0 0 0 1px ${ringColor}55, 0 0 ${near}px ${ringColor}77, 0 0 ${far}px ${ringColor}33`,
+                    ],
+                  }}
+              transition={shouldReduceMotion
+                ? { duration: 0.16 }
+                : { duration: breath, repeat: Infinity, ease: 'easeInOut' }}
+              style={{
+                position: 'absolute', inset: -ring,
+                borderRadius: panelRadius + ring,
+                border: `${isReply ? 2 : 1.5}px solid ${ringColor}`,
+              }}/>
+
+            {/* Challenge burst — one-shot expanding ring on entry (two for a reply) */}
+            {!shouldReduceMotion && [0, ...(isReply ? [0.16] : [])].map((delay, i) => (
+              <motion.div key={i}
+                initial={{ scale: 0.94, opacity: isReply ? 0.9 : 0.7 }}
+                animate={{ scale: isReply ? 1.5 : 1.32, opacity: 0 }}
+                transition={{ duration: isReply ? 0.62 : 0.5, delay, ease: 'easeOut' }}
+                style={{
+                  position: 'absolute', inset: -ring,
+                  borderRadius: panelRadius + ring,
+                  border: `${isReply ? 2 : 1.5}px solid ${ringColor}`,
+                  transformOrigin: 'center',
+                }}/>
+            ))}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+});
+
+// Supporting cue only: a tiny three-bar equalizer beside the player name that
+// confirms *speech* specifically (the aura says "this corner", the bars say
+// "talking"). Deliberately quiet so the aura stays the dominant signal, and it
+// steps aside entirely under reduced motion, where the aura's static ring is
+// already a clear highlight.
 const SpeakingIndicator = memo(function SpeakingIndicator({ color, active }: {
   color: string; active: boolean;
 }) {
@@ -989,12 +1130,12 @@ const SpeakingIndicator = memo(function SpeakingIndicator({ color, active }: {
   return (
     <motion.div
       initial={{ opacity: 0 }}
-      animate={{ opacity: active ? 1 : 0 }}
+      animate={{ opacity: active ? 0.82 : 0 }}
       transition={{ duration: 0.28, ease: 'easeOut' }}
       aria-hidden
       style={{
         display: 'flex', alignItems: 'flex-end', gap: 1.5,
-        height: 9, flexShrink: 0, pointerEvents: 'none',
+        height: 8, flexShrink: 0, pointerEvents: 'none',
       }}>
       {[0, 1, 2].map(i => (
         <motion.span
@@ -1008,9 +1149,9 @@ const SpeakingIndicator = memo(function SpeakingIndicator({ color, active }: {
             ease: 'easeInOut',
           }}
           style={{
-            width: 2, height: 8, borderRadius: 1,
+            width: 1.8, height: 7, borderRadius: 1,
             background: color,
-            boxShadow: `0 0 4px ${color}66`,
+            boxShadow: `0 0 3px ${color}55`,
             transformOrigin: 'bottom',
           }}
         />
@@ -4091,9 +4232,10 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const [showSettings, setShowSettings] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [restartKey, setRestartKey] = useState(0);
-  // Which player's voice line is currently audible — drives the speaking
-  // indicator on that player's corner panel. Managed by voice-line-manager.
-  const [speakingPlayer, setSpeakingPlayer] = useState<number | null>(null);
+  // Which player's voice line is currently audible, and whether it is a primary
+  // line or a reply — drives the speaking aura on that player's corner panel.
+  // Managed by voice-line-manager.
+  const [speaking, setSpeaking] = useState<SpeakingState>(null);
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
   const rollSequenceRef = useRef(0);
   const rollingRef = useRef(false);
@@ -4254,7 +4396,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   // the manager broadcasts that player so the panel can show the cue. Subscribe
   // at mount, unsubscribe at unmount so a lingering audio never leaks the state.
   useEffect(() => {
-    const unsubscribe = subscribeSpeaking(state => setSpeakingPlayer(state ? state.player : null));
+    const unsubscribe = subscribeSpeaking(setSpeaking);
     return unsubscribe;
   }, []);
 
@@ -5037,7 +5179,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 0}
-            player={0} anchor="tl" isAI={isComputer && 0 !== humanPlayer} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speakingPlayer === 0}/>
+            player={0} anchor="tl" isAI={isComputer && 0 !== humanPlayer} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 0 ? speaking.kind : null}/>
           {/* Blue  → top-right   (player 1) */}
           <CornerDice
             game={game}
@@ -5048,7 +5190,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 1}
-            player={1} anchor="tr" isAI={isComputer && humanPlayer !== 1} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speakingPlayer === 1}/>
+            player={1} anchor="tr" isAI={isComputer && humanPlayer !== 1} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 1 ? speaking.kind : null}/>
           {/* Yellow → bottom-right (player 2) */}
           <CornerDice
             game={game}
@@ -5059,7 +5201,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 2}
-            player={2} anchor="br" isAI={isComputer && humanPlayer !== 2} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speakingPlayer === 2}/>
+            player={2} anchor="br" isAI={isComputer && humanPlayer !== 2} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 2 ? speaking.kind : null}/>
           {/* Green  → bottom-left  (player 3) */}
           <CornerDice
             game={game}
@@ -5070,7 +5212,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 3}
-            player={3} anchor="bl" isAI={isComputer && humanPlayer !== 3} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speakingPlayer === 3}/>
+            player={3} anchor="bl" isAI={isComputer && humanPlayer !== 3} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 3 ? speaking.kind : null}/>
         </motion.div>
       </div>
 

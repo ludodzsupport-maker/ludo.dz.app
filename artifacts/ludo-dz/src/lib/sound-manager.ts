@@ -34,17 +34,41 @@ const SOUND_FILES: Record<UiSoundName, string> = {
 };
 
 const DEFAULT_VOLUME = 0.55;
-const SFX_DUCKED_MULTIPLIER = 0.3;
-const SFX_DUCK_FADE_MS = 200;
+
+// ─── Voice ducking ───────────────────────────────────────────────────────────
+// While a commentary voice line is audible, every game sound effect (dice roll,
+// pawn step, capture, UI clicks, jingles) is pulled down to `SFX_DUCK_LEVEL` so
+// the speech stays intelligible, then restored. Both transitions are ramps, not
+// jumps, so nothing ever clicks or pops. BGM has its own master gain and is not
+// touched here.
+//
+// The three constants below are the tuning surface — change the level/times
+// here and every cue follows, because all synthesized cues share the one
+// `sfxMasterGain` bus and every cached HTMLAudio cue is scaled by the same
+// multiplier.
+
+/** Level SFX are held at while a voice line plays. 1 = no ducking, 0 = silent. */
+export const SFX_DUCK_LEVEL = 0.28;
+/** Ramp time when ducking down (fast: speech has already started). */
+export const SFX_DUCK_FADE_IN_MS = 160;
+/** Ramp time when restoring (slower: an unhurried return to full level). */
+export const SFX_DUCK_FADE_OUT_MS = 320;
+
+/** Live value of the duck ramp (mid-fade included) — HTMLAudio cues read this. */
 let sfxVolumeMultiplier = 1;
+/** Where the current ramp is heading: 1 (normal) or SFX_DUCK_LEVEL (ducked). */
+let sfxDuckTarget = 1;
 let sfxDuckFadeTimer: ReturnType<typeof setInterval> | null = null;
 let sfxMasterGain: GainNode | null = null;
 
 function getSfxDestination(context: AudioContext): AudioNode {
   if (!sfxMasterGain || sfxMasterGain.context !== context) {
     sfxMasterGain = context.createGain();
+    // Start at the live value, then join the in-flight ramp, so a bus created
+    // mid-duck neither jumps to full volume nor stays stuck at the duck level.
     sfxMasterGain.gain.setValueAtTime(sfxVolumeMultiplier, context.currentTime);
     sfxMasterGain.connect(context.destination);
+    if (sfxDuckTarget !== sfxVolumeMultiplier) rampSynthSfxVolume(sfxDuckTarget, SFX_DUCK_FADE_IN_MS);
   }
   return sfxMasterGain;
 }
@@ -53,28 +77,40 @@ function applyCachedAudioVolume(): void {
   audioCache.forEach(audio => { audio.volume = DEFAULT_VOLUME * sfxVolumeMultiplier; });
 }
 
-function applySynthSfxVolume(): void {
+/** Smooth ramp of the shared synth bus (all Neon/Classic/DZ cues run through it). */
+function rampSynthSfxVolume(target: number, fadeMs: number): void {
   const gain = sfxMasterGain;
   const context = gain?.context;
-  if (!context || context.state === 'closed') return;
+  if (!gain || !context || context.state === 'closed') return;
   const now = context.currentTime;
   gain.gain.cancelScheduledValues(now);
   gain.gain.setValueAtTime(gain.gain.value, now);
-  gain.gain.linearRampToValueAtTime(sfxVolumeMultiplier, now + SFX_DUCK_FADE_MS / 1000);
+  gain.gain.linearRampToValueAtTime(target, now + fadeMs / 1000);
 }
 
+/**
+ * Duck (or restore) every sound effect while commentary plays. Level-based and
+ * idempotent: calling it repeatedly with the same state is a no-op, so
+ * back-to-back voice lines (a primary line and its reply) hold one continuous
+ * duck instead of bouncing the SFX level between clips.
+ */
 export function setSfxDucking(ducked: boolean): void {
+  const target = ducked ? SFX_DUCK_LEVEL : 1;
+  if (target === sfxDuckTarget) return;
+  sfxDuckTarget = target;
+  const fadeMs = ducked ? SFX_DUCK_FADE_IN_MS : SFX_DUCK_FADE_OUT_MS;
+
+  // Web Audio cues: one native ramp on the shared bus.
+  rampSynthSfxVolume(target, fadeMs);
+
+  // HTMLAudio cues have no ramp API, so their multiplier is stepped on a short
+  // timer over the same window — same curve, same duration, no audible step.
   const from = sfxVolumeMultiplier;
-  const to = ducked ? SFX_DUCKED_MULTIPLIER : 1;
-  if (from === to) return;
-  sfxVolumeMultiplier = to;
-  applySynthSfxVolume();
-  sfxVolumeMultiplier = from;
-  if (sfxDuckFadeTimer) clearInterval(sfxDuckFadeTimer);
   const startedAt = Date.now();
+  if (sfxDuckFadeTimer) clearInterval(sfxDuckFadeTimer);
   sfxDuckFadeTimer = setInterval(() => {
-    const progress = Math.min(1, (Date.now() - startedAt) / SFX_DUCK_FADE_MS);
-    sfxVolumeMultiplier = from + (to - from) * progress;
+    const progress = Math.min(1, (Date.now() - startedAt) / fadeMs);
+    sfxVolumeMultiplier = from + (target - from) * progress;
     applyCachedAudioVolume();
     if (progress >= 1 && sfxDuckFadeTimer) {
       clearInterval(sfxDuckFadeTimer);
@@ -82,6 +118,9 @@ export function setSfxDucking(ducked: boolean): void {
     }
   }, 16);
 }
+
+/** Current SFX level multiplier (1 = normal, SFX_DUCK_LEVEL = fully ducked). */
+export function getSfxDuckMultiplier(): number { return sfxVolumeMultiplier; }
 const STORAGE_KEY = "ludo-dz:sound-effects-enabled";
 const NEON_PAWN_MIN_INTERVAL_MS = 38;
 const CLASSIC_PAWN_MIN_INTERVAL_MS = 46;
