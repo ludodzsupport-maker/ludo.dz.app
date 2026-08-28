@@ -6,6 +6,7 @@ import { supportsDvh } from "../lib/utils";
 import { readSavedGame, type SavedGameSnapshot } from "../lib/saved-game";
 import type { BoardStyle } from "../App";
 import * as DZ from "../lib/board-theme-dz";
+import { MascotCharacter } from "./MascotCharacter";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 export interface SelectedMode {
@@ -472,7 +473,11 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume, boar
                 <div className="absolute -right-10 -top-12 w-32 h-32 rounded-full" style={{ background: `radial-gradient(circle, ${mode.neon}40, transparent 68%)` }}/>
                 <div className="relative flex items-center gap-4">
                   <motion.div className="relative flex items-center justify-center w-[78px] h-[78px] rounded-3xl" animate={{ boxShadow: [`0 0 18px ${themeColors[humanColor]}35`, `0 0 34px ${themeColors[humanColor]}70`, `0 0 18px ${themeColors[humanColor]}35`] }} transition={{ duration: 2.2, repeat: Infinity }} style={{ background: `radial-gradient(circle, ${themeColors[humanColor]}30, rgba(255,255,255,0.04) 58%, transparent 72%)`, border: `1px solid ${themeColors[humanColor]}60` }}>
-                    <motion.div animate={{ y: [0, -4, 0], rotate: [-2, 2, -2] }} transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}><PawnSilhouette color={themeColors[humanColor]} size={34}/></motion.div>
+                    {/* The chosen colour's own character — a presentation
+                        moment: it lands with a settle, waves hello, and
+                        keeps a gentle idle while you browse. greetKey makes
+                        every pick replay the greeting. */}
+                    <MascotCharacter player={humanColor} size={58} isNeon greetKey={humanColor} />
                   </motion.div>
                   <div className="min-w-0"><p className="font-heading uppercase" style={{ fontSize: "9px", letterSpacing: "0.18em", color: `${mode.neon}aa` }}>{showHumanColor ? t.colorSection : t.inPlay}</p><h3 className="font-heading font-bold text-white leading-tight" style={{ fontSize: "20px", letterSpacing: "0.04em" }}>{showHumanColor ? t.chooseColor : t.excludeTitle}</h3><p className="font-sans text-white/50 mt-1" style={{ fontSize: "10px", lineHeight: 1.35 }}>{showHumanColor ? t.chooseColorSub : t.excludeSub}</p></div>
                 </div>
@@ -481,7 +486,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume, boar
               {showHumanColor && <>
                 <SectionLabel label={t.colorSection} neon={mode.neon}/>
                 <div className="grid grid-cols-2 gap-2.5 mb-5">
-                  {themeColors.map((color, index) => { const active = humanColor === index; const unavailable = resolvedExcludedColor === index; return <motion.button key={color} disabled={unavailable} onClick={() => { playSelection(); setHumanColor(index); if (excludedColor === index) setExcludedColor(undefined); }} whileHover={{ y: -2 }} whileTap={{ scale: 0.96 }} className="relative flex items-center gap-3 rounded-2xl px-3.5 py-3" style={{ opacity: unavailable ? 0.28 : 1, background: active ? `linear-gradient(135deg, ${color}30, ${color}10)` : "rgba(255,255,255,0.04)", border: `1.5px solid ${active ? color : "rgba(255,255,255,0.10)"}`, boxShadow: active ? `0 0 22px ${color}40, inset 0 1px 0 rgba(255,255,255,0.10)` : "inset 0 1px 0 rgba(255,255,255,0.04)" }}><PawnSilhouette color={color} size={20}/><span className="font-heading font-bold" style={{ fontSize: "12px", color: active ? "white" : "rgba(255,255,255,0.58)", letterSpacing: "0.06em" }}>{["ROUGE", "BLEU", "JAUNE", "VERT"][index]}</span>{active && <span className="ml-auto w-2 h-2 rounded-full" style={{ background: color, boxShadow: `0 0 8px ${color}` }}/>}</motion.button>; })}
+                  {themeColors.map((color, index) => { const active = humanColor === index; const unavailable = resolvedExcludedColor === index; return <motion.button key={color} disabled={unavailable} onClick={() => { playSelection(); setHumanColor(index); if (excludedColor === index) setExcludedColor(undefined); }} whileHover={{ y: -2 }} whileTap={{ scale: 0.96 }} className="relative flex items-center gap-3 rounded-2xl px-3.5 py-3" style={{ opacity: unavailable ? 0.28 : 1, background: active ? `linear-gradient(135deg, ${color}30, ${color}10)` : "rgba(255,255,255,0.04)", border: `1.5px solid ${active ? color : "rgba(255,255,255,0.10)"}`, boxShadow: active ? `0 0 22px ${color}40, inset 0 1px 0 rgba(255,255,255,0.10)` : "inset 0 1px 0 rgba(255,255,255,0.04)" }}>{/* Each option pairs its colour with its character, so players pick "their" character along with their colour. */}<MascotCharacter player={index} size={30} isNeon/><span className="font-heading font-bold" style={{ fontSize: "12px", color: active ? "white" : "rgba(255,255,255,0.58)", letterSpacing: "0.06em" }}>{["ROUGE", "BLEU", "JAUNE", "VERT"][index]}</span>{active && <span className="ml-auto w-2 h-2 rounded-full" style={{ background: color, boxShadow: `0 0 8px ${color}` }}/>}</motion.button>; })}
                 </div>
               </>}
 

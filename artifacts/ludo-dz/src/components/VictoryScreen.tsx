@@ -6,8 +6,9 @@
 // it does not touch engine logic.
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Clock, Footprints, Swords, Sparkles, Crown } from 'lucide-react';
+import { Clock, Footprints, Swords, Sparkles, Crown } from 'lucide-react';
 import { GamePiece } from './GamePiece';
+import { MascotCharacter } from './MascotCharacter';
 import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
 import type { BoardStyle } from '../App';
@@ -188,19 +189,17 @@ export function VictoryScreen({
             style={{ inset: 6, borderRadius: 21, border: `1px solid ${theme.borderInner}` }} />
         )}
 
-        {/* Trophy */}
-        <motion.div
-          animate={{ rotate: [0, -12, 12, -6, 6, 0], scale: [1, 1.18, 1] }}
-          transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 2 }}
-          className="relative">
-          <Trophy size={52} color={theme.gold}
-            style={{ filter: `drop-shadow(0 0 14px ${theme.gold})` }} />
+        {/* Winner's character — the colour's own mascot celebrating in the
+            "joy" state (hop + stretch + sparkles), glowing in the theme of
+            the board the match was played on. */}
+        <div className="relative">
+          <MascotCharacter player={winner} mood="joy" size={88} isClassic={isClassic} isDz={isDz} isNeon={!isClassic && !isDz} />
           {(isClassic || isDz) && (
             <Sparkles size={18} color={theme.gold}
               className="absolute -top-1 -right-2"
               style={{ filter: `drop-shadow(0 0 6px ${theme.gold})` }} />
           )}
-        </motion.div>
+        </div>
 
         {/* Winner name block */}
         <div className="text-center">
