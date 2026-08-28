@@ -359,6 +359,12 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume, boar
   const needsColorPicker = mode.id === "computer" || (players < 4 && mode.id !== "teamup");
   const showHumanColor = mode.id === "computer";
   const resolvedExcludedColor = excludedColor ?? (humanColor === 0 && players < 4 ? players : 0);
+  // Which character the picker's hero card previews. In the flows that only
+  // ask who sits out (Tour par Tour with 2–3 players — the En Ligne and Amis
+  // cards are still "coming soon", so they never reach this sheet) there is no
+  // "your colour" to show, so the card follows the corner being left free
+  // instead of staying pinned on red.
+  const previewPlayer = showHumanColor ? humanColor : resolvedExcludedColor;
 
   const ruleLabel = (r: Rule) =>
     r === "classic" ? t.classic : r === "quick" ? t.quick : t.teamup;
@@ -472,12 +478,14 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume, boar
               <div className="relative overflow-hidden rounded-3xl px-5 pt-5 pb-4 mb-5" style={{ background: `linear-gradient(145deg, ${mode.neon}18 0%, rgba(7,10,34,0.72) 58%, rgba(4,7,22,0.88) 100%)`, border: `1px solid ${mode.neon}42`, boxShadow: `0 12px 32px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.09)` }}>
                 <div className="absolute -right-10 -top-12 w-32 h-32 rounded-full" style={{ background: `radial-gradient(circle, ${mode.neon}40, transparent 68%)` }}/>
                 <div className="relative flex items-center gap-4">
-                  <motion.div className="relative flex items-center justify-center w-[78px] h-[78px] rounded-3xl" animate={{ boxShadow: [`0 0 18px ${themeColors[humanColor]}35`, `0 0 34px ${themeColors[humanColor]}70`, `0 0 18px ${themeColors[humanColor]}35`] }} transition={{ duration: 2.2, repeat: Infinity }} style={{ background: `radial-gradient(circle, ${themeColors[humanColor]}30, rgba(255,255,255,0.04) 58%, transparent 72%)`, border: `1px solid ${themeColors[humanColor]}60` }}>
+                  <motion.div className="relative flex items-center justify-center w-[78px] h-[78px] rounded-3xl" animate={{ boxShadow: [`0 0 18px ${themeColors[previewPlayer]}35`, `0 0 34px ${themeColors[previewPlayer]}70`, `0 0 18px ${themeColors[previewPlayer]}35`] }} transition={{ duration: 2.2, repeat: Infinity }} style={{ background: `radial-gradient(circle, ${themeColors[previewPlayer]}30, rgba(255,255,255,0.04) 58%, transparent 72%)`, border: `1px solid ${themeColors[previewPlayer]}60` }}>
                     {/* The chosen colour's own character — a presentation
                         moment: it lands with a settle, waves hello, and
                         keeps a gentle idle while you browse. greetKey makes
-                        every pick replay the greeting. */}
-                    <MascotCharacter player={humanColor} size={58} isNeon greetKey={humanColor} />
+                        every pick replay the greeting. In the exclude-only
+                        flows the card shows the benched character instead,
+                        so it stays in step with the list below. */}
+                    <MascotCharacter player={previewPlayer} size={58} isNeon mood={showHumanColor ? "alert" : "sad"} greetKey={showHumanColor ? previewPlayer : undefined} />
                   </motion.div>
                   <div className="min-w-0"><p className="font-heading uppercase" style={{ fontSize: "9px", letterSpacing: "0.18em", color: `${mode.neon}aa` }}>{showHumanColor ? t.colorSection : t.inPlay}</p><h3 className="font-heading font-bold text-white leading-tight" style={{ fontSize: "20px", letterSpacing: "0.04em" }}>{showHumanColor ? t.chooseColor : t.excludeTitle}</h3><p className="font-sans text-white/50 mt-1" style={{ fontSize: "10px", lineHeight: 1.35 }}>{showHumanColor ? t.chooseColorSub : t.excludeSub}</p></div>
                 </div>
@@ -494,7 +502,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume, boar
                 <SectionLabel label={t.excludeTitle} neon={mode.neon}/>
                 <p className="font-sans text-white/50 text-center -mt-1 mb-3" style={{ fontSize: "10px" }}>{t.excludeSub}</p>
                 <div className="grid grid-cols-2 gap-2.5">
-                  {themeColors.map((color, index) => { const active = resolvedExcludedColor === index; const unavailable = showHumanColor && humanColor === index; return <motion.button key={`exclude-${color}`} disabled={unavailable} onClick={() => { playSelection(); setExcludedColor(index); }} whileHover={{ y: -2 }} whileTap={{ scale: 0.96 }} className="relative flex items-center gap-3 rounded-2xl px-3.5 py-3" style={{ opacity: unavailable ? 0.25 : 1, background: active ? `linear-gradient(135deg, ${color}28, ${color}0e)` : "rgba(255,255,255,0.035)", border: `1.5px solid ${active ? color : "rgba(255,255,255,0.10)"}`, boxShadow: active ? `0 0 20px ${color}38` : "none" }}><span className="flex items-center justify-center w-8 h-8 rounded-xl" style={{ background: `${color}28`, border: `1px solid ${color}55` }}><PawnSilhouette color={color} size={18}/></span><span className="font-heading font-bold" style={{ fontSize: "11px", color: active ? "white" : "rgba(255,255,255,0.55)", letterSpacing: "0.05em" }}>{["ROUGE", "BLEU", "JAUNE", "VERT"][index]}</span>{active && <span className="ml-auto font-heading font-bold" style={{ fontSize: "9px", color }}>OUT</span>}</motion.button>; })}
+                  {themeColors.map((color, index) => { const active = resolvedExcludedColor === index; const unavailable = showHumanColor && humanColor === index; return <motion.button key={`exclude-${color}`} disabled={unavailable} onClick={() => { playSelection(); setExcludedColor(index); }} whileHover={{ y: -2 }} whileTap={{ scale: 0.96 }} className="relative flex items-center gap-3 rounded-2xl px-3.5 py-3" style={{ opacity: unavailable ? 0.25 : 1, background: active ? `linear-gradient(135deg, ${color}28, ${color}0e)` : "rgba(255,255,255,0.035)", border: `1.5px solid ${active ? color : "rgba(255,255,255,0.10)"}`, boxShadow: active ? `0 0 20px ${color}38` : "none" }}>{/* The same illustrated characters as the colour-pick list above, at the same size and per-colour treatment — picking who sits this match out now reads as benching a character rather than switching off a generic pawn. */}<MascotCharacter player={index} size={30} isNeon mood={active ? "sad" : "alert"}/><span className="font-heading font-bold" style={{ fontSize: "12px", color: active ? "white" : "rgba(255,255,255,0.58)", letterSpacing: "0.06em" }}>{["ROUGE", "BLEU", "JAUNE", "VERT"][index]}</span>{active && <span className="ml-auto font-heading font-bold" style={{ fontSize: "9px", color }}>OUT</span>}</motion.button>; })}
                 </div>
               </>}
 
