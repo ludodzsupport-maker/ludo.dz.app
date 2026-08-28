@@ -70,17 +70,22 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
 // ─────────────────────────────────────────────────────────────────────────────
 // Reply (ردود) commentary
 //
-// A reply is an optional secondary line that plays *immediately after* a
-// registered event's primary line, as a direct back-and-forth. It reuses the
-// same isolated-folder model: the reply pool lives under `voice/ردود/<event>/`
-// and is shared across all players (the audio content is generic; only the
-// speaking indicator is tied to a specific player). No clip is shared between
-// events, nor between an event and its own replies, and the no-immediate-repeat
-// rule applies within each reply pool.
+// A reply is a guaranteed secondary line that plays *immediately after* a
+// replyable event's primary line, as a direct back-and-forth. There is no
+// probability gate: every primary line for a replyable event is answered. It
+// reuses the same isolated-folder model: the reply pool lives under
+// `voice/ردود/<event>/` and is shared across all players (the audio content is
+// generic; only the speaking indicator is tied to a specific player). No clip is
+// shared between events, nor between an event and its own replies, and the
+// no-immediate-repeat rule applies within each reply pool.
+//
+// The only randomness in a reply is (a) which clip is picked from the pool and
+// (b) which player answers — a uniform pick among the players currently in the
+// game, excluding whoever just acted. Exactly one of them is chosen every time.
 //
 // To enable replies for a new event, add its key to `REPLYABLE_EVENTS` and drop
 // clips into `voice/ردود/<event>/` — nothing else changes. The pool is auto-built
-// and the chance/gap constants below apply uniformly to every replyable event.
+// and the gap constants below apply uniformly to every replyable event.
 //
 // Scheduling model (see the "reply reservation" section further down):
 // the reply is decided and *preloaded* the moment its primary line starts, but
@@ -88,10 +93,11 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
 // a wall-clock timer racing the primary, and never as an ordinary, droppable
 // queue entry. That is what makes it land right after the primary regardless of
 // what the player is doing (rolling, moving pawns, tapping UI) in between.
+//
+// The only ways a reply does not happen are the two structural no-ops it has
+// always had: an empty `voice/ردود/<event>/` folder, and no eligible responder
+// (the caller passed no `playersInGame`, or the acting player is the only one).
 // ─────────────────────────────────────────────────────────────────────────────
-
-/** Probability that a reply fires after the primary line plays (tune here). */
-export const REPLY_CHANCE = 0.35;
 
 // Conversational beat between the primary line ending and the reply starting.
 // Measured from the primary's END (not its start), so it is a real pause in the
@@ -310,20 +316,25 @@ function isReplyable(event: VoiceLineTrigger): event is VoiceLineEvent {
 }
 
 /**
- * Decide + preload the reply for a primary line that is starting now. Nothing
- * is scheduled on a clock here: the reservation is handed to the primary's end
- * callback (`finishLine`). Preloading at this point means the clip is already
- * buffered when the primary ends, so the reply starts on the spot instead of
- * waiting on a media fetch in the middle of a dice roll or pawn animation.
+ * Reserve + preload the reply for a primary line that is starting now. A reply
+ * is unconditional: there is no probability roll, so every replyable primary
+ * line gets one as long as the pool has a clip and at least one other player is
+ * in the game. The randomness is limited to which clip plays and which player
+ * answers (uniform among everyone in the game except whoever just acted).
+ *
+ * Nothing is scheduled on a clock here: the reservation is handed to the
+ * primary's end callback (`finishLine`). Preloading at this point means the clip
+ * is already buffered when the primary ends, so the reply starts on the spot
+ * instead of waiting on a media fetch in the middle of a dice roll or pawn
+ * animation.
  */
 function prepareReply(event: VoiceLineEvent, options: VoiceLineContext, owner: HTMLAudioElement): void {
   clearPendingReply();
-  if (Math.random() >= REPLY_CHANCE) return;
 
   const acting = options.speaker;
   const candidates = (options.playersInGame ?? [])
     .filter(player => (acting === undefined ? true : player !== acting));
-  if (candidates.length === 0) return;
+  if (candidates.length === 0) return; // nobody left to answer = safe no-op
 
   const clip = pickRandomReply(event); // empty folder = safe no-op
   if (!clip) return;

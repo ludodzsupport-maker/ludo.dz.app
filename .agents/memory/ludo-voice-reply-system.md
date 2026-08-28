@@ -28,10 +28,16 @@ reported symptom ("the reply only comes out when I stop playing"):
 
 Current model in `voice-line-manager.ts`:
 
-- `prepareReply()` runs when a replyable primary **starts**: it rolls `REPLY_CHANCE`,
-  picks the speaker and clip, and creates + `load()`s the element up front (preloaded, so
-  playback is instant later). The result is stored in `pendingReply` tagged with its
-  `owner` (the primary's element). Nothing is scheduled on a clock.
+- `prepareReply()` runs when a replyable primary **starts**: it picks the responder
+  and clip, and creates + `load()`s the element up front (preloaded, so playback is
+  instant later). The result is stored in `pendingReply` tagged with its `owner` (the
+  primary's element). Nothing is scheduled on a clock.
+- **Replies are unconditional (2026-08-28).** The original `REPLY_CHANCE = 0.35`
+  probability gate was removed outright (constant deleted, not set to 1.0) — every
+  replyable primary line is answered. The only randomness left is which clip plays,
+  which player answers (uniform among `playersInGame` minus the acting player), and
+  the gap jitter. The two structural no-ops remain: an empty `ردود/<event>/` folder,
+  and no eligible responder (no `playersInGame`, or the actor is the only player).
 - `finishLine(owner)` is the single end-of-clip callback. If `pendingReply.owner === owner`
   it starts the reply after `REPLY_GAP_MIN_MS`-`REPLY_GAP_MAX_MS` measured from the
   primary's **end**. The reply can never be dropped by queue size and never waits behind
