@@ -653,6 +653,7 @@ const CornerDice = memo(function CornerDice({
           panels gaze up. */}
       <CornerMascot
         player={player}
+        anchor={anchor}
         isClassic={isClassic}
         isDz={isDz}
         isNeon={isNeon}
