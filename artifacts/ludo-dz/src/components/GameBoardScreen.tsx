@@ -4504,7 +4504,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       if (escapedDanger) playVoiceLine(enteredSafeStar ? 'perfect_escape' : 'danger_escape');
       else if (enteredSafeStar) playVoiceLine('safe_zone_entry');
       if (safeGathering) playVoiceLine('safe_gathering');
-      if (exitedHome) playVoiceLine('piece_exited_home');
+      if (exitedHome) playVoiceLine('إخراج_بيدق');
       if (enteredFinalStretch) playVoiceLine('final_stretch');
       if (isHomeFinish) playVoiceLine('piece_home');
       if (nearMiss) playVoiceLine('near_miss');
