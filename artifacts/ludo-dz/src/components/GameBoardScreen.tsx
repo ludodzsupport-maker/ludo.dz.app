@@ -8,6 +8,7 @@ import { memo, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useAnimationControls, useReducedMotion, type Transition } from 'framer-motion';
 import { ArrowLeft, Bot, Save, Settings, Trash2, X } from 'lucide-react';
 import { GamePiece } from './GamePiece';
+import { CornerMascot, type MascotEvent } from './CornerMascot';
 import { VictoryScreen } from './VictoryScreen';
 import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
@@ -536,7 +537,7 @@ type PanelLayout = {
 const CornerDice = memo(function CornerDice({
   player, anchor, game, isAI, lang, boardStyle,
   rolling, animDice, justLanded, lastDice,
-  onRoll, canRoll, panelLayout, paused, speaking,
+  onRoll, canRoll, panelLayout, paused, speaking, mascotEvent,
 }: {
   player: number;
   anchor: 'tl' | 'tr' | 'bl' | 'br';
@@ -547,6 +548,7 @@ const CornerDice = memo(function CornerDice({
   panelLayout: PanelLayout;
   paused?: boolean; // Neon exit-modal pause (see SETTLE_TRANSITION). Always false for Classic/DZ.
   speaking?: SpeakingKind | null; // Which kind of voice line this player is currently speaking.
+  mascotEvent?: MascotEvent; // One-shot mascot reaction targeted at this player's corner.
 }) {
   const col         = E.PLAYER_COLORS[player];
   const neon        = E.PLAYER_NEONS[player];
@@ -642,6 +644,25 @@ const CornerDice = memo(function CornerDice({
         panelRadius={panelRadius}
         panelScale={panelScale}
         panelOrigin={panelOrigin}
+        paused={paused}
+      />
+      {/* Corner mascot — peeks over the panel's top edge on this colour's turn,
+          celebrates a six/capture and consoles when captured. Purely visual:
+          pointer-events off, sits outside the card's flow, never touches the
+          click handler or audio. Top panels gaze down (toward the board), bottom
+          panels gaze up. */}
+      <CornerMascot
+        player={player}
+        isClassic={isClassic}
+        isDz={isDz}
+        isNeon={isNeon}
+        width={PANEL_W}
+        panelH={PANEL_H}
+        active={isActive}
+        rolling={isRollingMe}
+        anticipating={canTap && !isRollingMe}
+        gaze={isTop ? 'down' : 'up'}
+        event={mascotEvent && mascotEvent.player === player ? mascotEvent : null}
         paused={paused}
       />
       {/* Connector tail — visually anchors the panel to its board corner */}
@@ -4236,6 +4257,10 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   // line or a reply — drives the speaking aura on that player's corner panel.
   // Managed by voice-line-manager.
   const [speaking, setSpeaking] = useState<SpeakingState>(null);
+  // One-shot mascot reactions, targeted at a single corner. Raised by the roll
+  // / capture logic below and consumed by CornerDice → CornerMascot (which
+  // self-clears after the celebration/consolation plays out).
+  const [mascotEvent, setMascotEvent] = useState<MascotEvent>(null);
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
   const rollSequenceRef = useRef(0);
   const rollingRef = useRef(false);
@@ -4303,6 +4328,11 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   }, []);
   const clearShockwave = useCallback(() => setShockwave(null), []);
   const clearHomeFinishVFX = useCallback(() => setHomeFinishVFX(null), []);
+  // Raise a one-shot mascot reaction at a single corner. Each event carries a
+  // fresh id so an identical reaction (e.g. back-to-back sixes) still retriggers.
+  const raiseMascotEvent = useCallback((player: number, kind: 'six' | 'capture' | 'captured') => {
+    setMascotEvent({ player, kind, id: Date.now() });
+  }, []);
 
   // Stable refs so triggerMove closures always see the latest values
   // without needing to be recreated on every render.
@@ -4491,6 +4521,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
         // roll generation, move availability, or turn resolution.
         if (next.dice === 6 && next.consecutiveSixes === 2) playVoiceLine('consecutive_sixes_2', { speaker: rollingPlayer });
         else if (next.dice === 6) playVoiceLine('rolled_six', { speaker: rollingPlayer });
+        if (next.dice === 6) raiseMascotEvent(rollingPlayer, 'six');
         if (next.movable.length === 0) playVoiceLine('no_valid_moves', { speaker: rollingPlayer });
         landed = true;
       } else if (reason === 'failsafe') {
@@ -4542,7 +4573,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     };
 
     cycle();
-  }, [clearRollTimers, diceSpeed, diceTiming, isNeon, isClassic, isDz]);
+  }, [clearRollTimers, diceSpeed, diceTiming, isNeon, isClassic, isDz, raiseMascotEvent]);
 
   // Perf (roll-start jank): keep the prop passed into the memoized corner
   // panels permanently stable while still dispatching to the latest roll
@@ -4688,6 +4719,10 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
     const playResolvedVoiceLines = () => {
       if (capturedPid) {
+        // Corner mascots react to the capture: the captor celebrates, the
+        // victim consoles. Purely visual — fires alongside the voice lines.
+        raiseMascotEvent(ps, 'capture');
+        if (capturedPlayer !== null) raiseMascotEvent(capturedPlayer, 'captured');
         if (!isComputer || ps === humanPlayer) playVoiceLine('capture_by_me', { speaker: ps });
         else if (capturedPlayer === humanPlayer) playVoiceLine('captured_by_opponent', { speaker: capturedPlayer ?? ps });
         else playVoiceLine('opponent_captured', { speaker: capturedPlayer ?? ps });
@@ -4807,7 +4842,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     initAnims[pid] = { steps, startX, startY, onLastHop };
     // Do NOT set capturedPid to 'defeat' here — it waits for onLastHop
     setPieceAnims(initAnims);
-  }, [clearMoveRecoveryTimer, pawnTiming.hopMs, isClassic, unlockMoveInteraction]); // stable — reads game/isAnimating via refs
+  }, [clearMoveRecoveryTimer, pawnTiming.hopMs, isClassic, unlockMoveInteraction, raiseMascotEvent]); // stable — reads game/isAnimating via refs
 
   // ── Piece click ───────────────────────────────────────────────────────────
   // Non-movable pawns no longer swallow the tap — their onClick now calls here
@@ -5179,7 +5214,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 0}
-            player={0} anchor="tl" isAI={isComputer && 0 !== humanPlayer} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 0 ? speaking.kind : null}/>
+            player={0} anchor="tl" isAI={isComputer && 0 !== humanPlayer} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 0 ? speaking.kind : null} mascotEvent={mascotEvent}/>
           {/* Blue  → top-right   (player 1) */}
           <CornerDice
             game={game}
@@ -5190,7 +5225,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 1}
-            player={1} anchor="tr" isAI={isComputer && humanPlayer !== 1} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 1 ? speaking.kind : null}/>
+            player={1} anchor="tr" isAI={isComputer && humanPlayer !== 1} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 1 ? speaking.kind : null} mascotEvent={mascotEvent}/>
           {/* Yellow → bottom-right (player 2) */}
           <CornerDice
             game={game}
@@ -5201,7 +5236,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 2}
-            player={2} anchor="br" isAI={isComputer && humanPlayer !== 2} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 2 ? speaking.kind : null}/>
+            player={2} anchor="br" isAI={isComputer && humanPlayer !== 2} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 2 ? speaking.kind : null} mascotEvent={mascotEvent}/>
           {/* Green  → bottom-left  (player 3) */}
           <CornerDice
             game={game}
@@ -5212,7 +5247,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 3}
-            player={3} anchor="bl" isAI={isComputer && humanPlayer !== 3} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 3 ? speaking.kind : null}/>
+            player={3} anchor="bl" isAI={isComputer && humanPlayer !== 3} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speaking?.player === 3 ? speaking.kind : null} mascotEvent={mascotEvent}/>
         </motion.div>
       </div>
 
