@@ -41,7 +41,7 @@ import {
   playPrimaryAction,
   resumeBgmForMenu,
 } from '../lib/sound-manager';
-import { playVoiceLine, stopVoiceLines } from '../lib/voice-line-manager';
+import { playVoiceLine, stopVoiceLines, subscribeSpeaking } from '../lib/voice-line-manager';
 import { vibrateDiceRoll, vibratePawnStep, vibrateCaptureOrWin } from '../lib/haptics-manager';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -535,7 +535,7 @@ type PanelLayout = {
 const CornerDice = memo(function CornerDice({
   player, anchor, game, isAI, lang, boardStyle,
   rolling, animDice, justLanded, lastDice,
-  onRoll, canRoll, panelLayout, paused,
+  onRoll, canRoll, panelLayout, paused, speaking,
 }: {
   player: number;
   anchor: 'tl' | 'tr' | 'bl' | 'br';
@@ -545,6 +545,7 @@ const CornerDice = memo(function CornerDice({
   boardStyle?: BoardStyle;
   panelLayout: PanelLayout;
   paused?: boolean; // Neon exit-modal pause (see SETTLE_TRANSITION). Always false for Classic/DZ.
+  speaking?: boolean; // This player's voice line is currently audible.
 }) {
   const col         = E.PLAYER_COLORS[player];
   const neon        = E.PLAYER_NEONS[player];
@@ -570,6 +571,10 @@ const CornerDice = memo(function CornerDice({
   const clLight     = CL_LIGHT[player as 0|1|2|3];
   const clBorder    = CL_BORDER[player as 0|1|2|3];
   const dzColor     = DZ.HOME_COLORS[player as 0|1|2|3];
+  // Speaking-indicator accent — follows each theme's "active" vocabulary so the
+  // cue reads as native rather than bolted on (Classic: player solid, DZ: gold,
+  // Neon: neon).
+  const speechColor = isClassic ? clSolid : isDz ? DZ.BORDER_GOLD : neon;
   // Shadow module-level px constants with viewport-scaled values so panels
   // grow/shrink proportionally with the board on all phone sizes.
   // eslint-disable-next-line @typescript-eslint/no-shadow
@@ -878,6 +883,7 @@ const CornerDice = memo(function CornerDice({
         }}>
           {isDz && lang === 'fr' ? name : name.slice(0, 4)}
         </span>
+        <SpeakingIndicator color={speechColor} active={!!speaking}/>
         {isAI && <Bot size={8} color={isClassic ? 'rgba(80,50,10,0.42)' : isDz ? 'rgba(201,162,39,0.60)' : 'rgba(255,255,255,0.30)'} style={{ flexShrink: 0 }}/>}
       </div>
 
@@ -965,6 +971,51 @@ const CornerDice = memo(function CornerDice({
       )}
     </motion.div>
     </div>
+  );
+});
+
+// ─── Speaking indicator ───────────────────────────────────────────────────────
+// A compact, tasteful "this player is talking" cue shown on a player's corner
+// panel while their voice line actually plays. A tiny three-bar equalizer that
+// gently pulses (staggered so it reads as a waveform, not a strobe), tinted to
+// the active board theme's accent and soft-glow so it never competes with the
+// player colour or the active-turn glow. Fades in/out with the audio and scales
+// with the panel via its own flex layout — no fixed px beyond the bars so it
+// stays crisp on small Cordova screens.
+const SpeakingIndicator = memo(function SpeakingIndicator({ color, active }: {
+  color: string; active: boolean;
+}) {
+  const shouldReduceMotion = useReducedMotion();
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: active ? 1 : 0 }}
+      transition={{ duration: 0.28, ease: 'easeOut' }}
+      aria-hidden
+      style={{
+        display: 'flex', alignItems: 'flex-end', gap: 1.5,
+        height: 9, flexShrink: 0, pointerEvents: 'none',
+      }}>
+      {[0, 1, 2].map(i => (
+        <motion.span
+          key={i}
+          animate={active
+            ? (shouldReduceMotion ? { scaleY: 1 } : { scaleY: [0.55, 1, 0.55] })
+            : { scaleY: shouldReduceMotion ? 1 : 0.55 }}
+          transition={{
+            duration: 0.72 + i * 0.17,
+            repeat: (active && !shouldReduceMotion) ? Infinity : 0,
+            ease: 'easeInOut',
+          }}
+          style={{
+            width: 2, height: 8, borderRadius: 1,
+            background: color,
+            boxShadow: `0 0 4px ${color}66`,
+            transformOrigin: 'bottom',
+          }}
+        />
+      ))}
+    </motion.div>
   );
 });
 
@@ -4040,6 +4091,9 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const [showSettings, setShowSettings] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [restartKey, setRestartKey] = useState(0);
+  // Which player's voice line is currently audible — drives the speaking
+  // indicator on that player's corner panel. Managed by voice-line-manager.
+  const [speakingPlayer, setSpeakingPlayer] = useState<number | null>(null);
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
   const rollSequenceRef = useRef(0);
   const rollingRef = useRef(false);
@@ -4196,6 +4250,14 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const pawnTiming  = useMemo(() => pawnTimingFor(pawnSpeed), [pawnSpeed]);
   const springCfg   = useMemo(() => ({ stiffness: pawnTiming.stiffness, damping: pawnTiming.damping, mass: pawnTiming.mass }), [pawnTiming]);
 
+  // Live speaking indicator: while a voice line for a specific player is audible,
+  // the manager broadcasts that player so the panel can show the cue. Subscribe
+  // at mount, unsubscribe at unmount so a lingering audio never leaks the state.
+  useEffect(() => {
+    const unsubscribe = subscribeSpeaking(state => setSpeakingPlayer(state ? state.player : null));
+    return unsubscribe;
+  }, []);
+
   const saveGameState = useCallback(() => {
     if (typeof window === 'undefined') return;
     const elapsedMs = Date.now() - matchStartRef.current;
@@ -4285,9 +4347,9 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
         });
         // Commentary observes the resolved roll only; it never participates in
         // roll generation, move availability, or turn resolution.
-        if (next.dice === 6 && next.consecutiveSixes === 2) playVoiceLine('consecutive_sixes_2');
-        else if (next.dice === 6) playVoiceLine('rolled_six');
-        if (next.movable.length === 0) playVoiceLine('no_valid_moves');
+        if (next.dice === 6 && next.consecutiveSixes === 2) playVoiceLine('consecutive_sixes_2', { speaker: rollingPlayer });
+        else if (next.dice === 6) playVoiceLine('rolled_six', { speaker: rollingPlayer });
+        if (next.movable.length === 0) playVoiceLine('no_valid_moves', { speaker: rollingPlayer });
         landed = true;
       } else if (reason === 'failsafe') {
         console.warn('[dice] forced roll cleanup skipped logical resolution because game state already advanced', {
@@ -4484,9 +4546,9 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
     const playResolvedVoiceLines = () => {
       if (capturedPid) {
-        if (!isComputer || ps === humanPlayer) playVoiceLine('capture_by_me');
-        else if (capturedPlayer === humanPlayer) playVoiceLine('captured_by_opponent');
-        else playVoiceLine('opponent_captured');
+        if (!isComputer || ps === humanPlayer) playVoiceLine('capture_by_me', { speaker: ps });
+        else if (capturedPlayer === humanPlayer) playVoiceLine('captured_by_opponent', { speaker: capturedPlayer ?? ps });
+        else playVoiceLine('opponent_captured', { speaker: capturedPlayer ?? ps });
         const captorStreak = captureStreakRef.current?.kind === 'captor' && captureStreakRef.current.player === ps
           ? captureStreakRef.current.count + 1
           : 1;
@@ -4497,21 +4559,21 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
           ? { kind: 'victim', player: capturedPlayer, count: victimStreak }
           : { kind: 'captor', player: ps, count: captorStreak };
         captureStreakRef.current = nextStreak;
-        if (nextStreak.count >= LAUGH_MOCK_STREAK_THRESHOLD) playVoiceLine('laugh_mock');
+        if (nextStreak.count >= LAUGH_MOCK_STREAK_THRESHOLD) playVoiceLine('laugh_mock', { speaker: ps });
       } else {
         captureStreakRef.current = null;
       }
-      if (escapedDanger) playVoiceLine(enteredSafeStar ? 'perfect_escape' : 'danger_escape');
-      else if (enteredSafeStar) playVoiceLine('safe_zone_entry');
-      if (safeGathering) playVoiceLine('safe_gathering');
-      if (exitedHome) playVoiceLine('إخراج_بيدق');
-      if (enteredFinalStretch) playVoiceLine('final_stretch');
-      if (isHomeFinish) playVoiceLine('piece_home');
-      if (nearMiss) playVoiceLine('near_miss');
-      if (opponentBecameNearWin) playVoiceLine('opponent_near_win');
-      if (forfeitedThreeSixes) playVoiceLine('forfeit_three_sixes');
-      else if (earnedExtraTurn) playVoiceLine('extra_turn');
-      if (hasNewDanger) playVoiceLine('danger');
+      if (escapedDanger) playVoiceLine(enteredSafeStar ? 'perfect_escape' : 'danger_escape', { speaker: ps });
+      else if (enteredSafeStar) playVoiceLine('safe_zone_entry', { speaker: ps });
+      if (safeGathering) playVoiceLine('safe_gathering', { speaker: ps });
+      if (exitedHome) playVoiceLine('إخراج_بيدق', { speaker: ps, playersInGame: currentGame.playerSlots });
+      if (enteredFinalStretch) playVoiceLine('final_stretch', { speaker: ps });
+      if (isHomeFinish) playVoiceLine('piece_home', { speaker: ps });
+      if (nearMiss) playVoiceLine('near_miss', { speaker: ps });
+      if (opponentBecameNearWin) playVoiceLine('opponent_near_win', { speaker: ps });
+      if (forfeitedThreeSixes) playVoiceLine('forfeit_three_sixes', { speaker: ps });
+      else if (earnedExtraTurn) playVoiceLine('extra_turn', { speaker: ps });
+      if (hasNewDanger) playVoiceLine('danger', { speaker: ps });
       dangerPiecesRef.current = nextDanger;
     };
 
@@ -4673,7 +4735,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     if (isNeon) playNeonWelcomeJingle();
     else if (isClassic) playClassicWelcomeJingle();
     else if (isDz) playDzWelcomeJingle();
-    playVoiceLine('win');
+    playVoiceLine('win', { speaker: game.winner ?? undefined });
   }, [game.winner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-pass when no valid moves — blocked while animation is in flight ─
@@ -4693,7 +4755,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   useEffect(() => {
     if (showExitConfirm || !isComputer || game.activePlayer === humanPlayer) return;
     if (game.phase !== 'rolling' || rolling || game.winner) return;
-    playVoiceLine('ai_thinking');
+    playVoiceLine('ai_thinking', { speaker: game.activePlayer });
     const t = setTimeout(handleRoll, 620 + Math.random() * 320);
     return () => clearTimeout(t);
   }, [showExitConfirm, isComputer, game.activePlayer, game.phase, rolling, game.winner, handleRoll]);
@@ -4728,7 +4790,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   useEffect(() => {
     if (showExitConfirm || !isHumanTurn || game.winner || rolling || isAnimating) return;
     if (game.phase !== 'rolling' && game.phase !== 'selecting') return;
-    const t = setTimeout(() => playVoiceLine('turn_reminder'), TURN_REMINDER_IDLE_MS);
+    const t = setTimeout(() => playVoiceLine('turn_reminder', { speaker: humanPlayer }), TURN_REMINDER_IDLE_MS);
     return () => clearTimeout(t);
   }, [showExitConfirm, isHumanTurn, game.activePlayer, game.phase, game.diceRolled, game.movable.length, game.winner, rolling, isAnimating]);
 
@@ -4975,7 +5037,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 0}
-            player={0} anchor="tl" isAI={isComputer && 0 !== humanPlayer} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause}/>
+            player={0} anchor="tl" isAI={isComputer && 0 !== humanPlayer} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speakingPlayer === 0}/>
           {/* Blue  → top-right   (player 1) */}
           <CornerDice
             game={game}
@@ -4986,7 +5048,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 1}
-            player={1} anchor="tr" isAI={isComputer && humanPlayer !== 1} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause}/>
+            player={1} anchor="tr" isAI={isComputer && humanPlayer !== 1} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speakingPlayer === 1}/>
           {/* Yellow → bottom-right (player 2) */}
           <CornerDice
             game={game}
@@ -4997,7 +5059,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 2}
-            player={2} anchor="br" isAI={isComputer && humanPlayer !== 2} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause}/>
+            player={2} anchor="br" isAI={isComputer && humanPlayer !== 2} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speakingPlayer === 2}/>
           {/* Green  → bottom-left  (player 3) */}
           <CornerDice
             game={game}
@@ -5008,7 +5070,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             lastDice={lastDice}
             onRoll={onRollStable}
             canRoll={canRoll && game.activePlayer === 3}
-            player={3} anchor="bl" isAI={isComputer && humanPlayer !== 3} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause}/>
+            player={3} anchor="bl" isAI={isComputer && humanPlayer !== 3} boardStyle={boardStyle} panelLayout={panelLayout} paused={exitPause} speaking={speakingPlayer === 3}/>
         </motion.div>
       </div>
 
