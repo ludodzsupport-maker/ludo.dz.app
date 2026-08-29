@@ -222,9 +222,20 @@ const REPLYABLE_EVENTS: Readonly<Partial<Record<VoiceLineEvent, boolean>>> = {
 // specific player, a single speaker is broadcast; when it ends (or a line with
 // no speaker plays), the speaker is cleared. UI subscribes via `subscribeSpeaking`.
 // `kind` lets the UI treat a reply ("this player is answering back") with a
-// stronger, duel-flavoured treatment than an ordinary primary line.
+// stronger, duel-flavoured treatment than an ordinary primary line. `event`
+// says which registered event is audible (a reply carries the event it answers,
+// e.g. 'الأكل' for the capture reply), and `piece` — when the caller supplied
+// one — names the exact board pawn carrying the line, so per-piece visuals can
+// target it instead of (or alongside) a whole corner panel.
 export type SpeakingKind = 'primary' | 'reply';
-export type SpeakingState = { player: number; kind: SpeakingKind } | null;
+export type SpeakingState = {
+  player: number;
+  kind: SpeakingKind;
+  /** Registered event the audible line belongs to; null for unmigrated events. */
+  event: VoiceLineEvent | null;
+  /** Board-piece index of the pawn carrying the line, when known. */
+  piece?: number;
+} | null;
 type SpeakingListener = (state: SpeakingState) => void;
 const speakingListeners = new Set<SpeakingListener>();
 let currentSpeaking: SpeakingState = null;
@@ -233,6 +244,14 @@ let currentSpeaking: SpeakingState = null;
 export interface VoiceLineContext {
   /** The player this commentary belongs to — drives the speaking indicator. */
   speaker?: number;
+  /**
+   * The speaker's board-piece index (0-3) when the line is about one specific
+   * pawn. Purely visual — never affects audio selection or scheduling. The
+   * speaking broadcast echoes it back as `SpeakingState.piece` so per-piece
+   * effects (the capture speaking echo on the captor's pawn) can target the
+   * exact piece for exactly as long as the line is audible.
+   */
+  piece?: number;
   /** Players currently in the game — required only to target a reply. */
   playersInGame?: readonly number[];
   /**
@@ -242,12 +261,20 @@ export interface VoiceLineContext {
    * back to a random player or to the captor.
    */
   replySpeaker?: number;
+  /**
+   * For `الأكل`: the captured piece's own index. Echoed on the reply's
+   * speaking broadcast so the victim's pawn (back in its home bay by the time
+   * the reply plays) can carry the reply half of the capture speaking echo.
+   */
+  replyPiece?: number;
 }
 
 /**
  * Subscribe to speaking-state changes. The listener is invoked immediately with
  * any in-progress speaker and then on every change; returns an unsubscribe fn.
- * The state is `{ player, kind }` while a line for that player is audible, else `null`.
+ * The state is `{ player, kind, event, piece? }` while a line for that player is
+ * audible, else `null` — start/end are exact: set when a clip actually starts
+ * playing, cleared on natural end, error, watchdog, interrupt, or stop.
  */
 export function subscribeSpeaking(listener: SpeakingListener): () => void {
   speakingListeners.add(listener);
@@ -256,7 +283,10 @@ export function subscribeSpeaking(listener: SpeakingListener): () => void {
 }
 
 function notifySpeaking(state: SpeakingState): void {
-  if (currentSpeaking?.player === state?.player && currentSpeaking?.kind === state?.kind) return;
+  if (currentSpeaking?.player === state?.player
+    && currentSpeaking?.kind === state?.kind
+    && currentSpeaking?.event === state?.event
+    && currentSpeaking?.piece === state?.piece) return;
   currentSpeaking = state;
   speakingListeners.forEach(listener => listener(state));
 }
@@ -412,6 +442,11 @@ let queue: QueuedLine[] = [];
 interface PendingReply {
   event: VoiceLineEvent;
   speaker: number;
+  /**
+   * For `الأكل`: the victim's board-piece index (`replyPiece`), kept so the
+   * reply's speaking broadcast targets the captured pawn for the reply echo.
+   */
+  piece?: number;
   clip: VoiceClip;
   /** Element created (and `load()`-ed) up front so the reply starts instantly. */
   audio: HTMLAudioElement;
@@ -668,7 +703,7 @@ function prepareReply(event: VoiceLineEvent, options: VoiceLineContext, owner: H
   audio.preload = 'auto';
   try { audio.load(); } catch { /* preload is best-effort */ }
 
-  pendingReply = { event, speaker, clip, audio, owner, actors, playersInGame: options.playersInGame ?? [] };
+  pendingReply = { event, speaker, piece: options.replyPiece, clip, audio, owner, actors, playersInGame: options.playersInGame ?? [] };
   replyRunByEvent[event] = { event, owner, actors, preempted: false };
 }
 
@@ -708,6 +743,9 @@ function onReplyPrimaryStart(event: VoiceLineEvent, options: VoiceLineContext, o
         pendingReply.actors = run.actors;
         // Deterministic: the most recent victim answers back at the captor.
         pendingReply.speaker = victim;
+        // Same for the victim's pawn — the reply echo follows the latest
+        // captured piece, 1:1 with the reply speaker above.
+        pendingReply.piece = options.replyPiece;
       }
 
       // If a foreign event was queued while this run was progressing, it wins
@@ -795,7 +833,7 @@ function startReplyGap(): void {
       return;
     }
     playClip(
-      { kind: 'reply', replyEvent: reply.event, options: { speaker: reply.speaker } },
+      { kind: 'reply', replyEvent: reply.event, options: { speaker: reply.speaker, replyPiece: reply.piece } },
       reply.clip,
       reply.audio,
     );
@@ -849,9 +887,22 @@ function playClip(line: QueuedLine, clip: VoiceClip, preloaded?: HTMLAudioElemen
   audio.addEventListener('loadedmetadata', updateDuration, { once: true });
 
   syncDucking();
+  // The broadcast now also carries which registered event is audible and which
+  // board piece carries it, so UIs can target a specific pawn (the capture
+  // speaking echo) for exactly the line's audible lifetime. A reply line is
+  // announced with the event it answers; an unmigrated primary has no event.
+  const speakingEvent = line.kind === 'event'
+    ? (isRegisteredEvent(line.event) ? line.event : null)
+    : line.replyEvent;
+  const speakingPiece = line.kind === 'event' ? line.options.piece : line.options.replyPiece;
   notifySpeaking(line.options.speaker === undefined
     ? null
-    : { player: line.options.speaker, kind: line.kind === 'reply' ? 'reply' : 'primary' });
+    : {
+        player: line.options.speaker,
+        kind: line.kind === 'reply' ? 'reply' : 'primary',
+        event: speakingEvent,
+        piece: speakingPiece,
+      });
 
   const finish = () => {
     if (activeAudio !== audio) return;
