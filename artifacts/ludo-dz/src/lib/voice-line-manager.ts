@@ -70,22 +70,30 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
 // ─────────────────────────────────────────────────────────────────────────────
 // Reply (ردود) commentary
 //
-// A reply is a guaranteed secondary line that plays *immediately after* a
-// replyable event's primary line, as a direct back-and-forth. There is no
-// probability gate: every primary line for a replyable event is answered. It
-// reuses the same isolated-folder model: the reply pool lives under
+// A reply is a secondary line that plays *immediately after* a replyable event's
+// primary line, as a direct back-and-forth. Replies are probabilistic and gated
+// by audio activity so they feel like an occasional charming surprise rather than
+// audio clutter during busy play:
+//
+// 1. Probability gate: `REPLY_CHANCE` (e.g. 0.12, roughly 1 in 8 triggers).
+// 2. Quiet moment gate: `REPLY_QUIET_WINDOW_MS` (e.g. 2500 ms). A reply is only
+//    scheduled if no other voice line is currently playing, queued, pending/reserved,
+//    or was active/played within the quiet window duration.
+//
+// It reuses the same isolated-folder model: the reply pool lives under
 // `voice/ردود/<event>/` and is shared across all players (the audio content is
 // generic; only the speaking indicator is tied to a specific player). No clip is
 // shared between events, nor between an event and its own replies, and the
 // no-immediate-repeat rule applies within each reply pool.
 //
-// The only randomness in a reply is (a) which clip is picked from the pool and
-// (b) which player answers — a uniform pick among the players currently in the
-// game, excluding whoever just acted. Exactly one of them is chosen every time.
+// The randomness in a reply consists of (a) whether a reply is scheduled at all
+// (gated by probability + quiet moment check), (b) which clip is picked from the pool,
+// and (c) which player answers — a uniform pick among the players currently in the
+// game, excluding whoever just acted.
 //
 // To enable replies for a new event, add its key to `REPLYABLE_EVENTS` and drop
 // clips into `voice/ردود/<event>/` — nothing else changes. The pool is auto-built
-// and the gap constants below apply uniformly to every replyable event.
+// and the constants below apply uniformly to every replyable event.
 //
 // Scheduling model (see the "reply reservation" section further down):
 // the reply is decided and *preloaded* the moment its primary line starts, but
@@ -94,10 +102,20 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
 // queue entry. That is what makes it land right after the primary regardless of
 // what the player is doing (rolling, moving pawns, tapping UI) in between.
 //
-// The only ways a reply does not happen are the two structural no-ops it has
-// always had: an empty `voice/ردود/<event>/` folder, and no eligible responder
-// (the caller passed no `playersInGame`, or the acting player is the only one).
+// The only ways a reply does not happen are: the probability roll misses,
+// the quiet moment gate fails (recent audio activity), an empty `voice/ردود/<event>/`
+// folder, or no eligible responder (the caller passed no `playersInGame`, or the
+// acting player is the only one).
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Tunable probability (0.0 to 1.0) of scheduling a reply for replyable events. */
+export const REPLY_CHANCE = 0.12;
+
+/**
+ * Tunable duration (in milliseconds) for the "quiet moment" gate.
+ * Skip reply scheduling if any voice line was playing, queued, or recently active within this window.
+ */
+export const REPLY_QUIET_WINDOW_MS = 2500;
 
 // Conversational beat between the primary line ending and the reply starting.
 // Measured from the primary's END (not its start), so it is a real pause in the
@@ -212,6 +230,7 @@ let voiceLinesEnabled = readStoredVoiceEnabled();
 let voiceLineVolume = readStoredVoiceVolume();
 let activeAudio: HTMLAudioElement | null = null;
 let activeWatchdog: ReturnType<typeof setTimeout> | null = null;
+let lastVoiceActivityEndTime = 0;
 
 // A queued line is either a registered/unmigrated event, or a reply line. Both
 // carry their options so the speaking indicator and reply targeting still work
@@ -246,6 +265,22 @@ let replyGapTimer: ReturnType<typeof setTimeout> | null = null;
 /** True while a line is audible, or while the primary→reply gap is running. */
 function isVoiceBusy(): boolean {
   return activeAudio !== null || replyGapTimer !== null;
+}
+
+/**
+ * Check if the audio system is currently busy or was active within the quiet window.
+ * Used at reply scheduling time to ensure replies only occur during calm stretches.
+ *
+ * @param owner - Optional HTMLAudioElement of the primary voice line that is currently starting.
+ *                Passing `owner` ensures the line itself is not misidentified as "another active line".
+ */
+export function isAudioRecentlyActive(owner?: HTMLAudioElement): boolean {
+  if (activeAudio !== null && activeAudio !== owner) return true;
+  if (pendingReply !== null && pendingReply.owner !== owner) return true;
+  if (replyGapTimer !== null) return true;
+  if (queue.length > 0) return true;
+  if (Date.now() - lastVoiceActivityEndTime < REPLY_QUIET_WINDOW_MS) return true;
+  return false;
 }
 
 /**
@@ -316,11 +351,13 @@ function isReplyable(event: VoiceLineTrigger): event is VoiceLineEvent {
 }
 
 /**
- * Reserve + preload the reply for a primary line that is starting now. A reply
- * is unconditional: there is no probability roll, so every replyable primary
- * line gets one as long as the pool has a clip and at least one other player is
- * in the game. The randomness is limited to which clip plays and which player
- * answers (uniform among everyone in the game except whoever just acted).
+ * Reserve + preload the reply for a primary line that is starting now.
+ *
+ * Replies are probabilistic and gated by audio activity:
+ * 1. Probability gate: Controlled by `REPLY_CHANCE` (0.12 = ~1 in 8 triggers).
+ * 2. Quiet moment gate: Checked via `isAudioRecentlyActive(owner)`. If any voice line
+ *    was recently active (within `REPLY_QUIET_WINDOW_MS`), queued, or pending,
+ *    scheduling is skipped so replies only happen during genuinely calm stretches.
  *
  * Nothing is scheduled on a clock here: the reservation is handed to the
  * primary's end callback (`finishLine`). Preloading at this point means the clip
@@ -330,6 +367,12 @@ function isReplyable(event: VoiceLineTrigger): event is VoiceLineEvent {
  */
 function prepareReply(event: VoiceLineEvent, options: VoiceLineContext, owner: HTMLAudioElement): void {
   clearPendingReply();
+
+  // Gate 1: Probabilistic roll (start around 0.10–0.15)
+  if (Math.random() > REPLY_CHANCE) return;
+
+  // Gate 2: "Quiet moment" condition — skip if audio system was busy or recently active
+  if (isAudioRecentlyActive(owner)) return;
 
   const acting = options.speaker;
   const candidates = (options.playersInGame ?? [])
@@ -352,6 +395,7 @@ function startReplyGap(): void {
   const gap = REPLY_GAP_MIN_MS + Math.random() * (REPLY_GAP_MAX_MS - REPLY_GAP_MIN_MS);
   replyGapTimer = setTimeout(() => {
     replyGapTimer = null;
+    lastVoiceActivityEndTime = Date.now();
     const reply = pendingReply;
     pendingReply = null;
     if (!reply || !voiceLinesEnabled || voiceLineVolume <= 0) {
@@ -404,6 +448,7 @@ function playClip(line: QueuedLine, clip: VoiceClip, preloaded?: HTMLAudioElemen
     if (activeAudio !== audio) return;
     clearWatchdog();
     activeAudio = null;
+    lastVoiceActivityEndTime = Date.now();
     notifySpeaking(null);
     finishLine(audio);
   };
@@ -481,6 +526,7 @@ export function stopVoiceLines(): void {
     activeAudio = null;
     audio.pause();
   }
+  lastVoiceActivityEndTime = Date.now();
   setSfxDucking(false);
   notifySpeaking(null);
 }
