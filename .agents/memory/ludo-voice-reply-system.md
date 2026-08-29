@@ -32,12 +32,19 @@ Current model in `voice-line-manager.ts`:
   and clip, and creates + `load()`s the element up front (preloaded, so playback is
   instant later). The result is stored in `pendingReply` tagged with its `owner` (the
   primary's element). Nothing is scheduled on a clock.
-- **Replies are unconditional (2026-08-28).** The original `REPLY_CHANCE = 0.35`
-  probability gate was removed outright (constant deleted, not set to 1.0) — every
-  replyable primary line is answered. The only randomness left is which clip plays,
-  which player answers (uniform among `playersInGame` minus the acting player), and
-  the gap jitter. The two structural no-ops remain: an empty `ردود/<event>/` folder,
-  and no eligible responder (no `playersInGame`, or the actor is the only player).
+- **Replies are probabilistic and quiet-moment gated (2026-08-29).** Replies use a low probability
+  (`REPLY_CHANCE = 0.12`, ~1 in 8 triggers) and a "quiet moment" gate (`REPLY_QUIET_WINDOW_MS = 2500` ms).
+  In `prepareReply()`, scheduling is skipped if `Math.random() > REPLY_CHANCE` or if `isAudioRecentlyActive(owner)`
+  is true (i.e. another line is playing, another reply is reserved/pending, lines are queued, a gap timer is running,
+  or any voice line was active/played within the quiet window duration). The reservation mechanism
+  (`prepareReply()` preloads -> `finishLine(owner)` triggers gap -> reply plays) remains intact.
+  The two structural no-ops remain: an empty `ردود/<event>/` folder, and no eligible responder.
+- **`إخراج_بيدق` primary line queue rules (2026-08-29):**
+  - **Scenario A (Same-turn back-to-back exits):** If a second `إخراج_بيدق` trigger arrives for the same speaker
+    without an intervening turn/action from another player, it is unconditionally cancelled (never queued).
+  - **Scenario B (Cross-turn exits):** Evaluated against the currently playing line's remaining duration (`EXIT_QUEUE_MAX_WAIT_MS = 1200` ms).
+    If the active line finishes in <= 1200 ms, the new exit line is queued (replacing any existing queued exit line so at most 1 exit line is queued).
+    If remaining wait > 1200 ms, the new exit line is cancelled. If play advances to a 3rd player (color C), any queued exit line for B is cancelled.
 - `finishLine(owner)` is the single end-of-clip callback. If `pendingReply.owner === owner`
   it starts the reply after `REPLY_GAP_MIN_MS`-`REPLY_GAP_MAX_MS` measured from the
   primary's **end**. The reply can never be dropped by queue size and never waits behind
