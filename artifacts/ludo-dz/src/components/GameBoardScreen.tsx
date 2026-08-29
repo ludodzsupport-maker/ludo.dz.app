@@ -4693,7 +4693,15 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
         // immediately (stacked captures coalesce inside the manager). Fires on
         // every capture resolution — human or AI — at the moment the captor's
         // final hop lands (or immediately for zero-step moves).
-        playVoiceLine('الأكل', { speaker: ps });
+        playVoiceLine('الأكل', {
+          speaker: ps,
+          // رد الأكل — the captured piece's owner (the victim) answers back at
+          // the captor: the capture reply is reserved on this line, spoken by
+          // the victim, and guaranteed — one reply per coalesced capture-line
+          // run (see voice-line-manager).
+          replySpeaker: capturedPlayer ?? undefined,
+          playersInGame: currentGame.playerSlots,
+        });
         if (!isComputer || ps === humanPlayer) playVoiceLine('capture_by_me', { speaker: ps });
         else if (capturedPlayer === humanPlayer) playVoiceLine('captured_by_opponent', { speaker: capturedPlayer ?? ps });
         else playVoiceLine('opponent_captured', { speaker: capturedPlayer ?? ps });
