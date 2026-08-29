@@ -117,6 +117,13 @@ export const REPLY_CHANCE = 0.12;
  */
 export const REPLY_QUIET_WINDOW_MS = 2500;
 
+/**
+ * Tunable threshold (in milliseconds) for queuing a cross-turn `إخراج_بيدق` line (Scenario B).
+ * If the currently playing line is expected to finish within this wait window, the new exit line is queued;
+ * if it will take longer, the new exit line is cancelled to prevent stale audio backlog.
+ */
+export const EXIT_QUEUE_MAX_WAIT_MS = 1200;
+
 // Conversational beat between the primary line ending and the reply starting.
 // Measured from the primary's END (not its start), so it is a real pause in the
 // dialogue rather than a race against the primary's own length.
@@ -231,6 +238,24 @@ let voiceLineVolume = readStoredVoiceVolume();
 let activeAudio: HTMLAudioElement | null = null;
 let activeWatchdog: ReturnType<typeof setTimeout> | null = null;
 let lastVoiceActivityEndTime = 0;
+
+interface ActiveLineInfo {
+  event: VoiceLineTrigger | 'reply';
+  speaker?: number;
+  startTime: number;
+  durationMs: number | null;
+  audio: HTMLAudioElement;
+}
+
+let activeLineInfo: ActiveLineInfo | null = null;
+let lastExitSpeaker: number | null = null;
+
+function getActiveLineRemainingMs(): number {
+  if (!activeLineInfo) return 0;
+  const elapsed = Date.now() - activeLineInfo.startTime;
+  const duration = activeLineInfo.durationMs ?? 2000;
+  return Math.max(0, duration - elapsed);
+}
 
 // A queued line is either a registered/unmigrated event, or a reply line. Both
 // carry their options so the speaking indicator and reply targeting still work
@@ -439,6 +464,24 @@ function playClip(line: QueuedLine, clip: VoiceClip, preloaded?: HTMLAudioElemen
   audio.preload = 'auto';
   audio.volume = voiceLineVolume;
   activeAudio = audio;
+
+  activeLineInfo = {
+    event: line.kind === 'event' ? line.event : 'reply',
+    speaker: line.options.speaker,
+    startTime: Date.now(),
+    durationMs: (audio.duration && Number.isFinite(audio.duration) && audio.duration > 0)
+      ? audio.duration * 1000
+      : null,
+    audio,
+  };
+
+  const updateDuration = () => {
+    if (activeLineInfo && activeLineInfo.audio === audio && Number.isFinite(audio.duration) && audio.duration > 0) {
+      activeLineInfo.durationMs = audio.duration * 1000;
+    }
+  };
+  audio.addEventListener('loadedmetadata', updateDuration, { once: true });
+
   syncDucking();
   notifySpeaking(line.options.speaker === undefined
     ? null
@@ -448,6 +491,7 @@ function playClip(line: QueuedLine, clip: VoiceClip, preloaded?: HTMLAudioElemen
     if (activeAudio !== audio) return;
     clearWatchdog();
     activeAudio = null;
+    activeLineInfo = null;
     lastVoiceActivityEndTime = Date.now();
     notifySpeaking(null);
     finishLine(audio);
@@ -504,6 +548,66 @@ function playNextQueued(): void {
 export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContext): void {
   if (!voiceLinesEnabled || voiceLineVolume <= 0 || typeof Audio === 'undefined') return;
   if (!isRegisteredEvent(event)) return; // unmigrated event = safe no-op
+
+  const currentSpeaker = context?.speaker;
+
+  // Special Case B: If play proceeds to a 3rd player/color (Player C) while an `إخراج_بيدق`
+  // line for Player B is queued behind Player A's line, cancel Player B's queued line.
+  if (currentSpeaker !== undefined) {
+    const activeSpeaker = activeLineInfo?.speaker;
+    if (activeSpeaker !== undefined && currentSpeaker !== activeSpeaker) {
+      queue = queue.filter(q => {
+        if (q.kind === 'event' && q.event === 'إخراج_بيدق' && q.options.speaker !== undefined) {
+          return q.options.speaker === activeSpeaker || q.options.speaker === currentSpeaker;
+        }
+        return true;
+      });
+    }
+  }
+
+  // Refined queueing rules specific to `إخراج_بيدق` primary lines
+  if (event === 'إخراج_بيدق') {
+    const speaker = context?.speaker;
+
+    if (isVoiceBusy()) {
+      // Scenario A: Two pawn-exits happening directly back-to-back (no turn change between them)
+      if (speaker !== undefined && lastExitSpeaker !== null && speaker === lastExitSpeaker) {
+        // Unconditionally cancel the second line entirely
+        return;
+      }
+
+      // Scenario B: Pawn-exits across different players' turns
+      if (speaker !== undefined) {
+        lastExitSpeaker = speaker;
+      }
+
+      const remainingWaitMs = getActiveLineRemainingMs();
+
+      // If A's line is expected to finish soon after B's exit (short gap <= EXIT_QUEUE_MAX_WAIT_MS):
+      if (remainingWaitMs <= EXIT_QUEUE_MAX_WAIT_MS) {
+        // At most one `إخراج_بيدق` line should ever be queued waiting behind the currently-playing one.
+        // Evaluate fresh: replace any existing queued `إخراج_بيدق` line.
+        queue = queue.filter(q => !(q.kind === 'event' && q.event === 'إخراج_بيدق'));
+        queue.push({ kind: 'event', event, options: context ?? {} });
+      } else {
+        // A's line will take longer to finish (long wait > EXIT_QUEUE_MAX_WAIT_MS):
+        // Cancel B's line entirely (do not queue it) and clear any stale queued exit line.
+        queue = queue.filter(q => !(q.kind === 'event' && q.event === 'إخراج_بيدق'));
+      }
+      return;
+    }
+
+    // Audio system is not busy: play immediately
+    if (speaker !== undefined) {
+      lastExitSpeaker = speaker;
+    }
+    const clip = pickRandomClip(event);
+    if (!clip) return;
+    playClip({ kind: 'event', event, options: context ?? {} }, clip);
+    return;
+  }
+
+  // Default queueing logic for non-إخراج_بيدق voice events
   if (isVoiceBusy()) {
     if (queue.length < MAX_QUEUE_SIZE) queue.push({ kind: 'event', event, options: context ?? {} });
     return;
@@ -519,6 +623,8 @@ export function stopVoiceLines(): void {
   clearWatchdog();
   clearReplyGap();
   clearPendingReply();
+  activeLineInfo = null;
+  lastExitSpeaker = null;
   if (activeAudio) {
     const audio = activeAudio;
     // Null first: the `pause` below must not be mistaken for a natural end by

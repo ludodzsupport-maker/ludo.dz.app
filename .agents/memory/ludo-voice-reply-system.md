@@ -39,6 +39,12 @@ Current model in `voice-line-manager.ts`:
   or any voice line was active/played within the quiet window duration). The reservation mechanism
   (`prepareReply()` preloads -> `finishLine(owner)` triggers gap -> reply plays) remains intact.
   The two structural no-ops remain: an empty `ردود/<event>/` folder, and no eligible responder.
+- **`إخراج_بيدق` primary line queue rules (2026-08-29):**
+  - **Scenario A (Same-turn back-to-back exits):** If a second `إخراج_بيدق` trigger arrives for the same speaker
+    without an intervening turn/action from another player, it is unconditionally cancelled (never queued).
+  - **Scenario B (Cross-turn exits):** Evaluated against the currently playing line's remaining duration (`EXIT_QUEUE_MAX_WAIT_MS = 1200` ms).
+    If the active line finishes in <= 1200 ms, the new exit line is queued (replacing any existing queued exit line so at most 1 exit line is queued).
+    If remaining wait > 1200 ms, the new exit line is cancelled. If play advances to a 3rd player (color C), any queued exit line for B is cancelled.
 - `finishLine(owner)` is the single end-of-clip callback. If `pendingReply.owner === owner`
   it starts the reply after `REPLY_GAP_MIN_MS`-`REPLY_GAP_MAX_MS` measured from the
   primary's **end**. The reply can never be dropped by queue size and never waits behind
