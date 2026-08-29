@@ -1,0 +1,8 @@
+# Capture-reply pool (رد الأكل).
+#
+# Upload the captured piece's owner answering back at the captor here, as
+# .mp3/.ogg/.wav/.m4a/.aac/.webm files. Every file in this folder belongs to
+# the `الأكل` reply pool only (no clip is shared between events). Selection is
+# uniform random with no-immediate-repeat, exactly like ردود/إخراج_بيدق.
+#
+# Until clips exist, the capture reply is a safe no-op (empty pool).
