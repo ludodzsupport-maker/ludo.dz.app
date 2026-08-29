@@ -71,14 +71,10 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
 // Reply (ردود) commentary
 //
 // A reply is a secondary line that plays *immediately after* a replyable event's
-// primary line, as a direct back-and-forth. Replies are probabilistic and gated
-// by audio activity so they feel like an occasional charming surprise rather than
-// audio clutter during busy play:
-//
-// 1. Probability gate: `REPLY_CHANCE` (e.g. 0.12, roughly 1 in 8 triggers).
-// 2. Quiet moment gate: `REPLY_QUIET_WINDOW_MS` (e.g. 2500 ms). A reply is only
-//    scheduled if no other voice line is currently playing, queued, pending/reserved,
-//    or was active/played within the quiet window duration.
+// primary line(s), as a direct back-and-forth. For `إخراج_بيدق` the reply is now
+// guaranteed (probabilistic gating and the old "quiet moment" gate are removed):
+// a qualifying exit run always produces exactly one reply, subject only to the
+// structural preconditions below and to future-event priority.
 //
 // It reuses the same isolated-folder model: the reply pool lives under
 // `voice/ردود/<event>/` and is shared across all players (the audio content is
@@ -86,36 +82,38 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
 // shared between events, nor between an event and its own replies, and the
 // no-immediate-repeat rule applies within each reply pool.
 //
-// The randomness in a reply consists of (a) whether a reply is scheduled at all
-// (gated by probability + quiet moment check), (b) which clip is picked from the pool,
-// and (c) which player answers — a uniform pick among the players currently in the
-// game, excluding whoever just acted.
+// The randomness in a reply consists of (a) which clip is picked from the pool,
+// and (b) which player answers — a uniform pick among the players currently in the
+// game, excluding every actor involved in the run.
 //
 // To enable replies for a new event, add its key to `REPLYABLE_EVENTS` and drop
-// clips into `voice/ردود/<event>/` — nothing else changes. The pool is auto-built
-// and the constants below apply uniformly to every replyable event.
+// clips into `voice/ردود/<event>/` — nothing else changes. The pool is auto-built,
+// and the future-event priority check below applies automatically to any new
+// registered event without extra wiring.
 //
 // Scheduling model (see the "reply reservation" section further down):
-// the reply is decided and *preloaded* the moment its primary line starts, but
-// it is fired from the primary line's own end-of-playback callback — never from
-// a wall-clock timer racing the primary, and never as an ordinary, droppable
-// queue entry. That is what makes it land right after the primary regardless of
-// what the player is doing (rolling, moving pawns, tapping UI) in between.
+// the reply is decided and *preloaded* when a replyable primary line starts, but
+// it is fired from the end of the *last line in that logical run* — never from
+// a wall-clock timer racing the run, and never as an ordinary, droppable queue
+// entry.
 //
-// The only ways a reply does not happen are: the probability roll misses,
-// the quiet moment gate fails (recent audio activity), an empty `voice/ردود/<event>/`
-// folder, or no eligible responder (the caller passed no `playersInGame`, or the
-// acting player is the only one).
+// Stacked-run grouping: a `إخراج_بيدق` run is one currently-playing exit line plus
+// whichever queued exit line actually survives the existing queue-cancellation
+// rules and plays after it. The whole run is treated as a single logical event,
+// so it produces exactly one reply (not one per line). See `ExitReplyRunState`.
+//
+// Future-event priority: if a different, non-`إخراج_بيدق` event is already active
+// or queued ahead of the run at the moment a reply would be scheduled — or if one
+// appears while an exit run/reply is pending — that event takes priority and the
+// pending reply is dropped entirely (never delayed, never requeued). The check is
+// generic over the registered event type, so new event types (capture, danger,
+// taunt, etc.) are covered automatically. See `hasForeignVoiceEventInPath`.
+//
+// The only ways a reply does not happen are: an empty `voice/ردود/<event>/`
+// folder, no eligible responder (the caller passed no `playersInGame`, or every
+// player in the game is an actor in the run), a future event preempting it, or
+// voice being disabled/muted.
 // ─────────────────────────────────────────────────────────────────────────────
-
-/** Tunable probability (0.0 to 1.0) of scheduling a reply for replyable events. */
-export const REPLY_CHANCE = 0.12;
-
-/**
- * Tunable duration (in milliseconds) for the "quiet moment" gate.
- * Skip reply scheduling if any voice line was playing, queued, or recently active within this window.
- */
-export const REPLY_QUIET_WINDOW_MS = 2500;
 
 /**
  * Tunable threshold (in milliseconds) for queuing a cross-turn `إخراج_بيدق` line (Scenario B).
@@ -237,7 +235,6 @@ let voiceLinesEnabled = readStoredVoiceEnabled();
 let voiceLineVolume = readStoredVoiceVolume();
 let activeAudio: HTMLAudioElement | null = null;
 let activeWatchdog: ReturnType<typeof setTimeout> | null = null;
-let lastVoiceActivityEndTime = 0;
 
 interface ActiveLineInfo {
   event: VoiceLineTrigger | 'reply';
@@ -249,6 +246,33 @@ interface ActiveLineInfo {
 
 let activeLineInfo: ActiveLineInfo | null = null;
 let lastExitSpeaker: number | null = null;
+
+/**
+ * Tracks a logical `إخراج_بيدق` run so a stacked run produces exactly one reply.
+ *
+ * The run starts when the first exit line starts playing and ends when no exit
+ * line is active or queued any more. Every actor in the run (each speaker whose
+ * exit line actually plays) is collected, so the responder pick stays a uniform
+ * guess among the players that were *not* involved in that run.
+ */
+interface ExitReplyRunState {
+  /**
+   * The line that currently owns the reserved reply. As a stacked queued exit
+   * line starts playing, ownership is moved to that line (`re-owner`), so the
+   * reply is ultimately tied to the end of the last exit line that survives the
+   * existing queue-cancellation rules.
+   */
+  owner: HTMLAudioElement;
+  /** Every `إخراج_بيدق` speaker that has actually played inside this run. */
+  actors: Set<number>;
+  /**
+   * True once a future event has preempted this run. The run's single reply is
+   * dropped permanently; remaining continuation lines cannot resurrect it.
+   */
+  preempted: boolean;
+}
+
+let exitReplyRun: ExitReplyRunState | null = null;
 
 function getActiveLineRemainingMs(): number {
   if (!activeLineInfo) return 0;
@@ -267,22 +291,28 @@ type QueuedLine =
 let queue: QueuedLine[] = [];
 
 // ─── Reply reservation ────────────────────────────────────────────────────────
-// The reply is not a queue entry. It is a slot reserved on the primary line
-// itself (`owner`), decided + preloaded at the primary's start and consumed by
-// the primary's end callback. Two consequences that matter:
+// The reply is not a queue entry. It is a slot reserved on a primary line
+// itself (`owner`), decided + preloaded at the start of the line that owns it
+// and consumed by that owner's end callback. For stacked `إخراج_بيدق` runs the
+// ownership is re-pointed at each surviving exit line, so the reply is always
+// tied to the end of the last exit line in the run. Consequences that matter:
 //   • it can never be dropped by MAX_QUEUE_SIZE, and never has to wait behind
 //     unrelated lines that happen to be queued;
-//   • the short gap between primary and reply counts as "voice busy", so a
-//     gameplay-triggered line firing in that window queues instead of stealing
-//     the slot, and the SFX duck holds across the whole exchange.
+//   • the short gap between the last primary and the reply counts as "voice
+//     busy", so a gameplay-triggered line firing in that window queues instead
+//     of stealing the slot, and the SFX duck holds across the whole exchange.
 interface PendingReply {
   event: VoiceLineEvent;
   speaker: number;
   clip: VoiceClip;
   /** Element created (and `load()`-ed) up front so the reply starts instantly. */
   audio: HTMLAudioElement;
-  /** The primary element whose end fires this reply. */
+  /** The primary element whose end fires this reply (re-owned per run). */
   owner: HTMLAudioElement;
+  /** Every `إخراج_بيدق` speaker already involved in the run. */
+  actors: Set<number>;
+  /** Players available to answer, kept so a stacked run can reselect speakers. */
+  playersInGame: readonly number[];
 }
 let pendingReply: PendingReply | null = null;
 let replyGapTimer: ReturnType<typeof setTimeout> | null = null;
@@ -290,22 +320,6 @@ let replyGapTimer: ReturnType<typeof setTimeout> | null = null;
 /** True while a line is audible, or while the primary→reply gap is running. */
 function isVoiceBusy(): boolean {
   return activeAudio !== null || replyGapTimer !== null;
-}
-
-/**
- * Check if the audio system is currently busy or was active within the quiet window.
- * Used at reply scheduling time to ensure replies only occur during calm stretches.
- *
- * @param owner - Optional HTMLAudioElement of the primary voice line that is currently starting.
- *                Passing `owner` ensures the line itself is not misidentified as "another active line".
- */
-export function isAudioRecentlyActive(owner?: HTMLAudioElement): boolean {
-  if (activeAudio !== null && activeAudio !== owner) return true;
-  if (pendingReply !== null && pendingReply.owner !== owner) return true;
-  if (replyGapTimer !== null) return true;
-  if (queue.length > 0) return true;
-  if (Date.now() - lastVoiceActivityEndTime < REPLY_QUIET_WINDOW_MS) return true;
-  return false;
 }
 
 /**
@@ -375,43 +389,182 @@ function isReplyable(event: VoiceLineTrigger): event is VoiceLineEvent {
   return isRegisteredEvent(event) && REPLYABLE_EVENTS[event] === true;
 }
 
+/** The single event that participates in stacked-run reply grouping. */
+const EXIT_EVENT = 'إخراج_بيدق' as const;
+
+function isExitEvent(event: VoiceLineTrigger): event is typeof EXIT_EVENT {
+  return isRegisteredEvent(event) && event === EXIT_EVENT;
+}
+
+/** True for an exit primary (not a reply, not another event). */
+function isExitVoiceLine(event: VoiceLineTrigger | 'reply'): boolean {
+  return isExitEvent(event as VoiceLineTrigger);
+}
+
 /**
- * Reserve + preload the reply for a primary line that is starting now.
+ * Anything outside the `إخراج_بيدق`/reply system counts as a "foreign" event
+ * that takes priority over an exit reply. The check is event-type-agnostic:
+ * any future registered event (capture, danger, taunt, ...) becomes foreign
+ * automatically, so new event types need no per-event code here.
+ */
+function isForeignVoiceEvent(event: VoiceLineTrigger | 'reply'): boolean {
+  return event !== 'reply' && !isExitVoiceLine(event);
+}
+
+/**
+ * True when a non-`إخراج_بيدق` event is already playing or queued ahead of the
+ * reply path. The reply is not an ordinary queue entry, so any queued foreign
+ * event would otherwise have to wait behind the reply; the foreign event wins
+ * instead.
+ */
+function hasForeignVoiceEventInPath(): boolean {
+  if (activeLineInfo && isForeignVoiceEvent(activeLineInfo.event)) return true;
+  return queue.some(queued => {
+    const event = queued.kind === 'event' ? queued.event : 'reply';
+    return isForeignVoiceEvent(event);
+  });
+}
+
+/** True when another `إخراج_بيدق` line is waiting to play, i.e. the run continues. */
+function hasQueuedExitRunLine(): boolean {
+  return queue.some(queued => queued.kind === 'event' && queued.event === EXIT_EVENT);
+}
+
+function clearExitReplyRun(): void {
+  exitReplyRun = null;
+}
+
+/**
+ * Drop the pending reply entirely because a foreign event has taken priority.
+ * The reply is never delayed or requeued: if nothing is playing after the drop,
+ * the queued foreign line (or the ordinary queue) is drained immediately so the
+ * higher-priority event can speak.
+ */
+function cancelPendingReplyForFutures(): void {
+  clearPendingReply();
+  clearReplyGap();
+  // Keep the run state alive in preempted form: continuation exit lines in the
+  // same run must not resurrect the dropped reply.
+  if (exitReplyRun) {
+    exitReplyRun.preempted = true;
+  }
+  playNextQueued();
+  syncDucking();
+}
+
+function addRunActor(speaker?: number): void {
+  if (speaker === undefined || !exitReplyRun) return;
+  exitReplyRun.actors.add(speaker);
+}
+
+/**
+ * Pick a responder among players not involved in the run. Returns null when not
+ * enough players are left (e.g. every player has now acted in a stacked run),
+ * which drops this run's reply.
+ */
+function reselectReplySpeaker(reply: PendingReply): PendingReply | null {
+  const candidates = reply.playersInGame;
+  if (candidates.length === 0) return null;
+  const eligible = candidates.filter(player => !reply.actors.has(player));
+  if (eligible.length === 0) return null;
+  const speaker = eligible[Math.floor(Math.random() * eligible.length)];
+  return speaker === reply.speaker ? reply : { ...reply, speaker };
+}
+
+/**
+ * Reserve + preload the reply for a new replyable primary run that is starting.
  *
- * Replies are probabilistic and gated by audio activity:
- * 1. Probability gate: Controlled by `REPLY_CHANCE` (0.12 = ~1 in 8 triggers).
- * 2. Quiet moment gate: Checked via `isAudioRecentlyActive(owner)`. If any voice line
- *    was recently active (within `REPLY_QUIET_WINDOW_MS`), queued, or pending,
- *    scheduling is skipped so replies only happen during genuinely calm stretches.
+ * The probabilistic and quiet-moment gates are intentionally gone: a qualifying
+ * run always gets a reply. The only scheduling-time rules left are structural
+ * (eligible responder + non-empty reply pool) and the future-event priority
+ * check.
  *
  * Nothing is scheduled on a clock here: the reservation is handed to the
- * primary's end callback (`finishLine`). Preloading at this point means the clip
- * is already buffered when the primary ends, so the reply starts on the spot
+ * owner's end callback (`finishLine`). Preloading at this point means the clip
+ * is already buffered when the run ends, so the reply starts on the spot
  * instead of waiting on a media fetch in the middle of a dice roll or pawn
  * animation.
  */
 function prepareReply(event: VoiceLineEvent, options: VoiceLineContext, owner: HTMLAudioElement): void {
   clearPendingReply();
-
-  // Gate 1: Probabilistic roll (start around 0.10–0.15)
-  if (Math.random() > REPLY_CHANCE) return;
-
-  // Gate 2: "Quiet moment" condition — skip if audio system was busy or recently active
-  if (isAudioRecentlyActive(owner)) return;
+  clearExitReplyRun();
 
   const acting = options.speaker;
-  const candidates = (options.playersInGame ?? [])
-    .filter(player => (acting === undefined ? true : player !== acting));
+  const playersInGame = options.playersInGame ?? [];
+  const candidates = playersInGame.filter(player => (acting === undefined ? true : player !== acting));
   if (candidates.length === 0) return; // nobody left to answer = safe no-op
 
   const clip = pickRandomReply(event); // empty folder = safe no-op
   if (!clip) return;
 
+  // Future events take priority: if one is already active/queued here, this
+  // reply never enters the pending state.
+  if (hasForeignVoiceEventInPath()) {
+    cancelPendingReplyForFutures();
+    return;
+  }
+
   const speaker = candidates[Math.floor(Math.random() * candidates.length)];
+  const actors = new Set<number>();
+  if (acting !== undefined) actors.add(acting);
+
   const audio = new Audio(clip.url);
   audio.preload = 'auto';
   try { audio.load(); } catch { /* preload is best-effort */ }
-  pendingReply = { event, speaker, clip, audio, owner };
+
+  pendingReply = { event, speaker, clip, audio, owner, actors, playersInGame };
+  exitReplyRun = { owner, actors, preempted: false };
+  addRunActor(acting);
+}
+
+/**
+ * Handle a replyable primary that is actually starting to play. Exit lines get
+ * the grouped-run treatment; other replyable events simply start a reply.
+ */
+function onReplyPrimaryStart(event: VoiceLineEvent, options: VoiceLineContext, owner: HTMLAudioElement): void {
+  if (!isExitEvent(event)) {
+    prepareReply(event, options, owner);
+    return;
+  }
+
+  if (exitReplyRun && exitReplyRun.owner !== owner) {
+    // Stacked continuation: the previous exit line has ended and this line is
+    // the next one that survived the queue-cancellation rules. Re-own the reply
+    // to this line so it fires from *this* line's end, and broaden the actor
+    // set so the responder excludes everyone involved in the run.
+    addRunActor(options.speaker);
+    exitReplyRun.owner = owner;
+
+    if (exitReplyRun.preempted) {
+      // A future event already won and dropped this run's reply. Continuation
+      // lines must not resurrect it.
+      return;
+    }
+
+    if (pendingReply) {
+      pendingReply.owner = owner;
+      pendingReply.actors = exitReplyRun.actors;
+      // The responder must still exclude every actor involved in the run. If the
+      // added actor leaves nobody to answer, the run's reply is dropped.
+      const reselected = reselectReplySpeaker(pendingReply);
+      if (!reselected) {
+        cancelPendingReplyForFutures();
+        return;
+      }
+      pendingReply = reselected;
+    }
+
+    // If a foreign event was queued while this run was progressing, it wins and
+    // the (still-pending) reply is dropped.
+    if (hasForeignVoiceEventInPath()) {
+      cancelPendingReplyForFutures();
+    }
+    return;
+  }
+
+  // New run (or the very first line of a run, which is always an owner change
+  // from null).
+  prepareReply(event, options, owner);
 }
 
 /** Fire the reserved reply after a short conversational beat. */
@@ -420,9 +573,17 @@ function startReplyGap(): void {
   const gap = REPLY_GAP_MIN_MS + Math.random() * (REPLY_GAP_MAX_MS - REPLY_GAP_MIN_MS);
   replyGapTimer = setTimeout(() => {
     replyGapTimer = null;
-    lastVoiceActivityEndTime = Date.now();
+    // A foreign event queued during the gap wins: drop the reply entirely.
+    if (hasForeignVoiceEventInPath()) {
+      clearPendingReply();
+      clearExitReplyRun();
+      playNextQueued();
+      syncDucking();
+      return;
+    }
     const reply = pendingReply;
     pendingReply = null;
+    clearExitReplyRun();
     if (!reply || !voiceLinesEnabled || voiceLineVolume <= 0) {
       playNextQueued();
       syncDucking();
@@ -492,7 +653,6 @@ function playClip(line: QueuedLine, clip: VoiceClip, preloaded?: HTMLAudioElemen
     clearWatchdog();
     activeAudio = null;
     activeLineInfo = null;
-    lastVoiceActivityEndTime = Date.now();
     notifySpeaking(null);
     finishLine(audio);
   };
@@ -503,7 +663,7 @@ function playClip(line: QueuedLine, clip: VoiceClip, preloaded?: HTMLAudioElemen
 
   // Only a registered event's primary line can reserve a reply — never a reply.
   if (line.kind === 'event' && isReplyable(line.event)) {
-    prepareReply(line.event, line.options, audio);
+    onReplyPrimaryStart(line.event, line.options, audio);
   }
 }
 
@@ -514,34 +674,72 @@ function playClip(line: QueuedLine, clip: VoiceClip, preloaded?: HTMLAudioElemen
  */
 function finishLine(owner: HTMLAudioElement): void {
   if (pendingReply && pendingReply.owner === owner) {
+    // A foreign event queued while this line finished wins over the reply.
+    if (hasForeignVoiceEventInPath()) {
+      cancelPendingReplyForFutures();
+      return;
+    }
+
+    // If another exit line survived the queue-cancellation rules and is queued,
+    // the run continues: keep the reply pending and let the next exit line play.
+    // `onReplyPrimaryStart` will re-own the reply to that line.
+    if (hasQueuedExitRunLine()) {
+      const started = playNextQueued();
+      syncDucking();
+      // If the queued continuation had no playable clip, it never played, so
+      // the run actually ended here and the reservation still owns this line.
+      if (!started && pendingReply?.owner === owner) {
+        clearExitReplyRun();
+        startReplyGap();
+      }
+      return;
+    }
+
+    // This was the last surviving line in the run — the reply is now tied to
+    // the end of the run, not to this specific line's identity.
+    clearExitReplyRun();
     startReplyGap();
     return;
   }
   clearPendingReply(); // a reservation from an older line can never apply here
+  // If this was a preempted run with a continuation queued, keep the run state
+  // alive so the continuation line cannot resurrect the dropped reply.
+  if (hasQueuedExitRunLine()) {
+    const started = playNextQueued();
+    syncDucking();
+    if (!started) {
+      clearExitReplyRun();
+      playNextQueued();
+      syncDucking();
+    }
+    return;
+  }
+  clearExitReplyRun();
   playNextQueued();
   syncDucking();
 }
 
-function playNextQueued(): void {
+function playNextQueued(): boolean {
   // Loops rather than returning on the first unplayable entry: a queued line
   // whose pool is empty must not stall everything behind it.
   while (!isVoiceBusy() && queue.length > 0) {
     const next = queue.shift();
-    if (!next) return;
+    if (!next) return false;
 
     if (next.kind === 'event') {
       if (!isRegisteredEvent(next.event)) continue;
       const clip = pickRandomClip(next.event);
       if (!clip) continue;
       playClip(next, clip);
-      return;
+      return true;
     }
 
     const clip = pickRandomReply(next.replyEvent);
     if (!clip) continue;
     playClip(next, clip);
-    return;
+    return true;
   }
+  return false;
 }
 
 /** Plays one line from the event's own isolated pool without overlap. */
@@ -557,7 +755,7 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
     const activeSpeaker = activeLineInfo?.speaker;
     if (activeSpeaker !== undefined && currentSpeaker !== activeSpeaker) {
       queue = queue.filter(q => {
-        if (q.kind === 'event' && q.event === 'إخراج_بيدق' && q.options.speaker !== undefined) {
+        if (q.kind === 'event' && q.event === EXIT_EVENT && q.options.speaker !== undefined) {
           return q.options.speaker === activeSpeaker || q.options.speaker === currentSpeaker;
         }
         return true;
@@ -566,7 +764,7 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
   }
 
   // Refined queueing rules specific to `إخراج_بيدق` primary lines
-  if (event === 'إخراج_بيدق') {
+  if (event === EXIT_EVENT) {
     const speaker = context?.speaker;
 
     if (isVoiceBusy()) {
@@ -587,12 +785,12 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
       if (remainingWaitMs <= EXIT_QUEUE_MAX_WAIT_MS) {
         // At most one `إخراج_بيدق` line should ever be queued waiting behind the currently-playing one.
         // Evaluate fresh: replace any existing queued `إخراج_بيدق` line.
-        queue = queue.filter(q => !(q.kind === 'event' && q.event === 'إخراج_بيدق'));
+        queue = queue.filter(q => !(q.kind === 'event' && q.event === EXIT_EVENT));
         queue.push({ kind: 'event', event, options: context ?? {} });
       } else {
         // A's line will take longer to finish (long wait > EXIT_QUEUE_MAX_WAIT_MS):
         // Cancel B's line entirely (do not queue it) and clear any stale queued exit line.
-        queue = queue.filter(q => !(q.kind === 'event' && q.event === 'إخراج_بيدق'));
+        queue = queue.filter(q => !(q.kind === 'event' && q.event === EXIT_EVENT));
       }
       return;
     }
@@ -607,9 +805,30 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
     return;
   }
 
-  // Default queueing logic for non-إخراج_بيدق voice events
+  // Default queueing logic for non-إخراج_بيدق voice events.
+  //
+  // Future-event priority: any event outside the إخراج_بيدق/reply system wins
+  // over a pending exit reply, but only when that event actually gets to play
+  // or occupies a queued slot. A foreign line that is dropped by MAX_QUEUE_SIZE
+  // is not playing or queued ahead, so it does not preempt an existing reply.
   if (isVoiceBusy()) {
-    if (queue.length < MAX_QUEUE_SIZE) queue.push({ kind: 'event', event, options: context ?? {} });
+    if (queue.length < MAX_QUEUE_SIZE) {
+      queue.push({ kind: 'event', event, options: context ?? {} });
+      cancelPendingReplyForFutures();
+    }
+    return;
+  }
+
+  // Not busy: cancel any stale pending reply, then play immediately.
+  cancelPendingReplyForFutures();
+
+  // The cancel above may have drained a queued exit and started a fresh run; if
+  // so, queue this foreign event behind it (that run's reply is dropped).
+  if (isVoiceBusy()) {
+    if (queue.length < MAX_QUEUE_SIZE) {
+      queue.push({ kind: 'event', event, options: context ?? {} });
+      cancelPendingReplyForFutures();
+    }
     return;
   }
 
@@ -623,6 +842,7 @@ export function stopVoiceLines(): void {
   clearWatchdog();
   clearReplyGap();
   clearPendingReply();
+  clearExitReplyRun();
   activeLineInfo = null;
   lastExitSpeaker = null;
   if (activeAudio) {
@@ -632,7 +852,6 @@ export function stopVoiceLines(): void {
     activeAudio = null;
     audio.pause();
   }
-  lastVoiceActivityEndTime = Date.now();
   setSfxDucking(false);
   notifySpeaking(null);
 }

@@ -32,28 +32,48 @@ Current model in `voice-line-manager.ts`:
   and clip, and creates + `load()`s the element up front (preloaded, so playback is
   instant later). The result is stored in `pendingReply` tagged with its `owner` (the
   primary's element). Nothing is scheduled on a clock.
-- **Replies are probabilistic and quiet-moment gated (2026-08-29).** Replies use a low probability
-  (`REPLY_CHANCE = 0.12`, ~1 in 8 triggers) and a "quiet moment" gate (`REPLY_QUIET_WINDOW_MS = 2500` ms).
-  In `prepareReply()`, scheduling is skipped if `Math.random() > REPLY_CHANCE` or if `isAudioRecentlyActive(owner)`
-  is true (i.e. another line is playing, another reply is reserved/pending, lines are queued, a gap timer is running,
-  or any voice line was active/played within the quiet window duration). The reservation mechanism
-  (`prepareReply()` preloads -> `finishLine(owner)` triggers gap -> reply plays) remains intact.
-  The two structural no-ops remain: an empty `ردود/<event>/` folder, and no eligible responder.
-- **`إخراج_بيدق` primary line queue rules (2026-08-29):**
+- **Replies are guaranteed for a qualifying `إخراج_بيدق` run (2026-08-29).** The old
+  probabilistic `REPLY_CHANCE` gate and the `REPLY_QUIET_WINDOW_MS` "quiet moment" gate
+  are removed. `prepareReply()` no longer rolls `Math.random()` or checks recent audio
+  activity. A run still produces no reply only when: the `ردود/<event>/` pool is empty,
+  there is no eligible responder (no `playersInGame`, or every player in the game has now
+  acted in the run), a future event preempts the reply, or voice is disabled/muted.
+- **Stacked `إخراج_بيدق` runs produce exactly one reply.** `ExitReplyRunState` tracks one
+  logical run. When a queued exit line actually starts playing, `onReplyPrimaryStart()`
+  re-owns `pendingReply.owner` to that line and adds the line's speaker to the run's actor
+  set, so the reply is ultimately fired from the last exit line that survives the
+  queue-cancellation rules. `finishLine()` keeps the reply pending while
+  `hasQueuedExitRunLine()` is true; it only starts the reply gap when no queued exit line
+  remains. The single reply's speaker is reselected at each continuation so it still
+  excludes every actor in the run.
+- **Future event types take priority over the reply.** `hasForeignVoiceEventInPath()` is
+  generic: any event in `VOICE_EVENTS` other than `إخراج_بيدق` (and outside the `ردود`
+  reply system) is "foreign", so a newly migrated capture/danger/taunt/etc. event is
+  covered automatically. If such an event is already active or queued at the moment the
+  reply is scheduled, or appears while the reply is pending/gap-running,
+  `cancelPendingReplyForFutures()` drops the reply entirely (never delays/requeues it).
+  `cancelPendingReplyForFutures()` keeps the run marked `preempted`, so remaining
+  continuation exit lines in that run cannot resurrect the dropped reply. A foreign event
+  that is dropped by `MAX_QUEUE_SIZE` does not count as queued/playing and therefore does
+  not preempt.
+- **`إخراج_بيدق` primary line queue rules (2026-08-29, unchanged):**
   - **Scenario A (Same-turn back-to-back exits):** If a second `إخراج_بيدق` trigger arrives for the same speaker
     without an intervening turn/action from another player, it is unconditionally cancelled (never queued).
   - **Scenario B (Cross-turn exits):** Evaluated against the currently playing line's remaining duration (`EXIT_QUEUE_MAX_WAIT_MS = 1200` ms).
     If the active line finishes in <= 1200 ms, the new exit line is queued (replacing any existing queued exit line so at most 1 exit line is queued).
     If remaining wait > 1200 ms, the new exit line is cancelled. If play advances to a 3rd player (color C), any queued exit line for B is cancelled.
-- `finishLine(owner)` is the single end-of-clip callback. If `pendingReply.owner === owner`
-  it starts the reply after `REPLY_GAP_MIN_MS`-`REPLY_GAP_MAX_MS` measured from the
-  primary's **end**. The reply can never be dropped by queue size and never waits behind
-  other lines.
+- `finishLine(owner)` is the single end-of-clip callback. If `pendingReply.owner === owner`,
+  no foreign event is queued/active, and no queued exit line remains, it starts the reply
+  after `REPLY_GAP_MIN_MS`-`REPLY_GAP_MAX_MS` measured from the last primary's **end**. The
+  reply can never be dropped by queue size and never waits behind other lines (except when
+  a foreign event preempts it, per above).
 - `isVoiceBusy()` = `activeAudio !== null || replyGapTimer !== null`. The gap counts as
   busy, so a gameplay line fired in that window queues instead of stealing the slot.
 - `armWatchdog()` guarantees `finishLine` runs even if `ended` never does (re-armed on
   `loadedmetadata` so it tracks the clip's real duration), and `playNextQueued()` loops
-  past unplayable entries. Together these make the queue impossible to wedge.
+  past unplayable entries (returning whether it actually started a clip so `finishLine`
+  can fire a reply when a queued continuation turned out to be unplayable). Together these
+  make the queue impossible to wedge.
 
 **How to apply:** any future "line B must follow line A" pairing in this file should reuse
 the reservation shape (decide + preload at A's start, fire from A's end callback), not a
