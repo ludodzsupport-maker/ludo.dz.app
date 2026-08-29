@@ -13,16 +13,23 @@ import { setSfxDucking } from './sound-manager';
 // Events are registered one at a time. `VOICE_EVENTS` is the single source of
 // truth; adding an event here (with its Arabic key + folder) is all that's
 // needed to bring its pool online.
+//
+// Priority exception: `الأكل` (capture) is the system's top-priority event. It
+// does not queue behind anything — it interrupts the active line (primary or
+// reply) and starts immediately; consecutive captures coalesce via their own
+// run rule. See CAPTURE_COALESCE_MAX_WAIT_MS and the capture branch in
+// `playVoiceLine`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Registered voice events. The key is the Arabic folder name under `voice/`. */
-export const VOICE_EVENTS = ['بداية_اللعبة', 'إخراج_بيدق'] as const;
+export const VOICE_EVENTS = ['بداية_اللعبة', 'إخراج_بيدق', 'الأكل'] as const;
 export type VoiceLineEvent = (typeof VOICE_EVENTS)[number];
 
 /** Arabic display label for each registered event. */
 export const VOICE_EVENT_LABELS: Readonly<Record<VoiceLineEvent, string>> = {
   'بداية_اللعبة': 'بداية اللعبة',
   'إخراج_بيدق': 'إخراج بيدق',
+  'الأكل': 'الأكل',
 };
 
 // Trigger identifiers still referenced by existing game logic that have not
@@ -121,6 +128,32 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
  * if it will take longer, the new exit line is cancelled to prevent stale audio backlog.
  */
 export const EXIT_QUEUE_MAX_WAIT_MS = 1200;
+
+/**
+ * `الأكل` (a piece captures/eats another piece) — the highest-priority voice
+ * event in the system. Unlike `إخراج_بيدق`, a capture line never queues behind
+ * anything: when it fires, whatever is currently speaking (any primary line,
+ * any reply, mid reply-gap) is cut off on the spot and the capture line starts
+ * immediately. The one exception is a *stacked* capture — see below.
+ *
+ * Tunable threshold (in milliseconds) for consecutive `الأكل` events. When a
+ * capture fires while an `الأكل` line from a previous capture is still audible,
+ * the remaining duration of the running line decides:
+ *  • remaining wait <= threshold → the captures are separate events: the
+ *    running line finishes and a fresh (different-clip) capture line plays;
+ *  • remaining wait  > threshold → both captures are one combined event: the
+ *    running line already covers them, so no second line is queued.
+ * Default 1500 ms: capture reactions in this game's style run ~1.5-4 s (the
+ * existing primary pools measure 1.8-4.0 s), and a second capture realistically
+ * lands 2-6 s after the first (pawn defeat arc + extra-turn roll). With 1500 ms,
+ * captures landing in the last ~1.5 s of the running line still get their own
+ * follow-up line (feels responsive), while earlier ones — which would otherwise
+ * start long after their visual moment or machine-gun-interrupt each other —
+ * coalesce into the line already playing. Slightly larger than
+ * EXIT_QUEUE_MAX_WAIT_MS (1200 ms) on purpose: capture lines are the event the
+ * player most wants heard, so the "give it a separate line" window is wider.
+ */
+export const CAPTURE_COALESCE_MAX_WAIT_MS = 1500;
 
 // Conversational beat between the primary line ending and the reply starting.
 // Measured from the primary's END (not its start), so it is a real pause in the
@@ -349,6 +382,24 @@ function clearReplyGap(): void {
   replyGapTimer = null;
 }
 
+/**
+ * Cut off the active line (any primary or reply) instantly, without running
+ * its end-of-line logic. `activeAudio` is nulled *before* the pause so the
+ * element's own `ended`/`error` handlers and the watchdog no-op, and
+ * `finishLine` never fires for the interrupted line — the caller (the capture
+ * event) owns the slot afterwards. The reserved exit reply (and its gap) is
+ * cleared by the caller as part of the same interruption.
+ */
+function stopActiveLineImmediate(): void {
+  if (!activeAudio) return;
+  const audio = activeAudio;
+  activeAudio = null;
+  activeLineInfo = null;
+  clearWatchdog();
+  try { audio.pause(); } catch { /* nothing to pause */ }
+  notifySpeaking(null);
+}
+
 function isRegisteredEvent(event: VoiceLineTrigger): event is VoiceLineEvent {
   return (VOICE_EVENTS as readonly string[]).includes(event);
 }
@@ -392,6 +443,9 @@ function isReplyable(event: VoiceLineTrigger): event is VoiceLineEvent {
 /** The single event that participates in stacked-run reply grouping. */
 const EXIT_EVENT = 'إخراج_بيدق' as const;
 
+/** The capture event — top-priority interrupt + its own stacked-run coalescing. */
+const CAPTURE_EVENT = 'الأكل' as const;
+
 function isExitEvent(event: VoiceLineTrigger): event is typeof EXIT_EVENT {
   return isRegisteredEvent(event) && event === EXIT_EVENT;
 }
@@ -406,6 +460,12 @@ function isExitVoiceLine(event: VoiceLineTrigger | 'reply'): boolean {
  * that takes priority over an exit reply. The check is event-type-agnostic:
  * any future registered event (capture, danger, taunt, ...) becomes foreign
  * automatically, so new event types need no per-event code here.
+ *
+ * Confirmed for `الأكل`: it is registered in `VOICE_EVENTS` and is not
+ * `EXIT_EVENT`, so it is foreign by construction — a capture that arrives
+ * while an exit reply is reserved/pending/gap-running drops that reply. The
+ * capture branch in `playVoiceLine` additionally *interrupts* instead of
+ * merely preempting-then-queueing, which is its top-priority privilege.
  */
 function isForeignVoiceEvent(event: VoiceLineTrigger | 'reply'): boolean {
   return event !== 'reply' && !isExitVoiceLine(event);
@@ -761,6 +821,65 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
         return true;
       });
     }
+  }
+
+  // ── `الأكل` — top-priority capture event ──────────────────────────────────
+  // A capture line never waits behind a foreign line and never delays: it
+  // interrupts whatever is currently speaking (primary, reply, or the reply
+  // gap) and starts on the spot. Only a *stacked* capture (an `الأكل` line
+  // from a previous capture is still audible) defers — coalesced using the
+  // CAPTURE_COALESCE_MAX_WAIT_MS run rule below, independent of the
+  // `إخراج_بيدق` queue rules.
+  if (event === CAPTURE_EVENT) {
+    const captureLineActive = activeLineInfo !== null
+      && activeLineInfo.event === CAPTURE_EVENT
+      && getActiveLineRemainingMs() > 0;
+
+    if (captureLineActive) {
+      // Stacked captures — one combined event or one follow-up, decided by how
+      // much of the running capture line is left (same shape as the cross-turn
+      // `إخراج_بيدق` rule, its own threshold).
+      const remainingWaitMs = getActiveLineRemainingMs();
+
+      // At most one `الأكل` line may ever wait in the queue.
+      queue = queue.filter(q => !(q.kind === 'event' && q.event === CAPTURE_EVENT));
+
+      if (remainingWaitMs <= CAPTURE_COALESCE_MAX_WAIT_MS) {
+        // Short remaining wait → separate events: let the first line finish,
+        // then play a fresh capture line (the no-immediate-repeat pick ensures
+        // it is a *different* clip than the one that just played). Insert at
+        // the head so it follows the running capture line directly, ahead of
+        // any older queue entries — a capture line never waits behind things.
+        queue.unshift({ kind: 'event', event, options: context ?? {} });
+      }
+      // Long remaining wait → combined event: the running line already speaks
+      // for this capture too, so the new line is dropped and no follow-up is
+      // queued (the filter above also clears any stale queued capture line).
+
+      // Foreign-event priority (generic rule, confirmed for this event): a
+      // reserved/pending `إخراج_بيدق` reply is dropped, never delayed. This is
+      // a no-op while the capture line keeps the slot busy, but it keeps the
+      // run marked preempted so its queued continuations cannot resurrect it.
+      cancelPendingReplyForFutures();
+      return;
+    }
+
+    // Empty pool = safe no-op — never interrupt just to leave silence.
+    const clip = pickRandomClip(event);
+    if (!clip) return;
+
+    // Interrupt everything: cut the active line (of any type), drop the
+    // reserved exit reply + gap, and mark the exit run preempted so its tail
+    // lines stay reply-silent (same semantics as the generic foreign rule).
+    stopActiveLineImmediate();
+    clearPendingReply();
+    clearReplyGap();
+    if (exitReplyRun) {
+      exitReplyRun.preempted = true;
+    }
+
+    playClip({ kind: 'event', event, options: context ?? {} }, clip);
+    return;
   }
 
   // Refined queueing rules specific to `إخراج_بيدق` primary lines

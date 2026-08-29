@@ -4688,6 +4688,12 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
 
     const playResolvedVoiceLines = () => {
       if (capturedPid) {
+        // الأكل — a piece just ate another piece. Top-priority voice event:
+        // the manager cuts off whatever line is playing and starts this one
+        // immediately (stacked captures coalesce inside the manager). Fires on
+        // every capture resolution — human or AI — at the moment the captor's
+        // final hop lands (or immediately for zero-step moves).
+        playVoiceLine('الأكل', { speaker: ps });
         if (!isComputer || ps === humanPlayer) playVoiceLine('capture_by_me', { speaker: ps });
         else if (capturedPlayer === humanPlayer) playVoiceLine('captured_by_opponent', { speaker: capturedPlayer ?? ps });
         else playVoiceLine('opponent_captured', { speaker: capturedPlayer ?? ps });
