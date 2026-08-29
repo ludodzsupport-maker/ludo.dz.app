@@ -1,6 +1,6 @@
 ---
 name: Ludo DZ voice reply (ردود) scheduling + SFX ducking + speaking aura
-description: Why the إخراج_بيدق reply used to land only when the game went quiet, the reservation model that replaced the reply timer, how voice ducking of dice/pawn SFX is wired, and where the speaking aura lives.
+description: Why the إخراج_بيدق reply used to land only when the game went quiet, the reservation model that replaced the reply timer, the الأكل top-priority capture event (interrupt + coalescing), how voice ducking of dice/pawn SFX is wired, and where the speaking aura lives.
 ---
 
 ## The reply is a reservation on the primary line, not a queue entry or a timer
@@ -78,6 +78,38 @@ Current model in `voice-line-manager.ts`:
 **How to apply:** any future "line B must follow line A" pairing in this file should reuse
 the reservation shape (decide + preload at A's start, fire from A's end callback), not a
 timer plus the shared queue.
+
+## `الأكل` (capture) is the top-priority event and interrupts, not queues (2026-08-29)
+
+Third registered event, same isolated-folder pattern (`voice/الأكل/`). Unlike every other
+event, a capture line never waits behind anything: fired from `playResolvedVoiceLines()`
+in `GameBoardScreen.tsx` (the single capture-resolution point — last-hop landing, zero-step
+moves; the Neon exit-modal `resumePausedMove` path plays no voice for any event, by design),
+it goes through the capture branch of `playVoiceLine`, which
+
+- calls `stopActiveLineImmediate()` — nulls `activeAudio` *before* `pause()` so the cut
+  element's `ended`/watchdog handlers no-op and `finishLine` never runs for it; works for
+  primaries, replies, and clears the reply-gap;
+- drops the reserved exit reply (`clearPendingReply`/`clearReplyGap` + keeps
+  `exitReplyRun.preempted = true` so a queued continuation exit line still plays but
+  cannot resurrect the reply);
+- coalesces **stacked captures** with its own tunable `CAPTURE_COALESCE_MAX_WAIT_MS = 1500`
+  (analogous to `EXIT_QUEUE_MAX_WAIT_MS`, deliberately a bit larger): if the running
+  `الأكل` line finishes within 1500 ms the new capture is a separate event and gets queued
+  at the **head** (a capture never queues behind stale lines; the universal no-repeat pick
+  guarantees a different clip); if it has longer to run, both captures are one combined
+  event and the new line is dropped along with any stale queued capture line;
+- is a safe no-op when its pool is empty — it never interrupts just to leave silence.
+
+`الأكل` is foreign to the reply system **by construction** (registered in `VOICE_EVENTS`,
+not `EXIT_EVENT`), so the generic `hasForeignVoiceEventInPath()` preemption applies without
+extra wiring; the capture branch upgrades it from preempt-and-queue to preempt-and-play.
+
+**How to apply:** any future "interrupts everything" event copies this branch shape
+(immediate stop + pool-empty guard + head-inserted coalescing queue). All voice pools —
+primary and reply — inherit the no-immediate-repeat rule for free because selection is
+funnelled through `pickRandomClip`/`pickRandomReply`; per-event pickers must keep using
+them.
 
 ## Voice ducking lives in sound-manager and covers every SFX by construction
 
