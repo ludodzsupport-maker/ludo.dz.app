@@ -1118,6 +1118,108 @@ const SpeakingAura = memo(function SpeakingAura({
   );
 });
 
+// ─── SpeakingPawnPulse ────────────────────────────────────────────────────────
+// The board-piece companion to the corner SpeakingAura: a quiet per-pawn
+// "speaking echo" for capture voice lines. While the الأكل line is audible the
+// captor's pawn breathes here; while its رد الأكل reply is audible the victim's
+// pawn does. Rendered inside the pawn's own SVG group (under the piece body, in
+// board-cell units) so it rides along with stacking scales and position
+// springs, and scaled to the pawn — roughly 1.5–1.8× the piece radius, never
+// panel-scale. One breathing radial glow plus a slow sonar-style echo ring (a
+// second, brighter phase-offset ring for a reply, mirroring the aura's hotter
+// reply treatment). Colours reuse the exact per-theme speaking tokens the aura
+// uses (Classic: the player's solid; DZ: gold ring + home-colour glow; Neon:
+// the player's neon), so the read stays consistent at every size.
+//
+// All animation is attribute-based (r/opacity only — no transforms), so the
+// echo can never fight the pawn group's own transform pipeline. Under reduced
+// motion (or the Neon exit-modal pause) it becomes a static hairline ring +
+// steady glow: a calm highlight, never absent.
+const PULSE_RING_R0  = 0.30;  // echo birth radius — just outside the pawn body
+const PULSE_RING_R1  = 0.58;  // echo fade-out radius (~1.8× pawn radius)
+const PULSE_GLOW_R   = 0.50;  // breathing halo radius (~1.5× pawn radius)
+const PULSE_BREATH_S = { primary: 1.3, reply: 0.95 } as const; // ping period per line kind
+
+const SpeakingPawnPulse = memo(function SpeakingPawnPulse({
+  kind, ringColor, glowColor, glowId, reduced,
+}: {
+  kind: SpeakingKind;   // 'primary' = captor speaking, 'reply' = victim answering
+  ringColor: string;
+  glowColor: string;
+  glowId: string;       // per-player id for the pulse's own local radial gradient
+  reduced: boolean;     // prefers-reduced-motion or Neon exit-modal stillness
+}) {
+  const isReply = kind === 'reply';
+  const period  = isReply ? PULSE_BREATH_S.reply : PULSE_BREATH_S.primary;
+  const ringW   = isReply ? 0.034 : 0.026;
+  const pingHi  = isReply ? 0.5  : 0.4;   // echo peak opacity
+
+  // Root carries the whole presence lifecycle (fade in on mount, fade out on
+  // the line's end — exactly SpeakingAura's structure) so the looping children
+  // never have to fight their own infinite `animate` with an `exit` on the
+  // same opacity value.
+  return (
+    <motion.g pointerEvents="none" aria-hidden
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeOut' } }}
+      exit={{ opacity: 0, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeIn' } }}>
+      <defs>
+        <radialGradient id={glowId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%"  stopColor={glowColor} stopOpacity="0.50"/>
+          <stop offset="55%" stopColor={glowColor} stopOpacity="0.20"/>
+          <stop offset="100%" stopColor={glowColor} stopOpacity="0"/>
+        </radialGradient>
+      </defs>
+
+      {/* Breathing halo — soft radial glow that gives the echo its mass without
+          washing out the pawn (drawn under the body, peak centre alpha ≈ 0.31). */}
+      <motion.circle cx={0} cy={0} r={PULSE_GLOW_R} fill={`url(#${glowId})`}
+        initial={{ opacity: 0 }}
+        animate={reduced
+          ? { opacity: 0.55 }
+          : { opacity: [0.32, 0.62, 0.32], transition: { duration: period, repeat: Infinity, ease: 'easeInOut' } }}
+        transition={reduced ? { duration: 0.18, ease: 'easeOut' } : undefined}
+      />
+
+      {/* Sonar echo — one ring per breath, born at the pawn's edge and fading
+          as it expands. Replies run a hotter, faster echo plus a second
+          phase-offset ring (the aura's "answering back" doubling, at pawn
+          scale). Attribute-only animation (r + opacity): no transform-origin
+          concerns inside the translated pawn group. The mid keyframe keeps the
+          ring travelling outward for the whole period so it never stalls. */}
+      {!reduced && (isReply ? [0, period / 2] : [0]).map((delay, i) => (
+        <motion.circle key={i} cx={0} cy={0} fill="none"
+          stroke={ringColor} strokeWidth={ringW} strokeLinecap="round"
+          initial={{ r: PULSE_RING_R0, opacity: 0 }}
+          animate={{
+            r: [PULSE_RING_R0, PULSE_RING_R0 + (PULSE_RING_R1 - PULSE_RING_R0) * 0.55, PULSE_RING_R1],
+            opacity: [0, pingHi - i * 0.08, 0],
+            transition: {
+              duration: period,
+              times: [0, 0.22, 1],
+              delay,
+              repeat: Infinity,
+              ease: 'easeOut',
+            },
+          }}
+        />
+      ))}
+
+      {/* Reduced-motion highlight — the echo held still: a calm hairline ring
+          and the steady glow above, so the cue stays legible without motion. */}
+      {reduced && (
+        <motion.circle cx={0} cy={0} r={0.36} fill="none"
+          stroke={ringColor} strokeWidth={0.026}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.5 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
+        />
+      )}
+    </motion.g>
+  );
+});
+
+// ─── Speaking cue ── (existing) the corner equalizer bars ────────────────────
 // Supporting cue only: a tiny three-bar equalizer beside the player name that
 // confirms *speech* specifically (the aura says "this corner", the bars say
 // "talking"). Deliberately quiet so the aura stays the dominant signal, and it
@@ -1420,7 +1522,7 @@ function buildHopPath(
 const PawnToken = memo(function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
   onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand, onDustStep, onDzSparkleStep,
-  stackScale, showSafeStar, paused,
+  stackScale, showSafeStar, paused, speakPulse,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
@@ -1441,11 +1543,16 @@ const PawnToken = memo(function PawnToken({
   stackScale?: number; // Universal premium stacking (all themes): 1 = full size, <1 shrinks when sharing a cell. Defaults to 1.
   showSafeStar?: boolean; // Neon-only: this pawn is alone on a safe-star cell → renders its own glowing badge on the pawn. Classic/DZ ignore this prop — their safe-space icons are permanent cell fixtures that never attach to a pawn. Defaults to false.
   paused?: boolean; // Neon exit-modal pause: freeze the piece (see SETTLE_TRANSITION). Always false for Classic/DZ.
+  speakPulse?: SpeakingKind | null; // capture voice speaking echo: 'primary' while the captor's line is audible, 'reply' while the victim's reply is audible, null otherwise. See CaptureSpeakPulseTarget.
 }) {
   const baseCtrl  = useAnimationControls();
   const arcCtrl   = useAnimationControls();
   const scaleCtrl = useAnimationControls();
   const stackScaleVal = stackScale ?? 1;
+
+  // Capture speaking echo (see SpeakingPawnPulse): holds still under reduced
+  // motion exactly like the corner aura treats its own `paused`.
+  const pulseReduced = useReducedMotion() || !!paused;
 
   // Stable refs so async closures always see latest values
   const seqKeyRef      = useRef(0);
@@ -1703,6 +1810,12 @@ const PawnToken = memo(function PawnToken({
   const dzCollarRY = 0.048;
   const dzCollarCY = 0.10;
 
+  // Capture speaking echo colours — the exact per-theme speaking tokens the
+  // corner SpeakingAura receives (CornerDice's speechColor/speechBloom), so the
+  // pawn echo and the panel aura read as one system at every scale.
+  const pulseRing = isClassic ? clSolid : isDz ? DZ.BORDER_GOLD : neon;
+  const pulseGlow = isClassic ? clSolid : isDz ? dzColor : E.PLAYER_COLORS[player];
+
   return (
     // Outer group: tile-to-tile x/y movement — GPU-composited layer
     <motion.g
@@ -1728,6 +1841,24 @@ const PawnToken = memo(function PawnToken({
         <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
           fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : 'rgba(0,0,0,0.62)'}
           filter={isClassic ? 'url(#cl-pawn-shadow)' : isDz ? 'url(#dz-pawn-shadow)' : undefined}/>
+
+        {/* Capture speaking echo — breathes under the piece while a capture
+            voice line (captor) or its reply (victim) is audible. Sits behind
+            the body (shadow → echo → piece) so it never obscures the pawn, is
+            pointerEvents-none so tap hit-areas stay byte-identical, and rides
+            inside the stack-scale group so it shrinks with the pawn. */}
+        <AnimatePresence>
+          {speakPulse && (
+            <SpeakingPawnPulse
+              key="speak-pulse"
+              kind={speakPulse}
+              ringColor={pulseRing}
+              glowColor={pulseGlow}
+              glowId={`speak-pulse-glow-${player}`}
+              reduced={!!pulseReduced}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Inner group: parabolic Y-arc overlay — GPU-composited for buttery arcs */}
         <motion.g animate={arcCtrl} initial={{ y: 0 }} style={{ willChange: 'transform' }}>
@@ -2237,6 +2368,19 @@ type PieceAnim = {
   onArrival?: () => void;
 };
 
+// ─── Capture speaking pulse target ────────────────────────────────────────────
+// Which board pawn carries a capture voice line right now: the captor's pawn
+// while the الأكل line is audible, the victim's pawn while its رد الأكل reply
+// is audible. Derived from the same subscribeSpeaking broadcast that drives
+// the corner SpeakingAura (see GameBoardScreen) — never from the capture event
+// itself, so the visual is tied to actual playback start/end, including
+// interrupts and watchdog cutoffs.
+interface CaptureSpeakPulseTarget {
+  player: number;
+  index: number;
+  kind: SpeakingKind;
+}
+
 // ─── BoardSVG — pure game board ───────────────────────────────────────────────
 interface BoardSVGProps {
   game: E.GameState;
@@ -2270,6 +2414,9 @@ interface BoardSVGProps {
   // dim resting values so nothing pulses through the modal's semi-transparent
   // backdrop. Always false for Classic and DZ.
   paused?: boolean;
+  // Board pawn currently carrying a capture voice line (الأكل primary or its
+  // reply), or null while no capture voice is audible. See CaptureSpeakPulseTarget.
+  captureSpeakPulse?: CaptureSpeakPulseTarget | null;
 }
 
 const BoardSVG = memo(function BoardSVG({
@@ -2279,7 +2426,7 @@ const BoardSVG = memo(function BoardSVG({
   hopBursts, onHopBurstDone, onHopStepLand,
   dustPuffs, onDustPuffDone, onDustStep,
   dzSparkles, onDzSparkleDone, onDzSparkleStep,
-  boardStyle, paused,
+  boardStyle, paused, captureSpeakPulse,
 }: BoardSVGProps) {
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
@@ -3907,6 +4054,9 @@ const BoardSVG = memo(function BoardSVG({
             stackScale={stackScale}
             showSafeStar={showSafeStar}
             paused={isPaused}
+            speakPulse={captureSpeakPulse && captureSpeakPulse.player === player && captureSpeakPulse.index === index
+              ? captureSpeakPulse.kind
+              : null}
           />
         );
       })}
@@ -4236,6 +4386,22 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   // line or a reply — drives the speaking aura on that player's corner panel.
   // Managed by voice-line-manager.
   const [speaking, setSpeaking] = useState<SpeakingState>(null);
+  // ── Capture speaking pulse (board pieces) ──────────────────────────────────
+  // The corner SpeakingAura consumes `{ player, kind }` from the speaking
+  // broadcast; the board pieces need the same broadcast plus *which* pawn is
+  // speaking, so the capture call site passes the captor's/victim's piece
+  // index through VoiceLineContext (`piece` / `replyPiece`) and the manager
+  // echoes it back on `SpeakingState`. While the الأكل line is audible this
+  // targets the captor's pawn (kind 'primary'); while the رد الأكل reply is
+  // audible it targets the victim's pawn (kind 'reply', event 'الأكل') — the
+  // event field keeps a capture reply distinct from an exit reply. Memoized on
+  // the speaking state object (identity-stable between broadcasts) so it never
+  // defeats BoardSVG's memo during unrelated re-renders.
+  const captureSpeakPulse = useMemo<CaptureSpeakPulseTarget | null>(() => (
+    speaking && speaking.event === 'الأكل' && speaking.piece !== undefined
+      ? { player: speaking.player, index: speaking.piece, kind: speaking.kind }
+      : null
+  ), [speaking]);
   const rollTimers = useRef<NodeJS.Timeout[]>([]);
   const rollSequenceRef = useRef(0);
   const rollingRef = useRef(false);
@@ -4695,11 +4861,20 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
         // final hop lands (or immediately for zero-step moves).
         playVoiceLine('الأكل', {
           speaker: ps,
+          // The captor's own pawn — echoed on the speaking broadcast so the
+          // board-piece speaking pulse (see SpeakingPawnPulse) breathes on the
+          // piece that just captured, for exactly this line's audible lifetime.
+          // Purely visual: never affects audio selection or scheduling.
+          piece: is,
           // رد الأكل — the captured piece's owner (the victim) answers back at
           // the captor: the capture reply is reserved on this line, spoken by
           // the victim, and guaranteed — one reply per coalesced capture-line
           // run (see voice-line-manager).
           replySpeaker: capturedPlayer ?? undefined,
+          // The victim's own pawn — the reply's pulse target (it has flown
+          // home by the time the reply plays, so the echo breathes on it in
+          // its home bay).
+          replyPiece: capturedP?.index,
           playersInGame: currentGame.playerSlots,
         });
         if (!isComputer || ps === humanPlayer) playVoiceLine('capture_by_me', { speaker: ps });
@@ -5179,6 +5354,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
               onDzSparkleStep={handleDzSparkleStep}
               boardStyle={boardStyle}
               paused={exitPause}
+              captureSpeakPulse={captureSpeakPulse}
             />
           </div>
 
