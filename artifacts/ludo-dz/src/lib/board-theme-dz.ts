@@ -4,6 +4,12 @@
 // markers, a rosette + crescent-and-star center medallion, a faint star-lattice
 // texture on the home corners, a faint zellige tracery on the board felt, and a
 // warm hairline between neutral cells.
+// Phase 3 (readability pass): the four house colours are re-spaced for clear
+// quadrant differentiation, the corner/felt tracery is pulled back to engraving
+// strength so pieces sit cleanly on top of it, and each home base gains its own
+// ornament set (vignette, keyline frames, finials and a mini crescent crest)
+// built from the same motifs below — see HOME_COLORS and the DZ home-zone
+// block in GameBoardScreen.
 //
 // Player index → corner mapping matches the existing engine corner assignment
 // (see classifyCell() in GameBoardScreen.tsx): 0=Red/TL, 1=Blue/TR, 2=Yellow/BR, 3=Green/BL.
@@ -11,11 +17,19 @@
 
 export const BOARD_BG = '#006233'; // deep Algerian green — overall board background
 
+// Phase 3 (contrast pass): the four house colours are now spread across the
+// dial so no two corners read as siblings during play. The old trio gold
+// #D4A017 / terracotta #C2703A / ivory #F5E6C8 sat within ~18° of hue of each
+// other, and ivory sat within a few % of the neutral path cream — the board
+// read as "warm, warm, warm, blue". Gold is now a purer saffron (less orange),
+// terracotta is now a deep henna brown (enough hue distance AND a clear
+// lightness step below gold), and cream is a warm sand (a real plateau below
+// the near-white path cells). Blue already stood alone and is unchanged.
 export const HOME_COLORS = [
-  '#D4A017', // Player 1 (index 0, TL corner) — saffron gold
+  '#E0A300', // Player 1 (index 0, TL corner) — pure saffron yellow
   '#006994', // Player 2 (index 1, TR corner) — Mediterranean blue
-  '#C2703A', // Player 3 (index 2, BR corner) — Saharan terracotta
-  '#F5E6C8', // Player 4 (index 3, BL corner) — ivory cream
+  '#8A4A28', // Player 3 (index 2, BR corner) — deep henna brown
+  '#E8D4A6', // Player 4 (index 3, BL corner) — warm sand cream
 ] as const;
 
 export const PATH_CREAM = '#FDF3E3'; // warm cream — neutral path cells
@@ -39,18 +53,19 @@ export const PATH_HAIRLINE = 'rgba(0, 77, 38, 0.35)'; // deep-green hairline bet
 export const PLAYER_ACCENT_COLORS = [
   '#F6CF58', // saffron gold
   '#55BDE0', // Mediterranean blue
-  '#E4A574', // Saharan terracotta
-  '#FFF8E8', // ivory cream
+  '#E4A574', // sun-warmed clay (lifts above henna brown)
+  '#FFF8E8', // ivory cream (lifts above sand cream)
 ] as const;
 
 // DZ home-lane keylines are tuned separately from the player fills. The dark
 // line defines the lane edge while the lighter companion line carries the fine
 // zellige detail, preserving contrast for every one of the four palettes.
+// Phase 3: the brown keyline deepened in step with the new henna base.
 export const PLAYER_LANE_KEYLINE_COLORS = [
   '#7D5700', // rich brass against saffron
   '#004A69', // deep Atlantic blue against Mediterranean blue
-  '#7C391D', // burnt umber against terracotta
-  '#7A6035', // warm umber against ivory cream
+  '#5A2C14', // dark mahogany against henna brown
+  '#7A6035', // warm umber against sand cream
 ] as const;
 
 export const PLAYER_LANE_HIGHLIGHT_COLORS = [
