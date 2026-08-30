@@ -3250,7 +3250,7 @@ const BoardSVG = memo(function BoardSVG({
                 fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.026"/>
             </pattern>
             {/* Same najma motif, stroked in warm ivory instead of deep green — used on the
-                  blue (TR) and terracotta (BR) corners, where the deep-green stroke above
+                  blue (TR) and henna brown (BR) corners, where the deep-green stroke above
                   loses too much contrast against their darker/warmer field colour. */}
             <pattern id="dz-corner-motif-light" x="0" y="0" width="1" height="1" patternUnits="userSpaceOnUse">
               <polygon points={starPoints(0.5, 0.5, 0.5, 0.21, 8)}
@@ -3297,6 +3297,18 @@ const BoardSVG = memo(function BoardSVG({
                 <stop offset="100%" stopColor={shadeColor(c, -30)}/>
               </radialGradient>
             ))}
+            {/* DZ home-tray vignette — one per player's home colour. A gentle
+                  tonal bowl across each home base: a fraction lighter toward the
+                  middle (where the crest sits) and a fraction deeper around the
+                  rim, turning the flat colour field into a recessed tray. Pure
+                  tonal steps of the player's own colour, no new hues. */}
+            {DZ.HOME_COLORS.map((c, i) => (
+              <radialGradient key={`hv-${i}`} id={`dz-home-vign${i}`} cx="50%" cy="50%" r="72%">
+                <stop offset="0%"   stopColor={shadeColor(c, 10)}  stopOpacity="0.26"/>
+                <stop offset="55%"  stopColor={c}                  stopOpacity="0"/>
+                <stop offset="100%" stopColor={shadeColor(c, -24)} stopOpacity="0.30"/>
+              </radialGradient>
+            ))}
             {/* DZ pawn base — shared brass/gold pedestal foot across all four players */}
             <linearGradient id="dzbase" x1="20%" y1="0%" x2="75%" y2="100%">
               <stop offset="0%"   stopColor="#F6E3A8"/>
@@ -3336,9 +3348,11 @@ const BoardSVG = memo(function BoardSVG({
         };
 
         if (isDz) {
-          // Structural home base (Phase 1) + a very subtle star-lattice texture (Phase 2).
+          // Structural home base (Phase 1) + a very subtle star-lattice texture (Phase 2)
+          // + a full ornament set (Phase 3: vignette, keyline frames, corner finials,
+          // mini crescent crest) — all drawn from the theme's existing motif language.
           const solid = DZ.HOME_COLORS[player as 0|1|2|3];
-          // Blue (TR, index 1) and terracotta (BR, index 2) are dark/mid-saturated enough
+          // Blue (TR, index 1) and henna brown (BR, index 2) are dark/mid-saturated enough
           // that the deep-green motif stroke (fine against gold/cream) nearly disappears —
           // swap to the ivory-stroke variant for just those two corners.
           const motifId = (player === 1 || player === 2) ? 'dz-corner-motif-light' : 'dz-corner-motif';
@@ -3347,13 +3361,80 @@ const BoardSVG = memo(function BoardSVG({
           // per-corner contrast fix (see ludo-dz-theme memory: one hardcoded ink silently
           // fails on 2 of the 4 home colours).
           const perchInk = (player === 1 || player === 2) ? DZ.PATH_CREAM : DZ.BORDER_DEEP;
+          // Engraving/inlay pair for this base's ornament frames — the exact ink system
+          // the home-lane keylines already use, so every base is framed in its own
+          // wavelength-safe pair without introducing new hues.
+          const baseKeyline   = DZ.PLAYER_LANE_KEYLINE_COLORS[player as 0|1|2|3];
+          const baseHighlight = DZ.PLAYER_LANE_HIGHLIGHT_COLORS[player as 0|1|2|3];
+          // Out-of-game slots dim the whole ornament set with the colour field below.
+          const ornamentFade = exists ? 1 : 0.28;
           return (
             <g key={`hz-${player}`}>
               <rect x={zc} y={zr} width="6" height="6" fill={solid}
                 fillOpacity={exists ? (isCurrent ? 1 : 0.94) : 0.30}/>
-              {/* Islamic star-lattice — felt, not seen: a quiet engraved texture */}
+              {/* Islamic star-lattice — felt, not seen: a quiet engraved texture.
+                  Phase 3 pulled it back from 0.08 to engraving strength so the
+                  ornament set (and the pawns) sit clearly on top of the field. */}
               <rect x={zc} y={zr} width="6" height="6" fill={`url(#${motifId})`}
-                fillOpacity="0.08" pointerEvents="none"/>
+                fillOpacity="0.045" pointerEvents="none"/>
+              {/* Tray vignette — a tonal bowl over the field: gently lighter at the
+                  middle, deeper toward the rim, so the base reads as a recessed
+                  tray instead of one flat stamp of colour. */}
+              <rect x={zc} y={zr} width="6" height="6" fill={`url(#dz-home-vign${player})`}
+                fillOpacity={ornamentFade} pointerEvents="none"/>
+              {/* Inset keyline frames — the same double-keyline language that seals
+                  each home lane (dark engraved edge + fine light-catching inlay),
+                  now framing the base itself, with a shared gold hairline just inside
+                  the zone edge mirroring the board border's own gold accent line. */}
+              <rect x={zc+0.15} y={zr+0.15} width="5.70" height="5.70" rx="0.10"
+                fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.018"
+                strokeOpacity={0.55 * ornamentFade} pointerEvents="none"/>
+              <rect x={zc+0.32} y={zr+0.32} width="5.36" height="5.36" rx="0.06"
+                fill="none" stroke={baseKeyline} strokeWidth="0.022"
+                strokeOpacity={0.34 * ornamentFade} pointerEvents="none"/>
+              <rect x={zc+0.40} y={zr+0.40} width="5.20" height="5.20" rx="0.045"
+                fill="none" stroke={baseHighlight} strokeWidth="0.011"
+                strokeOpacity={0.30 * ornamentFade} pointerEvents="none"/>
+              {/* Corner najma finials — small eight-point engraved stars seated
+                  just inside the keyline band, with a fine gold ring and a bright
+                  inlay heart: the base's "corners set with studs". Cleared of the
+                  pawn slots (slot edge ~1.10 from the zone corner; finial extends
+                  to 0.70). */}
+              {([[0.56,0.56],[5.44,0.56],[5.44,5.44],[0.56,5.44]] as [number,number][])
+                .map(([ox,oy], i) => (
+                <g key={`fin-${i}`} pointerEvents="none">
+                  <polygon points={starPoints(zc+ox, zr+oy, 0.135, 0.056, 8)}
+                    fill={baseKeyline} fillOpacity={0.52 * ornamentFade}
+                    stroke={DZ.BORDER_GOLD} strokeWidth="0.012"
+                    strokeOpacity={0.55 * ornamentFade} strokeLinejoin="round"/>
+                  <rect x={zc+ox-0.026} y={zr+oy-0.026} width="0.052" height="0.052"
+                    fill={baseHighlight} fillOpacity={0.75 * ornamentFade}
+                    transform={`rotate(45 ${zc+ox} ${zr+oy})`}/>
+                </g>
+              ))}
+              {/* Base crest — a miniature of the board's center medallion seated in
+                  the empty middle between the four pawn slots: double engraved ring,
+                  nested najma star, and the theme's own crescent-and-star at its
+                  heart. Kept at engraving strength so it reads as the house seal,
+                  never as a piece. Star-to-crescent-horn gap computed the same way
+                  as the center medallion's (verified: ~0.036 units). */}
+              <g pointerEvents="none">
+                <circle cx={cx} cy={cy} r="0.78" fill="none"
+                  stroke={baseKeyline} strokeWidth="0.016" strokeOpacity={0.38 * ornamentFade}/>
+                <circle cx={cx} cy={cy} r="0.70" fill="none"
+                  stroke={baseHighlight} strokeWidth="0.010" strokeOpacity={0.34 * ornamentFade}/>
+                <polygon points={starPoints(cx, cy, 0.56, 0.235, 8)}
+                  fill={baseKeyline} fillOpacity={0.05 * ornamentFade}
+                  stroke={baseKeyline} strokeWidth="0.013" strokeOpacity={0.40 * ornamentFade}
+                  strokeLinejoin="round"/>
+                <polygon points={starPoints(cx, cy, 0.385, 0.161, 8)}
+                  fill="none" stroke={baseHighlight} strokeWidth="0.010"
+                  strokeOpacity={0.38 * ornamentFade} strokeLinejoin="round"/>
+                <path fillRule="evenodd" fill={baseKeyline} fillOpacity={0.46 * ornamentFade}
+                  d={crescentPath(cx - 0.048, cy, 0.150, cx + 0.010, cy, 0.120)}/>
+                <polygon points={starPoints(cx + 0.145, cy, 0.058, 0.023, 5)}
+                  fill={baseKeyline} fillOpacity={0.50 * ornamentFade}/>
+              </g>
               {/* Empty-perch markers — a faint echo of the onion-dome pawn silhouette
                   marks any home slot with no pawn in it, so a vacated bay still reads as
                   "this is a pawn's designated spot" instead of a blank void. Occupancy is
@@ -4213,7 +4294,7 @@ const BoardSVG = memo(function BoardSVG({
         <>
           {/* DZ: four player-facing fields meet at the exact board centre. Their
               placement follows the adjacent approach lanes: gold enters from the
-              left, blue from above, terracotta from the right, and cream below. */}
+              left, blue from above, henna brown from the right, and cream below. */}
           <polygon points="6,6 7.5,7.5 6,9" fill={DZ.HOME_COLORS[0]}/>
           <polygon points="6,6 9,6 7.5,7.5" fill={DZ.HOME_COLORS[1]}/>
           <polygon points="9,6 9,9 7.5,7.5" fill={DZ.HOME_COLORS[2]}/>
@@ -4359,9 +4440,11 @@ const BoardSVG = memo(function BoardSVG({
       )}
 
       {/* ── DZ: zellige-tile overlay — drawn after every cell so the faint engraved-floor
-            texture actually reads across path, home and center tiles, not just bare felt ── */}
+            texture actually reads across path, home and center tiles, not just bare felt.
+            Phase 3 pulled it back from 0.05 so the gold tracery stays a whisper on the
+            felt and never competes with the pawns standing on the path. ── */}
       {isDz && (
-        <rect width="15" height="15" fill="url(#dz-zellige)" fillOpacity="0.05" pointerEvents="none"/>
+        <rect width="15" height="15" fill="url(#dz-zellige)" fillOpacity="0.03" pointerEvents="none"/>
       )}
 
       {/* ── Board border ── */}
