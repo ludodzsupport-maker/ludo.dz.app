@@ -1220,153 +1220,175 @@ const SpeakingPawnPulse = memo(function SpeakingPawnPulse({
 });
 
 // ─── Threat markers (التهديد) ─────────────────────────────────────────────────
-// Board-state warning pair, drawn under the pawn body exactly like the
-// capture speaking echo above but with its own colour + motion signature so a
-// threat is never mistaken for a capture reaction:
-//   • the *threatened* piece (target, B) — a dashed amber warning ring in a
-//     tense staccato double-blink, plus a fast warm glow: the alert half;
-//   • the *threatening* piece (attacker, A) — two crimson rings converging
-//     inward toward the pawn (the capture echo expands outward, the predator
-//     closes in), slow and deliberate: the focused half.
-// Colours are board-level hazard tokens shared by all four players
-// (deliberately NOT the player palette the capture echo uses), tuned once per
-// board theme so they sit legibly on every felt. Attribute-only animation
-// (r/opacity) like the capture echo, and both hold still as a calm static
-// ring + steady glow under reduced motion (or the Neon exit-modal pause).
-const THREAT_ALERT_TOKENS = {
-  classic: { ring: '#E8890C', glow: '#FFB84D' },
-  dz:      { ring: '#D98A10', glow: '#F2B45C' },
-  neon:    { ring: '#FFB340', glow: '#FFC966' },
+// Board-state warning pair, drawn beside the pawn body exactly like the
+// capture speaking echo above but with its own SHAPE + MOTION signature so a
+// threat is never mistaken for a capture reaction or a moveable piece:
+//
+//   • the *threatened* piece (target, B) — a crisp amber "!" danger beacon
+//     that hovers just above the crown and thumps in a nervous double-beat.
+//     Icon language (glyph, not a ring) → unmistakably "this piece is in
+//     danger", and its jitter reads as *anxious*, never "tap me".
+//
+//   • the *threatening* piece (attacker, A) — a crimson target-lock reticle:
+//     four crisp corner brackets snapping inward on a slow, deliberate beat.
+//     Angular frame + converging "aiming" motion → unmistakably "this piece
+//     is about to strike", the exact mirror of the capture echo, which
+//     blooms *outward* after the fact.
+//
+// Both are deliberately hard-edged and avoid any soft radial glow, breathing
+// ring, or round sonar silhouette — the three things the moveable halo and the
+// capture echo share — so the threat reads at a glance. Colours are board-level
+// hazard tokens shared by all four players (NOT the player palette the capture
+// echo uses), tuned once per board theme so they sit legibly on every felt.
+// Animations keep a single motion-owner per element (translate x/y + opacity),
+// rendered outside the pawn's arc/squash transform group, so they never fight
+// the pawn's own transform pipeline; both hold still as calm static shapes
+// under reduced motion (or the Neon exit-modal pause).
+const THREAT_TARGET_TOKENS = {
+  classic: { badge: '#E8890C', mark: '#241300', rim: '#FFE9A6' },
+  dz:      { badge: '#D98A10', mark: '#2A1700', rim: '#F6D18A' },
+  neon:    { badge: '#FFB340', mark: '#1A0E00', rim: '#FFE08A' },
 } as const;
-const THREAT_PREDATOR_TOKENS = {
-  classic: { ring: '#A31320', glow: '#D64045' },
-  dz:      { ring: '#8E1A1A', glow: '#B54A3C' },
-  neon:    { ring: '#FF3B30', glow: '#FF6B57' },
+const THREAT_ATTACKER_TOKENS = {
+  classic: { frame: '#C3172B', rim: '#FF7A6E' },
+  dz:      { frame: '#A21B22', rim: '#E06A52' },
+  neon:    { frame: '#FF3B30', rim: '#FF7A6B' },
 } as const;
 
-const THREAT_ALERT_RING_R     = 0.42; // warning ring radius (~1.3× pawn radius)
-const THREAT_ALERT_GLOW_R     = 0.50; // alert halo radius (same mass as the capture glow)
-const THREAT_ALERT_BLINK_S    = 1.10; // double-flash period: two quick blinks, then a rest
-const THREAT_ALERT_GLOW_BEAT_S = 0.85; // alert glow breath — faster than the capture echo's 1.3 s
+// Danger beacon — sits just above the pawn's crown/finial, drawn OVER the
+// piece so it reads as a mounted alert (the moveable halo and capture echo
+// live *behind* the pawn). Filled amber triangle with a dark "!" and a warm
+// rim, trembling like a startled character.
+const THREAT_BEACON_X  = 0;       // beacon horizontal offset (dead-centre)
+const THREAT_BEACON_Y  = -0.60;   // beacon centre height above the pawn (clears Neon's antenna + DZ finial)
+const THREAT_BEACON_W  = 0.34;    // triangle width  (~0.34 board units, bold enough to read on a phone pawn)
+const THREAT_BEACON_H  = 0.30;    // triangle height
+const THREAT_BEACON_S  = 1.05;    // nervous panic rhythm (two thumps + rest)
 
-const THREAT_PREDATOR_R0      = 0.62; // converging ring birth radius (~1.9× pawn radius)
-const THREAT_PREDATOR_R1      = 0.34; // converging ring death radius — just outside the pawn body
-const THREAT_PREDATOR_GLOW_R  = 0.44; // tight core glow hugging the pawn
-const THREAT_PREDATOR_SWEEP_S = 1.50; // one closing-in sweep
+// Target-lock reticle — four crisp corner brackets wrapping the pawn.
+const THREAT_RETICLE_R  = 0.47;   // bracket corner radius from pawn centre
+const THREAT_RETICLE_L  = 0.19;   // bracket leg length
+const THREAT_RETICLE_W  = 0.046;  // bracket stroke width
+const THREAT_RETICLE_IN = 0.075;  // inward convergence travel per lock
+const THREAT_RETICLE_S  = 1.66;   // deliberate "acquiring target" rhythm
 
 /** Which half of a threat pair a pawn carries. */
 type ThreatRole = 'target' | 'attacker';
 
-const ThreatAlertMarker = memo(function ThreatAlertMarker({
-  ringColor, glowColor, glowId, reduced,
+const ThreatTargetBeacon = memo(function ThreatTargetBeacon({
+  badge, mark, rim, reduced,
 }: {
-  ringColor: string;
-  glowColor: string;
-  glowId: string;   // per-player id for the marker's own local radial gradient
+  badge: string; // amber triangle fill
+  mark: string;  // the "!" ink
+  rim: string;   // warm contrast rim
   reduced: boolean; // prefers-reduced-motion or Neon exit-modal stillness
 }) {
+  // The exclamation bar + dot are drawn so they read at the size of a phone
+  // pawn: a thick rounded bar and a bold dot, inside a soft-triangle badge.
+  const hw  = THREAT_BEACON_W / 2;
+  const tri = `M 0,${-THREAT_BEACON_H * 0.56} L ${hw},${THREAT_BEACON_H * 0.42} L ${-hw},${THREAT_BEACON_H * 0.42} Z`;
+
   return (
     <motion.g pointerEvents="none" aria-hidden
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeOut' } }}
       exit={{ opacity: 0, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeIn' } }}>
-      <defs>
-        <radialGradient id={glowId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%"  stopColor={glowColor} stopOpacity="0.45"/>
-          <stop offset="60%" stopColor={glowColor} stopOpacity="0.18"/>
-          <stop offset="100%" stopColor={glowColor} stopOpacity="0"/>
-        </radialGradient>
-      </defs>
-
-      {/* Warm alert halo — breathes slightly faster than the capture echo so
-          the two never feel like the same effect. */}
-      <motion.circle cx={0} cy={0} r={THREAT_ALERT_GLOW_R} fill={`url(#${glowId})`}
-        initial={{ opacity: 0 }}
-        animate={reduced
-          ? { opacity: 0.50 }
-          : { opacity: [0.30, 0.55, 0.30], transition: { duration: THREAT_ALERT_GLOW_BEAT_S, repeat: Infinity, ease: 'easeInOut' } }}
+      <motion.g
+        initial={{ x: THREAT_BEACON_X, y: THREAT_BEACON_Y, opacity: 0 }}
+        animate={
+          reduced
+            ? { x: THREAT_BEACON_X, y: THREAT_BEACON_Y, opacity: 0.96 }
+            : {
+                // A frightened double-thump bob with a tiny side-to-side tremble:
+                // a *nervous* cue, the opposite of a calm "select me" halo. x/y
+                // are motion-owned so the group never fights it via transform.
+                x: [THREAT_BEACON_X, THREAT_BEACON_X + 0.018, THREAT_BEACON_X - 0.018, THREAT_BEACON_X + 0.010, THREAT_BEACON_X],
+                y: [THREAT_BEACON_Y, THREAT_BEACON_Y - 0.05, THREAT_BEACON_Y, THREAT_BEACON_Y - 0.032, THREAT_BEACON_Y],
+                opacity: [0.86, 1, 0.9, 1, 0.86],
+                transition: { duration: THREAT_BEACON_S, times: [0, 0.22, 0.44, 0.66, 1], repeat: Infinity, ease: 'easeInOut' },
+              }
+        }
         transition={reduced ? { duration: 0.18, ease: 'easeOut' } : undefined}
-      />
+      >
+        {/* Drop shadow that floats the badge off the board so it reads as
+            hovering alert above the crown — kept just under the triangle's
+            base (never wider than the badge) so it stays tidy at pawn scale. */}
+        <ellipse cx={0} cy={THREAT_BEACON_H * 0.46} rx={THREAT_BEACON_W * 0.50} ry={THREAT_BEACON_H * 0.11}
+          fill="rgba(0,0,0,0.30)" />
 
-      {/* Dashed warning ring — the dash breaks the round sonar silhouette of
-          the capture echo, and the irregular double-blink (two quick flashes
-          then a rest) reads as tense/urgent rather than conversational. */}
-      <motion.circle cx={0} cy={0} r={THREAT_ALERT_RING_R} fill="none"
-        stroke={ringColor} strokeWidth={0.030} strokeLinecap="round"
-        strokeDasharray="0.09 0.075"
-        initial={{ opacity: 0 }}
-        animate={reduced
-          ? { opacity: 0.55 }
-          : { opacity: [0.30, 0.95, 0.35, 0.95, 0.30], transition: { duration: THREAT_ALERT_BLINK_S, times: [0, 0.16, 0.32, 0.48, 1], repeat: Infinity, ease: 'easeInOut' } }}
-        transition={reduced ? { duration: 0.18, ease: 'easeOut' } : undefined}
-      />
+        {/* Warning triangle — hard-edged, no glow, a different shape language
+            from the moveable halo's soft ring and the capture echo's glow. */}
+        <path d={tri} fill={badge}
+          stroke={rim} strokeWidth={0.016} strokeLinejoin="round" />
+        {/* Subtle top-light sheen on the badge face for a little cartoon hug. */}
+        <ellipse cx={-hw * 0.34} cy={-THREAT_BEACON_H * 0.22} rx={THREAT_BEACON_W * 0.16} ry={THREAT_BEACON_H * 0.11}
+          fill="white" fillOpacity="0.34" />
+
+        {/* The "!" — bar + dot, crisp dark ink on amber, bold enough to read
+            at phone scale. The bar is thick and rounded so it never thins to a
+            hairline when the pawn shrinks on a crowded cell. */}
+        <rect x={-0.020} y={-THREAT_BEACON_H * 0.27} width={0.040} height={THREAT_BEACON_H * 0.45}
+          rx={0.020} fill={mark} />
+        <circle cx={0} cy={THREAT_BEACON_H * 0.20} r={0.032} fill={mark} />
+      </motion.g>
     </motion.g>
   );
 });
 
-const ThreatPredatorMarker = memo(function ThreatPredatorMarker({
-  ringColor, glowColor, glowId, reduced,
+const ThreatLockReticle = memo(function ThreatLockReticle({
+  frame, rim, reduced,
 }: {
-  ringColor: string;
-  glowColor: string;
-  glowId: string;
+  frame: string; // crimson bracket stroke
+  rim: string;   // hot inner rim for the "lock flash"
   reduced: boolean;
 }) {
+  // Four corner brackets, one per compass corner. Each is an L that cups
+  // toward its corner with the two legs running INWARD along the frame edges,
+  // so together they read as a viewfinder / targeting reticle — not a ring.
+  const corners = [
+    [ 1,  1], [ 1, -1], [-1,  1], [-1, -1],
+  ] as const;
+  const bracketPath = (sx: number, sy: number) => {
+    const cx = sx * THREAT_RETICLE_R;
+    const cy = sy * THREAT_RETICLE_R;
+    return `M ${cx - sx * THREAT_RETICLE_L},${cy} L ${cx},${cy} L ${cx},${cy - sy * THREAT_RETICLE_L}`;
+  };
+
   return (
     <motion.g pointerEvents="none" aria-hidden
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeOut' } }}
       exit={{ opacity: 0, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeIn' } }}>
-      <defs>
-        <radialGradient id={glowId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%"  stopColor={glowColor} stopOpacity="0.40"/>
-          <stop offset="60%" stopColor={glowColor} stopOpacity="0.15"/>
-          <stop offset="100%" stopColor={glowColor} stopOpacity="0"/>
-        </radialGradient>
-      </defs>
-
-      {/* Tight core glow — hugs the pawn instead of spreading, so the
-          attacker reads as coiled/focused rather than broadcasting. */}
-      <motion.circle cx={0} cy={0} r={THREAT_PREDATOR_GLOW_R} fill={`url(#${glowId})`}
-        initial={{ opacity: 0 }}
-        animate={reduced
-          ? { opacity: 0.50 }
-          : { opacity: [0.28, 0.52, 0.28], transition: { duration: THREAT_PREDATOR_SWEEP_S, repeat: Infinity, ease: 'easeInOut' } }}
-        transition={reduced ? { duration: 0.18, ease: 'easeOut' } : undefined}
-      />
-
-      {/* Closing-in rings — the exact opposite of the capture echo's outward
-          sonar: they shrink toward the pawn and brighten as they close, like
-          a hunter narrowing in. Two staggered copies for a steady hunt
-          rhythm (deliberate, never machine-gun). */}
-      {!reduced && [0, THREAT_PREDATOR_SWEEP_S / 2].map((delay, i) => (
-        <motion.circle key={i} cx={0} cy={0} fill="none"
-          stroke={ringColor} strokeWidth={0.030} strokeLinecap="round"
-          initial={{ r: THREAT_PREDATOR_R0, opacity: 0 }}
-          animate={{
-            r: [THREAT_PREDATOR_R0, THREAT_PREDATOR_R1],
-            opacity: [0, 0.55, 0.85],
-            transition: {
-              duration: THREAT_PREDATOR_SWEEP_S,
-              times: [0, 0.55, 1],
-              delay,
-              repeat: Infinity,
-              ease: 'easeIn',
-            },
-          }}
-        />
+      {corners.map(([sx, sy]) => (
+        <motion.g key={`${sx},${sy}`} pointerEvents="none"
+          initial={{ x: 0, y: 0, opacity: 0 }}
+          animate={reduced
+            ? { x: 0, y: 0, opacity: 0.85 }
+            : {
+                // Snap inward toward the pawn, hold, then ease back out: a
+                // deliberate "I've got you in my sights" pulse. Direction is
+                // inward (predator), the mirror of the capture echo's outward
+                // bloom, and the rhythm is slow/menacing, never urgent.
+                x: [0, -sx * THREAT_RETICLE_IN, 0],
+                y: [0, -sy * THREAT_RETICLE_IN, 0],
+                opacity: [0.42, 0.95, 0.42],
+                transition: {
+                  duration: THREAT_RETICLE_S,
+                  times: [0, 0.44, 1],
+                  repeat: Infinity,
+                  ease: ['easeIn', 'easeOut'],
+                },
+              }}
+          transition={reduced ? { duration: 0.18, ease: 'easeOut' } : undefined}>
+          <path d={bracketPath(sx, sy)}
+            fill="none" stroke={frame} strokeWidth={THREAT_RETICLE_W} strokeLinecap="round" strokeLinejoin="round" />
+          {/* Hot inner rim rides the same path, a hair thinner and warmer, that
+              brightens as the bracket closes — the "lock-on" flash. */}
+          <path d={bracketPath(sx, sy)}
+            fill="none" stroke={rim} strokeWidth={THREAT_RETICLE_W * 0.42} strokeLinecap="round" strokeLinejoin="round"
+            opacity="0.85" />
+        </motion.g>
       ))}
-
-      {/* Reduced-motion highlight — the sweep held still: a calm hairline
-          ring hugging the pawn, matching the alert's static treatment. */}
-      {reduced && (
-        <motion.circle cx={0} cy={0} r={0.36} fill="none"
-          stroke={ringColor} strokeWidth={0.026}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.5 }}
-          transition={{ duration: 0.18, ease: 'easeOut' }}
-        />
-      )}
     </motion.g>
   );
 });
@@ -1696,7 +1718,7 @@ const PawnToken = memo(function PawnToken({
   showSafeStar?: boolean; // Neon-only: this pawn is alone on a safe-star cell → renders its own glowing badge on the pawn. Classic/DZ ignore this prop — their safe-space icons are permanent cell fixtures that never attach to a pawn. Defaults to false.
   paused?: boolean; // Neon exit-modal pause: freeze the piece (see SETTLE_TRANSITION). Always false for Classic/DZ.
   speakPulse?: SpeakingKind | null; // capture voice speaking echo: 'primary' while the captor's line is audible, 'reply' while the victim's reply is audible, null otherwise. See CaptureSpeakPulseTarget.
-  threatRole?: ThreatRole | null; // التهديد board-state marker: 'target' = this piece is under threat (amber alert), 'attacker' = this piece threatens someone (crimson predator sweep), null = no threat involvement. See ThreatAlertMarker / ThreatPredatorMarker.
+  threatRole?: ThreatRole | null; // التهديد board-state marker: 'target' = this piece is under threat (amber "!" danger beacon), 'attacker' = this piece threatens someone (crimson target-lock reticle), null = no threat involvement. See ThreatTargetBeacon / ThreatLockReticle.
 }) {
   const baseCtrl  = useAnimationControls();
   const arcCtrl   = useAnimationControls();
@@ -1973,10 +1995,8 @@ const PawnToken = memo(function PawnToken({
   // section): shared by every player, tuned per board theme, never the player
   // palette the capture echo above uses.
   const threatTheme = isClassic ? 'classic' : isDz ? 'dz' : 'neon';
-  const threatAlertRing   = THREAT_ALERT_TOKENS[threatTheme].ring;
-  const threatAlertGlow   = THREAT_ALERT_TOKENS[threatTheme].glow;
-  const threatPredatorRing = THREAT_PREDATOR_TOKENS[threatTheme].ring;
-  const threatPredatorGlow = THREAT_PREDATOR_TOKENS[threatTheme].glow;
+  const threatTargetTok   = THREAT_TARGET_TOKENS[threatTheme];
+  const threatAttackerTok = THREAT_ATTACKER_TOKENS[threatTheme];
 
   return (
     // Outer group: tile-to-tile x/y movement — GPU-composited layer
@@ -2017,35 +2037,6 @@ const PawnToken = memo(function PawnToken({
               ringColor={pulseRing}
               glowColor={pulseGlow}
               glowId={`speak-pulse-glow-${player}`}
-              reduced={!!pulseReduced}
-            />
-          )}
-        </AnimatePresence>
-
-        {/* التهديد markers — the board-state warning pair, independent of any
-            voice line (they live as long as the threat persists, exactly like
-            a safe-star badge). Target = amber double-blink alert, attacker =
-            crimson closing-in sweep. Rendered under the body beside the
-            capture echo; pointerEvents-none so tap hit-areas are unchanged,
-            and inside the stack-scale group so they shrink with the pawn. */}
-        <AnimatePresence>
-          {threatRole === 'target' && (
-            <ThreatAlertMarker
-              key="threat-target"
-              ringColor={threatAlertRing}
-              glowColor={threatAlertGlow}
-              glowId={`threat-alert-glow-${player}`}
-              reduced={!!pulseReduced}
-            />
-          )}
-        </AnimatePresence>
-        <AnimatePresence>
-          {threatRole === 'attacker' && (
-            <ThreatPredatorMarker
-              key="threat-attacker"
-              ringColor={threatPredatorRing}
-              glowColor={threatPredatorGlow}
-              glowId={`threat-predator-glow-${player}`}
               reduced={!!pulseReduced}
             />
           )}
@@ -2245,6 +2236,37 @@ const PawnToken = memo(function PawnToken({
         )}
           </>
         )}
+
+        {/* التهديد markers — the board-state warning pair, independent of any
+            voice line (they live as long as the threat persists, exactly like
+            a safe-star badge). Target = amber "!" danger beacon (anxious),
+            attacker = crimson target-lock reticle (predatory). Rendered ON
+            TOP of the piece body (after the body closes) so they read as a
+            foreground alert mounted on the pawn — the deliberate opposite of
+            the moveable halo and capture echo, which live *behind* the pawn.
+            pointerEvents-none so tap hit-areas are unchanged, and inside the
+            stack-scale group so they shrink with the pawn. */}
+        <AnimatePresence>
+          {threatRole === 'target' && (
+            <ThreatTargetBeacon
+              key="threat-target"
+              badge={threatTargetTok.badge}
+              mark={threatTargetTok.mark}
+              rim={threatTargetTok.rim}
+              reduced={!!pulseReduced}
+            />
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {threatRole === 'attacker' && (
+            <ThreatLockReticle
+              key="threat-attacker"
+              frame={threatAttackerTok.frame}
+              rim={threatAttackerTok.rim}
+              reduced={!!pulseReduced}
+            />
+          )}
+        </AnimatePresence>
       </motion.g>
       </motion.g>
     </motion.g>
