@@ -1235,13 +1235,6 @@ const SpeakingPawnPulse = memo(function SpeakingPawnPulse({
 //     watching pulse (opacity) is the motion signature — menacing, never
 //     the beacon's nervous tremble and never a "tap me" halo.
 //
-//   • a *hunt thread* between the pair — a hairline that follows the 1–2
-//     main-path squares from attacker to target (so an L-corner never cuts
-//     diagonally across unrelated cells). Secondary by design: the two
-//     glyphs remain the primary read; the thread just ties them as one
-//     situation. Under reduced motion (or the Neon exit-modal pause) the
-//     eye and the thread hold still as calm static shapes, never absent.
-//
 // Both glyphs are deliberately hard-edged and avoid any soft radial glow,
 // breathing ring, or round sonar silhouette — the three things the moveable
 // halo and the capture echo share — so the threat reads at a glance. Colours
@@ -1279,10 +1272,6 @@ const THREAT_EYE_Y  = -0.60;   // matches THREAT_BEACON_Y (clears Neon antenna +
 const THREAT_EYE_W  = 0.38;    // almond width
 const THREAT_EYE_H  = 0.22;    // almond height
 const THREAT_EYE_S  = 1.66;    // slow "watching" rhythm (was the reticle lock beat)
-
-// Hunt thread — a hairline that walks the main-path cells between the pair.
-const THREAT_THREAD_INSET = 0.32;  // pull endpoints off the pawn centres
-const THREAT_THREAD_S     = 2.40;  // dash crawl period (motion only)
 
 /** Which half of a threat pair a pawn carries. */
 type ThreatRole = 'target' | 'attacker';
@@ -1395,92 +1384,6 @@ const ThreatPredatorEye = memo(function ThreatPredatorEye({
         <ellipse cx={-hw * 0.22} cy={-hh * 0.28} rx={hw * 0.16} ry={hh * 0.18}
           fill="white" fillOpacity="0.38" />
       </motion.g>
-    </motion.g>
-  );
-});
-
-// Walk the main-path cells from attacker → target (1 or 2 squares along the
-// target's forward direction). Returns cell-centre SVG points, or null when
-// the pair isn't a legal on-track threat (shouldn't happen — detectThreats
-// already gated this — but we refuse to draw a stray diagonal).
-function threatThreadPoints(attacker: E.Piece, target: E.Piece): [number, number][] | null {
-  if (attacker.relPos < 0 || attacker.relPos >= E.TRACK_SIZE) return null;
-  if (target.relPos < 0 || target.relPos >= E.TRACK_SIZE) return null;
-  const aAbs = (E.PLAYER_STARTS[attacker.player] + attacker.relPos) % E.MAIN_PATH_SIZE;
-  const tAbs = (E.PLAYER_STARTS[target.player] + target.relPos) % E.MAIN_PATH_SIZE;
-  const dist = (tAbs - aAbs + E.MAIN_PATH_SIZE) % E.MAIN_PATH_SIZE;
-  if (dist !== 1 && dist !== 2) return null;
-  const pts: [number, number][] = [];
-  for (let i = 0; i <= dist; i++) {
-    const [r, c] = E.MAIN_PATH[(aAbs + i) % E.MAIN_PATH_SIZE];
-    pts.push([c + 0.5, r + 0.5]);
-  }
-  return pts;
-}
-
-function insetPolyline(pts: [number, number][], inset: number): [number, number][] {
-  if (pts.length < 2) return pts;
-  const out = pts.map(([x, y]) => [x, y] as [number, number]);
-  const trim = (from: number, toward: number) => {
-    const [x0, y0] = out[from];
-    const [x1, y1] = out[toward];
-    const d = Math.hypot(x1 - x0, y1 - y0) || 1;
-    const t = Math.min(inset / d, 0.42);
-    out[from] = [x0 + (x1 - x0) * t, y0 + (y1 - y0) * t];
-  };
-  trim(0, 1);
-  trim(out.length - 1, out.length - 2);
-  return out;
-}
-
-interface ThreatThreadSpec {
-  key: string;
-  d: string;
-  x1: number; y1: number; x2: number; y2: number;
-}
-
-const ThreatHuntThread = memo(function ThreatHuntThread({
-  spec, from, to, reduced,
-}: {
-  spec: ThreatThreadSpec;
-  from: string; // attacker crimson
-  to: string;   // target amber — the thread is the colour bridge
-  reduced: boolean;
-}) {
-  const gid = `threat-thread-${spec.key.replace(/[^0-9a-z]+/gi, '-')}`;
-  return (
-    <motion.g pointerEvents="none" aria-hidden
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeOut' } }}
-      exit={{ opacity: 0, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeIn' } }}>
-      <defs>
-        <linearGradient id={gid} x1={spec.x1} y1={spec.y1} x2={spec.x2} y2={spec.y2} gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor={from} />
-          <stop offset="100%" stopColor={to} />
-        </linearGradient>
-      </defs>
-      {/* Soft under-glow — faint enough that it never competes with the glyphs. */}
-      <path d={spec.d} fill="none" stroke={`url(#${gid})`}
-        strokeWidth={0.14} strokeLinecap="round" strokeLinejoin="round" opacity={0.18} />
-      {/* Hairline thread. Reduced motion: a calm solid stroke. Motion: a
-          very slow dash crawl so the link feels alive without drawing the
-          eye away from the two icons. */}
-      <motion.path d={spec.d} fill="none" stroke={`url(#${gid})`}
-        strokeWidth={0.028} strokeLinecap="round" strokeLinejoin="round"
-        strokeDasharray={reduced ? undefined : '0.14 0.10'}
-        initial={{ opacity: 0 }}
-        animate={reduced
-          ? { opacity: 0.55 }
-          : {
-              opacity: [0.38, 0.62, 0.38],
-              strokeDashoffset: [0, -0.48],
-              transition: {
-                opacity: { duration: THREAT_THREAD_S, repeat: Infinity, ease: 'easeInOut' },
-                strokeDashoffset: { duration: THREAT_THREAD_S, repeat: Infinity, ease: 'linear' },
-              },
-            }}
-        transition={reduced ? { duration: 0.18, ease: 'easeOut' } : undefined}
-      />
     </motion.g>
   );
 });
@@ -1810,7 +1713,7 @@ const PawnToken = memo(function PawnToken({
   showSafeStar?: boolean; // Neon-only: this pawn is alone on a safe-star cell → renders its own glowing badge on the pawn. Classic/DZ ignore this prop — their safe-space icons are permanent cell fixtures that never attach to a pawn. Defaults to false.
   paused?: boolean; // Neon exit-modal pause: freeze the piece (see SETTLE_TRANSITION). Always false for Classic/DZ.
   speakPulse?: SpeakingKind | null; // capture voice speaking echo: 'primary' while the captor's line is audible, 'reply' while the victim's reply is audible, null otherwise. See CaptureSpeakPulseTarget.
-  threatRole?: ThreatRole | null; // التهديد board-state marker: 'target' = this piece is under threat (amber "!" danger beacon), 'attacker' = this piece threatens someone (crimson predatory-eye glyph), null = no threat involvement. See ThreatTargetBeacon / ThreatPredatorEye. The hunt thread between the pair is drawn at board level (ThreatHuntThread), not on the pawn.
+  threatRole?: ThreatRole | null; // التهديد board-state marker: 'target' = this piece is under threat (amber "!" danger beacon), 'attacker' = this piece threatens someone (crimson predatory-eye glyph), null = no threat involvement. See ThreatTargetBeacon / ThreatPredatorEye.
 }) {
   const baseCtrl  = useAnimationControls();
   const arcCtrl   = useAnimationControls();
@@ -2337,8 +2240,7 @@ const PawnToken = memo(function PawnToken({
             foreground alert mounted on the pawn — the deliberate opposite of
             the moveable halo and capture echo, which live *behind* the pawn.
             pointerEvents-none so tap hit-areas are unchanged, and inside the
-            stack-scale group so they shrink with the pawn. The hunt thread
-            that ties the pair lives at board level (see ThreatHuntThread). */}
+            stack-scale group so they shrink with the pawn. */}
         <AnimatePresence>
           {threatRole === 'target' && (
             <ThreatTargetBeacon
@@ -2740,9 +2642,6 @@ const BoardSVG = memo(function BoardSVG({
   const isDz        = boardStyle === 'dz';
   // Neon exit-modal pause — always false for Classic/DZ (see BoardSVGProps).
   const isPaused = paused === true;
-  // Hunt-thread / predator-eye stillness: user reduced-motion OR the Neon
-  // exit-modal pause. Calm static fallback, never absent.
-  const threatThreadReduced = !!(useReducedMotion() || isPaused);
   // Classic palette: uses module-level CL_SOLID / CL_LIGHT / CL_BORDER / CL_ARROW
   // DZ palette: uses ../lib/board-theme-dz (Phase 1 — base colors only)
   const pieces      = game.pieces;
@@ -2779,37 +2678,6 @@ const BoardSVG = memo(function BoardSVG({
     }
     return roles;
   }, [pieces, game.winner]);
-
-  // Hunt-thread polylines for every live threat pair. Cell-centre routing
-  // (not stacked pawn XY) so the line follows the path squares rather than
-  // cutting a chord across the board; endpoints are inset so they don't
-  // run through the pawn bodies.
-  const threatThreads = useMemo<ThreatThreadSpec[]>(() => {
-    if (game.winner !== null) return [];
-    const byRef = (ref: E.PieceRef) =>
-      pieces.find(p => p.player === ref.player && p.index === ref.index);
-    const threads: ThreatThreadSpec[] = [];
-    for (const pair of E.detectThreats(pieces)) {
-      const attacker = byRef(pair.attacker);
-      const target = byRef(pair.target);
-      if (!attacker || !target) continue;
-      const raw = threatThreadPoints(attacker, target);
-      if (!raw || raw.length < 2) continue;
-      const pts = insetPolyline(raw, THREAT_THREAD_INSET);
-      const [x1, y1] = pts[0];
-      const [x2, y2] = pts[pts.length - 1];
-      threads.push({
-        key: E.threatSignature(pair),
-        d: pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${x},${y}`).join(' '),
-        x1, y1, x2, y2,
-      });
-    }
-    return threads;
-  }, [pieces, game.winner]);
-
-  const threatTheme = isClassic ? 'classic' : isDz ? 'dz' : 'neon';
-  const threatTargetTok   = THREAT_TARGET_TOKENS[threatTheme];
-  const threatAttackerTok = THREAT_ATTACKER_TOKENS[threatTheme];
 
   // Per-cell occupant counts (main path / home column only) — drives every
   // theme's safe-star cell 0 / 1 / 2+ occupant states below. Keyed the same
@@ -4385,21 +4253,6 @@ const BoardSVG = memo(function BoardSVG({
           onDone={() => onDzSparkleDone(sparkle.id)}
         />
       ))}
-
-      {/* ── Threat hunt threads — sit on the board, under the pawns, so the
-          pair is tied without covering the two glyphs. Path-routed (not a
-          straight chord) and pointer-events none. */}
-      <AnimatePresence>
-        {threatThreads.map(spec => (
-          <ThreatHuntThread
-            key={spec.key}
-            spec={spec}
-            from={threatAttackerTok.frame}
-            to={threatTargetTok.badge}
-            reduced={threatThreadReduced}
-          />
-        ))}
-      </AnimatePresence>
 
       {/* ── Pieces ── each PawnToken manages its own dual-control animation ── */}
       {piecePositions.map(({ player, index, xy: [fx, fy], stackScale, showSafeStar }) => {
