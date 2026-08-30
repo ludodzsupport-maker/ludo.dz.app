@@ -258,6 +258,53 @@ export function threatSignature(pair: ThreatPair): string {
   return `${pair.attacker.player}:${pair.attacker.index}>${pair.target.player}:${pair.target.index}`;
 }
 
+export interface ThreatDiff {
+  /**
+   * Pairs that did not exist before this move — freshly created threats
+   * (التهديد). Returned in `next` scan order, so the caller can speak for a
+   * deterministic piece when several appear at once.
+   */
+  created: ThreatPair[];
+  /**
+   * Pairs that existed before this move and no longer exist — *resolved*
+   * threats (الهروب): the target is out of its attacker's 1-2 square range,
+   * whether it moved away, the attacker moved away, or the target reached a
+   * square that cannot be captured on. Returned in `previous` scan order.
+   *
+   * This is only the geometric half of an escape. A threatened piece that was
+   * *captured* by the move also disappears from the threat set, and that is
+   * الأكل, not an escape — the caller filters those out (the target is back in
+   * base, `relPos === -1`).
+   */
+  resolved: ThreatPair[];
+}
+
+/**
+ * Diff two threat sets by pair signature. Pure, turn/dice-free — exactly like
+ * `detectThreats`, the caller decides when to scan and what each half means.
+ * Both halves come from one pass so the two events that share a threat
+ * relationship (التهديد / الهروب) are always derived from the same snapshot.
+ */
+export function diffThreats(
+  previous: readonly ThreatPair[],
+  next: readonly ThreatPair[],
+): ThreatDiff {
+  const before = new Map(previous.map(pair => [threatSignature(pair), pair]));
+  const after = new Set(next.map(pair => threatSignature(pair)));
+
+  const created: ThreatPair[] = [];
+  for (const pair of next) {
+    if (!before.has(threatSignature(pair))) created.push(pair);
+  }
+
+  const resolved: ThreatPair[] = [];
+  for (const pair of previous) {
+    if (!after.has(threatSignature(pair))) resolved.push(pair);
+  }
+
+  return { created, resolved };
+}
+
 // ── Game lifecycle ─────────────────────────────────────────────────────────
 export function createGame(numPlayers: number, pawnsPerPlayer = 4, playerSlots?: readonly number[]): GameState {
   const rawSlots = playerSlots ?? Array.from({ length: numPlayers }, (_, i) => i);
