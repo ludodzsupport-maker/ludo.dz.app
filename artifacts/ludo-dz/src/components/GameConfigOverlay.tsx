@@ -6,6 +6,7 @@ import { supportsDvh } from "../lib/utils";
 import { readSavedGame, type SavedGameSnapshot } from "../lib/saved-game";
 import type { BoardStyle } from "../App";
 import * as DZ from "../lib/board-theme-dz";
+import * as NM from "../lib/board-theme-normal";
 import { MascotCharacter } from "./MascotCharacter";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -333,6 +334,7 @@ const CLASSIC_PLAYER_COLORS = ["#C31024", "#1542B0", "#E8A800", "#1C6B2E"];
 function themePlayerColors(boardStyle: BoardStyle): readonly string[] {
   if (boardStyle === "dz") return DZ.HOME_COLORS;
   if (boardStyle === "classic") return CLASSIC_PLAYER_COLORS;
+  if (boardStyle === "normal") return NM.HOME_COLORS;
   return PLAYER_COLORS;
 }
 

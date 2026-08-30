@@ -6,6 +6,7 @@ import { LoadingOverlay } from "./LoadingOverlay";
 
 import type { BoardStyle } from '../App';
 import * as DZ from '../lib/board-theme-dz';
+import * as NM from '../lib/board-theme-normal';
 import {
   isSoundEnabled,
   setSoundEnabled,
@@ -65,6 +66,7 @@ const T = {
     neonBoard:       "Neon Board",
     classicBoard:    "Classic Board",
     dzBoard:         "DZ Board",
+    normalBoard:     "Normal Board",
 
     sectionAbout: "À propos",
     about:       "Ludo DZ",
@@ -102,6 +104,7 @@ const T = {
     neonBoard:       "نيون بورد",
     classicBoard:    "بورد كلاسيكي",
     dzBoard:         "لوحة DZ",
+    normalBoard:     "البورد العادي",
 
     sectionAbout: "حول اللعبة",
     about:       "لودو DZ",
@@ -661,10 +664,12 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                   ? { background: "rgba(0,255,238,0.15)", color: "#00FFEE", border: "1px solid rgba(0,255,238,0.32)", letterSpacing: "0.08em" }
                   : boardStyle === 'classic'
                   ? { background: "rgba(180,130,40,0.18)", color: "#C8960A", border: "1px solid rgba(180,130,40,0.40)", letterSpacing: "0.08em" }
-                  : { background: "rgba(0,98,51,0.20)", color: "#C9A227", border: "1px solid rgba(0,98,51,0.45)", letterSpacing: "0.08em" }
+                  : boardStyle === 'dz'
+                  ? { background: "rgba(0,98,51,0.20)", color: "#C9A227", border: "1px solid rgba(0,98,51,0.45)", letterSpacing: "0.08em" }
+                  : { background: "rgba(68,114,196,0.20)", color: "#4472C4", border: "1px solid rgba(68,114,196,0.45)", letterSpacing: "0.08em" }
                 }
               >
-                {boardStyle === 'neon' ? t.neonBoard : boardStyle === 'classic' ? t.classicBoard : t.dzBoard}
+                {boardStyle === 'neon' ? t.neonBoard : boardStyle === 'classic' ? t.classicBoard : boardStyle === 'dz' ? t.dzBoard : t.normalBoard}
               </span>
 
               <motion.div
@@ -910,6 +915,82 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                         style={{ background: boardStyle === 'dz' ? "#C9A227" : "rgba(255,255,255,0.12)" }}
                       >
                         {boardStyle === 'dz' ? <Check className="w-3 h-3 text-black" strokeWidth={3} /> : null}
+                      </div>
+                    </motion.button>
+
+                    {/* ── Normal Board option ── */}
+                    <motion.button
+                      onClick={() => { playSelection(); handlePickBoardStyle("normal"); }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl relative overflow-hidden mt-2"
+                      style={boardStyle === 'normal' ? {
+                        background: "rgba(68,114,196,0.16)",
+                        border: "1px solid rgba(68,114,196,0.55)",
+                        boxShadow: "0 0 18px rgba(68,114,196,0.18)",
+                      } : {
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                      }}
+                    >
+                      {boardStyle === 'normal' && (
+                        <motion.div
+                          className="absolute inset-0"
+                          layoutId="activeBoardBg"
+                          style={{ background: "rgba(68,114,196,0.07)" }}
+                        />
+                      )}
+                      {/* Mini Normal board thumbnail — flat, saturated, standard Ludo */}
+                      <div className="relative z-10 flex-shrink-0 rounded-lg overflow-hidden"
+                        style={boardStyle === 'normal'
+                          ? { boxShadow: "0 0 10px rgba(68,114,196,0.35)", border: "1px solid rgba(68,114,196,0.40)" }
+                          : { border: "1px solid rgba(255,255,255,0.14)" }}>
+                        <svg viewBox="0 0 60 60" width="42" height="42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <rect width="60" height="60" fill={NM.PATH_WHITE}/>
+                          {/* Corner home areas — TL=P0, TR=P1, BR=P2, BL=P3 (matches engine corner assignment) */}
+                          <rect x="1"  y="1"  width="22" height="22" rx="2" fill={NM.HOME_COLORS[0]}/>
+                          <rect x="37" y="1"  width="22" height="22" rx="2" fill={NM.HOME_COLORS[1]}/>
+                          <rect x="37" y="37" width="22" height="22" rx="2" fill={NM.HOME_COLORS[2]}/>
+                          <rect x="1"  y="37" width="22" height="22" rx="2" fill={NM.HOME_COLORS[3]}/>
+                          {/* White home-base insets */}
+                          <rect x="3"   y="3"   width="18" height="18" rx="1.5" fill={NM.HOME_INSET}/>
+                          <rect x="39"  y="3"   width="18" height="18" rx="1.5" fill={NM.HOME_INSET}/>
+                          <rect x="39"  y="39"  width="18" height="18" rx="1.5" fill={NM.HOME_INSET}/>
+                          <rect x="3"   y="39"  width="18" height="18" rx="1.5" fill={NM.HOME_INSET}/>
+                          {/* White cross lanes */}
+                          <rect x="23" y="1"  width="14" height="58" fill={NM.PATH_WHITE}/>
+                          <rect x="1"  y="23" width="58" height="14" fill={NM.PATH_WHITE}/>
+                          {/* Home-stretch tints (top=P0, bottom=P1, left=P3, right=P2) */}
+                          <rect x="25" y="1"  width="10" height="20" fill={NM.STRIP_COLORS[0]}/>
+                          <rect x="25" y="39" width="10" height="20" fill={NM.STRIP_COLORS[1]}/>
+                          <rect x="1"  y="25" width="20" height="10" fill={NM.STRIP_COLORS[3]}/>
+                          <rect x="39" y="25" width="20" height="10" fill={NM.STRIP_COLORS[2]}/>
+                          {/* Center — flat white with four flat triangles */}
+                          <rect x="23" y="23" width="14" height="14" fill={NM.PATH_WHITE}/>
+                          <polygon points="23,23 37,23 30,30" fill={NM.HOME_COLORS[0]}/>
+                          <polygon points="37,23 37,37 30,30" fill={NM.HOME_COLORS[2]}/>
+                          <polygon points="37,37 23,37 30,30" fill={NM.HOME_COLORS[3]}/>
+                          <polygon points="23,37 23,23 30,30" fill={NM.HOME_COLORS[1]}/>
+                          {/* Flat hairline grid */}
+                          <line x1="23" y1="0" x2="23" y2="60" stroke={NM.PATH_HAIRLINE} strokeWidth="0.7"/>
+                          <line x1="37" y1="0" x2="37" y2="60" stroke={NM.PATH_HAIRLINE} strokeWidth="0.7"/>
+                          <line x1="0" y1="23" x2="60" y2="23" stroke={NM.PATH_HAIRLINE} strokeWidth="0.7"/>
+                          <line x1="0" y1="37" x2="60" y2="37" stroke={NM.PATH_HAIRLINE} strokeWidth="0.7"/>
+                          {/* Flat outer border */}
+                          <rect x="0.5" y="0.5" width="59" height="59" rx="2" stroke={NM.BORDER_DARK} strokeWidth="1.4" fill="none"/>
+                        </svg>
+                      </div>
+                      <span
+                        className="font-heading font-bold relative z-10 flex-1 px-3"
+                        style={{ fontSize: "14px", color: boardStyle === 'normal' ? "#4472C4" : "rgba(255,255,255,0.55)", letterSpacing: "0.08em" }}
+                      >
+                        {t.normalBoard}
+                      </span>
+                      <div
+                        className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 relative z-10"
+                        style={{ background: boardStyle === 'normal' ? "#4472C4" : "rgba(255,255,255,0.12)" }}
+                      >
+                        {boardStyle === 'normal' ? <Check className="w-3 h-3 text-white" strokeWidth={3} /> : null}
                       </div>
                     </motion.button>
                   </div>
