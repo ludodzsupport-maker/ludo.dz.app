@@ -29,10 +29,24 @@ import { setSfxDucking } from './sound-manager';
 // is cancelled) by the same remaining-wait rule as exits. Near-simultaneous
 // threats coalesce into one line using the same run shape as captures — see
 // the threat branch in `playVoiceLine`.
+//
+// `الهروب` (escape) closes the threat relationship: it fires when a piece that
+// was under threat is no longer inside its attacker's 1-2 square range. It is
+// queue-tier like `التهديد` and shares its coalescing run rule, with three
+// behaviours of its own:
+//   • it **waits out a playing `التهديد` line**: the escape is the resolution of
+//     the warning that line is announcing, so it never interrupts it and never
+//     overlaps it — it plays immediately once the threat line ends naturally,
+//     however much of it was left;
+//   • it **outranks `إخراج_بيدق` in the queue** (see `insertEscapeByPriority`):
+//     when the two contend for the same slot, the escape plays (or queues
+//     ahead) and the exit yields, even though `إخراج_بيدق` is the baseline
+//     queue-and-wait event;
+//   • like every queue-tier event it never interrupts anything else.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Registered voice events. The key is the Arabic folder name under `voice/`. */
-export const VOICE_EVENTS = ['بداية_اللعبة', 'إخراج_بيدق', 'الأكل', 'التهديد'] as const;
+export const VOICE_EVENTS = ['بداية_اللعبة', 'إخراج_بيدق', 'الأكل', 'التهديد', 'الهروب'] as const;
 export type VoiceLineEvent = (typeof VOICE_EVENTS)[number];
 
 /** Arabic display label for each registered event. */
@@ -41,6 +55,7 @@ export const VOICE_EVENT_LABELS: Readonly<Record<VoiceLineEvent, string>> = {
   'إخراج_بيدق': 'إخراج بيدق',
   'الأكل': 'الأكل',
   'التهديد': 'التهديد',
+  'الهروب': 'الهروب',
 };
 
 // Trigger identifiers still referenced by existing game logic that have not
@@ -167,6 +182,14 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
  * beat?") for the identical class of line — the measured reply pools sit at
  * ~1.9-7.7 s, the same class as primary lines — so a second threshold would
  * just create a second knob for the same question.
+ *
+ * The same constant also governs `التهديد`'s and `الهروب`'s coalescing — see
+ * the threat and escape branches in `playVoiceLine`. Threat and escape are two
+ * halves of one relationship (a pair appears, a pair is resolved), they fire
+ * from the same board scan, and their pools are the same class of line, so
+ * giving them the same "one conversational beat" window keeps one knob for one
+ * question and makes the pair behave symmetrically. Only `الأكل` — the event
+ * the player most wants heard — widens it, with CAPTURE_COALESCE_MAX_WAIT_MS.
  */
 export const EXIT_QUEUE_MAX_WAIT_MS = 1200;
 
@@ -572,6 +595,14 @@ const CAPTURE_EVENT = 'الأكل' as const;
  */
 const THREAT_EVENT = 'التهديد' as const;
 
+/**
+ * The escape event — queue-tier too, and the closing half of the threat
+ * relationship (a previously threatened piece is out of range). It waits out a
+ * playing `التهديد` line instead of competing with it, and it outranks
+ * `إخراج_بيدق` in the queue — see `insertEscapeByPriority`.
+ */
+const ESCAPE_EVENT = 'الهروب' as const;
+
 function isExitEvent(event: VoiceLineTrigger): event is typeof EXIT_EVENT {
   return isRegisteredEvent(event) && event === EXIT_EVENT;
 }
@@ -623,6 +654,53 @@ function hasForeignVoiceEventInPath(relativeTo?: VoiceLineEvent): boolean {
 /** True when another line of the given event is waiting to play, i.e. that run continues. */
 function hasQueuedRunLine(event: VoiceLineEvent): boolean {
   return queue.some(queued => queued.kind === 'event' && queued.event === event);
+}
+
+/**
+ * Queue-tier ordering, first-to-speak:
+ *
+ *   `الأكل` (interrupts everything; even when stacked it keeps the head of the
+ *   queue) → a reply line → **`الهروب`** → every other queue-tier event
+ *   (`إخراج_بيدق`, `التهديد`, …).
+ *
+ * `الهروب` sits above `إخراج_بيدق` because the two constantly contend for the
+ * same slot: both are fired from the same move resolution, and an escape is the
+ * board-specific beat — it describes a moment that has *already* happened and
+ * is being pointed at by a one-shot marker — while `إخراج_بيدق` is a social
+ * aside that still reads fine one line later. So when the two collide, the
+ * escape plays (or queues ahead of it), and if the queue is at MAX_QUEUE_SIZE
+ * with `إخراج_بيدق` holding the last slot, the exit yields that slot outright
+ * rather than pushing the escape out. A dropped exit line never starts, so it
+ * never reserves a reply of its own; any reply already reserved by the exit
+ * line that is *playing* is dropped by the generic foreign-event rule
+ * (`hasForeignVoiceEventInPath`) when that line ends — never delayed.
+ */
+function insertEscapeByPriority(line: QueuedLine): void {
+  // Skip past the entries that outrank an escape: الأكل and reply lines.
+  let insertAt = 0;
+  while (insertAt < queue.length) {
+    const entry = queue[insertAt];
+    const outranksEscape = entry.kind === 'reply'
+      || (entry.kind === 'event' && entry.event === CAPTURE_EVENT);
+    if (!outranksEscape) break;
+    insertAt++;
+  }
+
+  // Queue full: `إخراج_بيدق` yields its slot so the escape is never the line
+  // that gets dropped by the cap.
+  if (queue.length >= MAX_QUEUE_SIZE) {
+    const exitAt = queue.findIndex(q => q.kind === 'event' && q.event === EXIT_EVENT);
+    if (exitAt !== -1) {
+      queue.splice(exitAt, 1);
+      if (exitAt < insertAt) insertAt--;
+    }
+  }
+
+  // Still full (no exit line to yield): the ordinary cap applies, same as every
+  // other queue-tier event.
+  if (queue.length >= MAX_QUEUE_SIZE) return;
+
+  queue.splice(insertAt, 0, line);
 }
 
 /**
@@ -1142,6 +1220,67 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
       }
       // Longer remaining wait → the burst is combined into the line already
       // playing (and any stale queued threat line is dropped by the filter).
+      return;
+    }
+
+    // Voice is idle: play immediately.
+    const clip = pickRandomClip(event);
+    if (!clip) return;
+    playClip({ kind: 'event', event, options: context ?? {} }, clip);
+    return;
+  }
+
+  // ── `الهروب` — queue-tier escape event (the mirror of `التهديد`) ──────────
+  // An escape is the resolution of a threat the board was already tracking: a
+  // piece that was inside an attacker's 1-2 square range is out of it now. It
+  // never interrupts anything, and it is shaped by three rules:
+  //
+  // 1. It waits out a playing `التهديد` line. The escape is the *answer* to the
+  //    warning that line is announcing, so cutting it short would be nonsense:
+  //    whatever the threat line has left, the escape queues and plays the
+  //    instant the threat line ends on its own. Never overlapping, never
+  //    interrupting — the two lines read as one exchange.
+  //
+  // 2. It coalesces like every other run event, reusing EXIT_QUEUE_MAX_WAIT_MS
+  //    (same "one conversational beat" question as the threat branch, see that
+  //    constant): how much of the line that is currently playing is left
+  //    decides whether this escape shares that line or gets its own.
+  //       • short remaining wait → separate beats: a fresh (different-clip)
+  //         escape line is queued and plays once the current line has fully
+  //         finished;
+  //       • long remaining wait → one combined beat: whatever is playing
+  //         already speaks for this escape too (and, when a foreign line is
+  //         playing, the escape is stale and dropped instead).
+  //
+  // 3. It outranks `إخراج_بيدق` when the two contend for the queue — see
+  //    `insertEscapeByPriority`.
+  //
+  // No speaker-based cancellation here (same as the threat branch): the call
+  // site already gates re-fires to threat pairs that genuinely resolved, so the
+  // remaining-wait coalescing above is the only suppression this event needs.
+  if (event === ESCAPE_EVENT) {
+    // Empty pool = safe no-op: never queue, and never disturb a line that is
+    // already waiting, just to leave silence. (The folder ships empty until the
+    // clips are recorded.)
+    if ((eventPools.get(event) ?? []).length === 0) return;
+
+    if (isVoiceBusy()) {
+      // At most one `الهروب` line may ever wait in the queue — a newer escape
+      // re-owns the pending slot (its speaker/piece follow the newest piece
+      // that actually got away).
+      queue = queue.filter(q => !(q.kind === 'event' && q.event === ESCAPE_EVENT));
+
+      const waitingOnThreatLine = activeLineInfo?.event === THREAT_EVENT;
+      const remainingWaitMs = getActiveLineRemainingMs();
+
+      // Rule 1 (a playing threat line is waited out in full) OR rule 2 (the
+      // current line finishes within one conversational beat).
+      if (waitingOnThreatLine || remainingWaitMs <= EXIT_QUEUE_MAX_WAIT_MS) {
+        insertEscapeByPriority({ kind: 'event', event, options: context ?? {} });
+      }
+      // Otherwise: one combined beat (an `الهروب` line already playing speaks
+      // for this escape too) or a stale line (anything else still has a long
+      // way to run) — both are covered by the filter above clearing the queue.
       return;
     }
 

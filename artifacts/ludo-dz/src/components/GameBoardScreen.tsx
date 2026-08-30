@@ -1388,6 +1388,185 @@ const ThreatPredatorEye = memo(function ThreatPredatorEye({
   );
 });
 
+// ─── Escape marker (الهروب) ────────────────────────────────────────────────────
+// The closing half of the التهديد pair — and the mirror image of it in every
+// respect:
+//
+//   • The threat markers are a *state*: they live exactly as long as the danger
+//     does (an amber "!" beacon on the threatened piece, a crimson predator eye
+//     on the attacker). An escape is a *moment*: the threatened piece has
+//     slipped out of its attacker's 1-2 square range and the tension broke. So
+//     this marker plays once, on the escaping piece, and dissolves — it is
+//     never a persistent badge.
+//
+//   • Same icon language as the threat pair — board-level per-theme tokens, a
+//     filled badge above the crown with a pale rim, a soft contact shadow, a
+//     top-left sheen, dark ink inside — but every cue is inverted: merged soft
+//     lobes instead of the triangle's hard warning edges, cool sea-glass mint
+//     instead of amber / crimson hazard, a single drifting exhale instead of a
+//     looping nervous tremble or a slow watching pulse.
+//
+//   • Deliberately *not* celebratory — no star, no burst, no ring, no upward
+//     "win" pop: those belong to the capture VFX. This reads as released
+//     tension, the board taking a breath.
+//
+// Placement is offset to the upper-right of the crown instead of dead-centre
+// like the threat glyphs, because the same piece can escape one attacker and
+// fall under another's in the same move — the two markers have to be able to
+// coexist on one pawn without stacking on each other.
+const ESCAPE_RELIEF_TOKENS = {
+  classic: { puff: '#17917E', wisp: '#25A48E', ink: '#04241E', rim: '#D6F5ED' },
+  dz:      { puff: '#4CBEA6', wisp: '#6CDCC4', ink: '#03382C', rim: '#E8FBF5' },
+  neon:    { puff: '#4BDCBA', wisp: '#79FFE1', ink: '#04291F', rim: '#E5FFF8' },
+} as const;
+
+// Drawn as a union of same-fill circles over a rounded base, so the silhouette
+// has no internal seams; the pale rim is the very same union grown by
+// ESCAPE_RIM_W and drawn behind the fill, which keeps one clean outline without
+// stroking every lobe.
+const ESCAPE_RIM_W   = 0.017;
+const ESCAPE_LOBES = [
+  { cx: -0.092, cy:  0.004, r: 0.062 },
+  { cx:  0.000, cy: -0.042, r: 0.092 },
+  { cx:  0.092, cy:  0.004, r: 0.062 },
+] as const;
+const ESCAPE_BASE = { x: -0.150, y: 0.004, w: 0.300, h: 0.072, rx: 0.036 } as const;
+
+// Sized to sit at the same weight as the threat glyphs (~0.32 × 0.24 board
+// units) so both halves of the pair read identically on a phone pawn.
+const ESCAPE_PUFF_X  =  0.32;   // off the upper-right shoulder of the crown (the threat glyphs own dead-centre)
+const ESCAPE_PUFF_Y  = -0.60;   // same mounted-alert height as THREAT_BEACON_Y
+const ESCAPE_DRIFT_X =  0.028;  // the breath slips sideways as it thins out…
+const ESCAPE_DRIFT_Y =  0.075;  // …and rises
+const ESCAPE_PUFF_HOLD_MS = 950; // one exhale: bloom → drift → dissolve
+const ESCAPE_PUFF_FADE_S  = 0.30; // unmount fade (AnimatePresence exit)
+
+const EscapeReliefMarker = memo(function EscapeReliefMarker({
+  puff, wisp, ink, rim, reduced, onDone,
+}: {
+  puff: string;    // cloud fill — cool relief mint
+  wisp: string;    // the two wisps of escaping air
+  ink: string;     // the exhale curls inside the cloud
+  rim: string;     // pale rim + sheen
+  reduced: boolean; // prefers-reduced-motion, or the Neon exit-modal stillness
+  onDone: () => void; // fires once, when the exhale has finished
+}) {
+  // Armed exactly once per marker: a parent re-render (the pawn is still
+  // settling onto its tile) must never restart the exhale mid-flight.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  useEffect(() => {
+    const t = setTimeout(() => onDoneRef.current(), ESCAPE_PUFF_HOLD_MS);
+    return () => clearTimeout(t);
+  }, []);
+
+  const holdS = ESCAPE_PUFF_HOLD_MS / 1000;
+
+  return (
+    <motion.g pointerEvents="none" aria-hidden
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: reduced ? 0.16 : 0.14, ease: 'easeOut' } }}
+      exit={{ opacity: 0, transition: { duration: ESCAPE_PUFF_FADE_S, ease: 'easeIn' } }}>
+      {/* Drift — one slow exhale away from the crown. x/y are motion-owned, so
+          the group never fights the pawn's own transform pipeline, and the
+          translation lives outside the scale group below so the two compose. */}
+      <motion.g
+        initial={{ x: ESCAPE_PUFF_X, y: ESCAPE_PUFF_Y }}
+        animate={{
+          x: reduced ? ESCAPE_PUFF_X : ESCAPE_PUFF_X + ESCAPE_DRIFT_X,
+          y: reduced ? ESCAPE_PUFF_Y : ESCAPE_PUFF_Y - ESCAPE_DRIFT_Y,
+        }}
+        transition={reduced
+          ? { duration: 0.16, ease: 'easeOut' }
+          : { duration: holdS, ease: 'easeOut' }}
+      >
+        {/* Bloom + dissolve — the breath swells once and thins out to nothing.
+            No repeat: a one-shot cue, not a state marker. The group is centred
+            on (0,0), so scaling grows the puff from its own middle. */}
+        <motion.g
+          initial={{ scale: 0.84, opacity: 0 }}
+          animate={reduced
+            ? { scale: 1, opacity: 0.95 }
+            : { scale: [0.84, 1, 1.03, 1.06], opacity: [0, 0.95, 0.92, 0] }}
+          transition={reduced
+            ? { duration: 0.20, ease: 'easeOut' }
+            : { duration: holdS, times: [0, 0.18, 0.62, 1], ease: 'easeOut' }}
+        >
+          {/* Contact shadow — floats the puff off the board, same treatment as
+              the threat glyphs' shadow (never wider than the badge). */}
+          <ellipse cx={0} cy={0.098} rx={0.115} ry={0.026} fill="rgba(0,0,0,0.28)" />
+
+          {/* Rim pass — the silhouette grown by ESCAPE_RIM_W, behind the fill. */}
+          <g fill={rim}>
+            {ESCAPE_LOBES.map((lobe, i) => (
+              <circle key={i} cx={lobe.cx} cy={lobe.cy} r={lobe.r + ESCAPE_RIM_W} />
+            ))}
+            <rect
+              x={ESCAPE_BASE.x - ESCAPE_RIM_W}
+              y={ESCAPE_BASE.y - ESCAPE_RIM_W}
+              width={ESCAPE_BASE.w + ESCAPE_RIM_W * 2}
+              height={ESCAPE_BASE.h + ESCAPE_RIM_W * 2}
+              rx={ESCAPE_BASE.rx + ESCAPE_RIM_W}
+            />
+          </g>
+
+          {/* Cloud fill — three merged lobes over a rounded base. */}
+          <g fill={puff}>
+            {ESCAPE_LOBES.map((lobe, i) => (
+              <circle key={i} cx={lobe.cx} cy={lobe.cy} r={lobe.r} />
+            ))}
+            <rect
+              x={ESCAPE_BASE.x}
+              y={ESCAPE_BASE.y}
+              width={ESCAPE_BASE.w}
+              height={ESCAPE_BASE.h}
+              rx={ESCAPE_BASE.rx}
+            />
+          </g>
+
+          {/* The exhale — two curls of air inside the cloud. The lower one is
+              longer and flatter, the upper one shorter and steeper, and they
+              step to the right as they rise, so the pair reads as breath
+              leaving rather than as a face. Bold round caps keep them legible
+              at phone-pawn scale. */}
+          <path d="M -0.088,0.032 C -0.052,-0.006 -0.012,-0.006 0.024,0.018"
+            fill="none" stroke={ink} strokeWidth={0.028} strokeLinecap="round" />
+          <path d="M -0.030,-0.026 C -0.004,-0.052 0.026,-0.050 0.048,-0.022"
+            fill="none" stroke={ink} strokeWidth={0.022} strokeLinecap="round" />
+
+          {/* Top-left sheen — the same small cartoon hug the threat badge
+              carries, placed to stay inside the big lobe and clear of the ink. */}
+          <ellipse cx={-0.052} cy={-0.070} rx={0.032} ry={0.020} fill="white" fillOpacity="0.40" />
+
+          {/* Two wisps of escaping air — thin, translucent, off the cloud's
+              upper-right shoulder, gone by the end of the exhale. They carry
+              the direction of the breath (out and away). */}
+          <g fill="none" stroke={wisp} strokeLinecap="round">
+            <motion.path d="M 0.070,-0.126 Q 0.116,-0.162 0.134,-0.202" strokeWidth={0.019}
+              initial={{ opacity: 0 }}
+              animate={reduced
+                ? { opacity: 0.55 }
+                : { opacity: [0, 0.60, 0.50, 0] }}
+              transition={reduced
+                ? { duration: 0.20, ease: 'easeOut' }
+                : { duration: holdS, times: [0, 0.20, 0.55, 1], ease: 'easeOut' }}
+            />
+            <motion.path d="M 0.118,-0.092 Q 0.150,-0.116 0.156,-0.156" strokeWidth={0.015}
+              initial={{ opacity: 0 }}
+              animate={reduced
+                ? { opacity: 0.45 }
+                : { opacity: [0, 0.50, 0.40, 0] }}
+              transition={reduced
+                ? { duration: 0.20, ease: 'easeOut' }
+                : { duration: holdS, times: [0, 0.24, 0.60, 1], ease: 'easeOut' }}
+            />
+          </g>
+        </motion.g>
+      </motion.g>
+    </motion.g>
+  );
+});
+
 // ─── Speaking cue ── (existing) the corner equalizer bars ────────────────────
 // Supporting cue only: a tiny three-bar equalizer beside the player name that
 // confirms *speech* specifically (the aura says "this corner", the bars say
@@ -1691,7 +1870,7 @@ function buildHopPath(
 const PawnToken = memo(function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
   onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand, onDustStep, onDzSparkleStep,
-  stackScale, showSafeStar, paused, speakPulse, threatRole,
+  stackScale, showSafeStar, paused, speakPulse, threatRole, escapeMarkerId, onEscapeMarkerDone,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
@@ -1714,6 +1893,8 @@ const PawnToken = memo(function PawnToken({
   paused?: boolean; // Neon exit-modal pause: freeze the piece (see SETTLE_TRANSITION). Always false for Classic/DZ.
   speakPulse?: SpeakingKind | null; // capture voice speaking echo: 'primary' while the captor's line is audible, 'reply' while the victim's reply is audible, null otherwise. See CaptureSpeakPulseTarget.
   threatRole?: ThreatRole | null; // التهديد board-state marker: 'target' = this piece is under threat (amber "!" danger beacon), 'attacker' = this piece threatens someone (crimson predatory-eye glyph), null = no threat involvement. See ThreatTargetBeacon / ThreatPredatorEye.
+  escapeMarkerId?: number | null; // الهروب one-shot marker: the id of the relief puff this pawn is currently breathing out, null when it is not escaping. See EscapeReliefMarker.
+  onEscapeMarkerDone?: (id: number) => void; // fires once the puff's single exhale has finished — removes the marker from the board.
 }) {
   const baseCtrl  = useAnimationControls();
   const arcCtrl   = useAnimationControls();
@@ -1733,11 +1914,13 @@ const PawnToken = memo(function PawnToken({
   const onStepLandRef  = useRef(onStepLand);
   const onDustStepRef  = useRef(onDustStep);
   const onDzSparkleStepRef = useRef(onDzSparkleStep);
+  const onEscapeMarkerDoneRef = useRef(onEscapeMarkerDone);
   finalRef.current     = { x: finalX, y: finalY };
   springCfgRef.current = springCfg;
   onLastHopRef.current = onLastHopLand;
   onDefeatRef.current  = onDefeatArrived;
   onStepLandRef.current = onStepLand;
+  onEscapeMarkerDoneRef.current = onEscapeMarkerDone;
   onDustStepRef.current = onDustStep;
   onDzSparkleStepRef.current = onDzSparkleStep;
 
@@ -1992,6 +2175,9 @@ const PawnToken = memo(function PawnToken({
   const threatTheme = isClassic ? 'classic' : isDz ? 'dz' : 'neon';
   const threatTargetTok   = THREAT_TARGET_TOKENS[threatTheme];
   const threatAttackerTok = THREAT_ATTACKER_TOKENS[threatTheme];
+  // Escape marker colours — the same board-level, per-theme token idea, in the
+  // cool relief mint that closes the threat pair (never the player palette).
+  const escapeTok = ESCAPE_RELIEF_TOKENS[threatTheme];
 
   return (
     // Outer group: tile-to-tile x/y movement — GPU-composited layer
@@ -2259,6 +2445,26 @@ const PawnToken = memo(function PawnToken({
               frame={threatAttackerTok.frame}
               rim={threatAttackerTok.rim}
               reduced={!!pulseReduced}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* الهروب marker — one-shot relief puff on a piece that has just
+            slipped out of an attacker's 1-2 square range. A single
+            breathe-and-dissolve pass, then it removes itself via
+            onEscapeMarkerDone (the marker is a moment, not a state). Mounted
+            exactly like the threat glyphs: on top of the body, pointer-events
+            none, inside the stack-scale group so it shrinks with the pawn. */}
+        <AnimatePresence>
+          {escapeMarkerId !== null && escapeMarkerId !== undefined && (
+            <EscapeReliefMarker
+              key={`escape-${escapeMarkerId}`}
+              puff={escapeTok.puff}
+              wisp={escapeTok.wisp}
+              ink={escapeTok.ink}
+              rim={escapeTok.rim}
+              reduced={!!pulseReduced}
+              onDone={() => onEscapeMarkerDoneRef.current?.(escapeMarkerId)}
             />
           )}
         </AnimatePresence>
@@ -2559,6 +2765,10 @@ const SETTLE_TRANSITION: Transition = { duration: SETTLE_MS, ease: 'easeOut' };
 // ─── Shared animation types (used by BoardSVG and GameBoardScreen) ────────────
 type ShockwaveEvent = { x: number; y: number; neon: string; id: number };
 type HomeImpactEvent = { player: number; index: number; id: number };
+// الهروب one-shot relief puff — one per escaping pawn, self-removing when its
+// single exhale finishes (see EscapeReliefMarker). A list because one move can
+// resolve the threats of more than one piece at once.
+type EscapeMarkerEvent = { player: number; index: number; id: number };
 // Neon-only per-step hop light burst (see HopBurstEffect) — one fires at every
 // cell a pawn lands on mid-move, not just the final destination.
 type HopBurstEvent = { x: number; y: number; neon: string; id: number };
@@ -2625,6 +2835,10 @@ interface BoardSVGProps {
   // Board pawn currently carrying a capture voice line (الأكل primary or its
   // reply), or null while no capture voice is audible. See CaptureSpeakPulseTarget.
   captureSpeakPulse?: CaptureSpeakPulseTarget | null;
+  // الهروب one-shot relief puffs currently breathing out on the board. Owned by
+  // GameBoardScreen; each entry removes itself when its exhale finishes.
+  escapeMarkers: EscapeMarkerEvent[];
+  onEscapeMarkerDone: (id: number) => void;
 }
 
 const BoardSVG = memo(function BoardSVG({
@@ -2635,6 +2849,7 @@ const BoardSVG = memo(function BoardSVG({
   dustPuffs, onDustPuffDone, onDustStep,
   dzSparkles, onDzSparkleDone, onDzSparkleStep,
   boardStyle, paused, captureSpeakPulse,
+  escapeMarkers, onEscapeMarkerDone,
 }: BoardSVGProps) {
   const activeNeon  = E.PLAYER_NEONS[game.activePlayer];
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
@@ -4258,6 +4473,7 @@ const BoardSVG = memo(function BoardSVG({
       {piecePositions.map(({ player, index, xy: [fx, fy], stackScale, showSafeStar }) => {
         const pid  = E.pieceId(player, index);
         const anim = pieceAnims[pid] ?? { steps: null };
+        const escapeMarker = escapeMarkers.find(m => m.player === player && m.index === index) ?? null;
         return (
           <PawnToken
             key={pid}
@@ -4286,6 +4502,8 @@ const BoardSVG = memo(function BoardSVG({
               ? captureSpeakPulse.kind
               : null}
             threatRole={threatRoles?.get(pid) ?? null}
+            escapeMarkerId={escapeMarker?.id ?? null}
+            onEscapeMarkerDone={onEscapeMarkerDone}
           />
         );
       })}
@@ -4655,10 +4873,12 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const [matchDurationMs, setMatchDurationMs] = useState(() => initialSnapshot?.stats.matchDurationMs ?? 0);
   const matchStartRef = useRef(Date.now() - (initialSnapshot?.stats.matchDurationMs ?? 0));
   const dangerPiecesRef = useRef<DangerSet>(new Set());
-  // التهديد signatures currently on the board (attacker>target pairs), diffed
-  // against after every move resolves so only *new* threats fire the voice
-  // event — a threat that simply persists across a move never re-fires.
-  const threatSignaturesRef = useRef<ReadonlySet<string>>(new Set());
+  // التهديد pairs currently on the board (attacker>target), diffed against after
+  // every move resolves so only *new* threats fire the التهديد voice event and
+  // only *resolved* pairs fire the الهروب one — a threat that simply persists
+  // across a move never re-fires either way. Kept as pairs (not signatures) so
+  // both halves of the diff know which pieces they are talking about.
+  const threatPairsRef = useRef<readonly E.ThreatPair[]>([]);
   const captureStreakRef = useRef<CaptureStreak>(null);
 
   // ── Animation queue state (owned here, threaded down to BoardSVG) ─────────
@@ -4699,6 +4919,22 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   }, []);
   const removeDzSparkle = useCallback((id: number) => {
     setDzSparkles(prev => prev.filter(sparkle => sparkle.id !== id));
+  }, []);
+  // الهروب relief puffs — one per escaping piece, each self-removing when its
+  // single exhale finishes (EscapeReliefMarker). A list because one move can
+  // resolve the threats of several pieces at once.
+  const [escapeMarkers, setEscapeMarkers] = useState<EscapeMarkerEvent[]>([]);
+  const escapeMarkerIdRef = useRef(0);
+  const spawnEscapeMarker = useCallback((player: number, index: number) => {
+    const id = ++escapeMarkerIdRef.current;
+    setEscapeMarkers(prev => [
+      // Never stack two puffs on one pawn — a newer escape re-owns the slot.
+      ...prev.filter(m => !(m.player === player && m.index === index)),
+      { player, index, id },
+    ]);
+  }, []);
+  const removeEscapeMarker = useCallback((id: number) => {
+    setEscapeMarkers(prev => prev.filter(m => m.id !== id));
   }, []);
   const clearShockwave = useCallback(() => setShockwave(null), []);
   const clearHomeFinishVFX = useCallback(() => setHomeFinishVFX(null), []);
@@ -5061,16 +5297,29 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     const nextDanger = getDangerSet(nextState.pieces, nextState.playerSlots);
     const escapedDanger = previousDanger.has(pid) && !nextDanger.has(pid);
     const hasNewDanger = Array.from(nextDanger).some(dangerPid => !previousDanger.has(dangerPid));
-    // ── التهديد board-state diff ── re-scanned from this move's committed
-    // outcome, exactly like the danger set above (pure engine helper, same
-    // resolution point). Only pairs that did not exist before count as new;
-    // one voice line fires per resolution no matter how many pairs appeared.
-    // The on-board markers (BoardSVG) derive from the same detectThreats over
-    // the live committed state, so they persist exactly as long as a threat.
-    const previousThreats = threatSignaturesRef.current;
+    // ── التهديد / الهروب board-state diff ── re-scanned from this move's
+    // committed outcome, exactly like the danger set above (pure engine helper,
+    // same resolution point). One diff serves both halves of the relationship:
+    //   • `created`  → التهديد (a *new* threat pair appeared with this move);
+    //   • `resolved` → الهروب (a pair that existed before this move is gone:
+    //     the threatened piece moved out of its attacker's 1-2 square range,
+    //     the attacker moved away, or the piece reached a square that cannot be
+    //     captured on).
+    // One voice line fires per resolution no matter how many pairs appeared or
+    // vanished; the on-board markers (BoardSVG) derive from the same
+    // detectThreats over the live committed state, so they persist exactly as
+    // long as a threat.
     const nextThreatPairs = E.detectThreats(nextState.pieces);
-    const nextThreatSignatures = new Set(nextThreatPairs.map(pair => E.threatSignature(pair)));
-    const newThreatPairs = nextThreatPairs.filter(pair => !previousThreats.has(E.threatSignature(pair)));
+    const threatDiff = E.diffThreats(threatPairsRef.current, nextThreatPairs);
+    const newThreatPairs = threatDiff.created;
+    // الهروب — geometry alone is not an escape: a threatened piece that was
+    // *captured* by this move also drops out of the threat set, and that moment
+    // belongs to الأكل. Anything now sitting back in base (relPos === -1) was
+    // eaten, not escaped, so it is filtered out here.
+    const escapedPairs = threatDiff.resolved.filter(pair => {
+      const escaped = nextState.pieces.find(p => p.player === pair.target.player && p.index === pair.target.index);
+      return escaped !== undefined && escaped.relPos !== -1;
+    });
     const safeGathering = !hasMixedColorSafeGathering(currentGame.pieces) && hasMixedColorSafeGathering(nextState.pieces);
     const capturedPlayer = capturedP?.player ?? null;
     const movedPiece = nextState.pieces.find(p => p.player === ps && p.index === is)!;
@@ -5162,9 +5411,26 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
           piece: firstThreat.attacker.index,
         });
       }
+      // الهروب — one or more threat pairs were resolved by this move: a piece
+      // that was under threat is out of its attacker's range. Simultaneous
+      // escapes are already a single event here (one line per resolution);
+      // near-simultaneous bursts coalesce further inside the manager's escape
+      // run rule. Spoken by the owner of the escaping piece — the one breathing
+      // the sigh of relief — with `piece` naming that pawn on the speaking
+      // broadcast. Played after the escape has resolved, never before.
+      if (escapedPairs.length > 0) {
+        const firstEscape = escapedPairs[0];
+        playVoiceLine('الهروب', {
+          speaker: firstEscape.target.player,
+          piece: firstEscape.target.index,
+        });
+      }
+      // The relief puffs are board visuals, not audio: they fire whether or not
+      // voice commentary is enabled, and one puff rides each escaping pawn.
+      for (const pair of escapedPairs) spawnEscapeMarker(pair.target.player, pair.target.index);
       if (hasNewDanger) playVoiceLine('danger', { speaker: ps });
       dangerPiecesRef.current = nextDanger;
-      threatSignaturesRef.current = nextThreatSignatures;
+      threatPairsRef.current = nextThreatPairs;
     };
 
     // Fix: handle zero-step edge case (piece already at destination, e.g. relPos=0
@@ -5255,7 +5521,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     initAnims[pid] = { steps, startX, startY, onLastHop };
     // Do NOT set capturedPid to 'defeat' here — it waits for onLastHop
     setPieceAnims(initAnims);
-  }, [clearMoveRecoveryTimer, pawnTiming.hopMs, isClassic, unlockMoveInteraction]); // stable — reads game/isAnimating via refs
+  }, [clearMoveRecoveryTimer, pawnTiming.hopMs, isClassic, unlockMoveInteraction, spawnEscapeMarker]); // stable — reads game/isAnimating via refs
 
   // ── Piece click ───────────────────────────────────────────────────────────
   // Non-movable pawns no longer swallow the tap — their onClick now calls here
@@ -5307,7 +5573,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     dangerPiecesRef.current = getDangerSet(gameRef.current.pieces, gameRef.current.playerSlots);
     // Seed the threat baseline (also covers saved-game loads): pre-existing
     // threats never fire on entry, only threats created by a real move.
-    threatSignaturesRef.current = new Set(E.detectThreats(gameRef.current.pieces).map(E.threatSignature));
+    threatPairsRef.current = E.detectThreats(gameRef.current.pieces);
     return () => { stopVoiceLines(); resumeBgmForMenu(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -5445,7 +5711,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     const newGame = E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots);
     setGame(newGame);
     dangerPiecesRef.current = getDangerSet(newGame.pieces, newGame.playerSlots);
-    threatSignaturesRef.current = new Set(E.detectThreats(newGame.pieces).map(E.threatSignature));
+    threatPairsRef.current = E.detectThreats(newGame.pieces);
     captureStreakRef.current = null;
     stopVoiceLines();
     playVoiceLine('بداية_اللعبة');
@@ -5618,6 +5884,8 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
               boardStyle={boardStyle}
               paused={exitPause}
               captureSpeakPulse={captureSpeakPulse}
+              escapeMarkers={escapeMarkers}
+              onEscapeMarkerDone={removeEscapeMarker}
             />
           </div>
 
