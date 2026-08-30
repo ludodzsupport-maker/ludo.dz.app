@@ -1219,6 +1219,158 @@ const SpeakingPawnPulse = memo(function SpeakingPawnPulse({
   );
 });
 
+// ─── Threat markers (التهديد) ─────────────────────────────────────────────────
+// Board-state warning pair, drawn under the pawn body exactly like the
+// capture speaking echo above but with its own colour + motion signature so a
+// threat is never mistaken for a capture reaction:
+//   • the *threatened* piece (target, B) — a dashed amber warning ring in a
+//     tense staccato double-blink, plus a fast warm glow: the alert half;
+//   • the *threatening* piece (attacker, A) — two crimson rings converging
+//     inward toward the pawn (the capture echo expands outward, the predator
+//     closes in), slow and deliberate: the focused half.
+// Colours are board-level hazard tokens shared by all four players
+// (deliberately NOT the player palette the capture echo uses), tuned once per
+// board theme so they sit legibly on every felt. Attribute-only animation
+// (r/opacity) like the capture echo, and both hold still as a calm static
+// ring + steady glow under reduced motion (or the Neon exit-modal pause).
+const THREAT_ALERT_TOKENS = {
+  classic: { ring: '#E8890C', glow: '#FFB84D' },
+  dz:      { ring: '#D98A10', glow: '#F2B45C' },
+  neon:    { ring: '#FFB340', glow: '#FFC966' },
+} as const;
+const THREAT_PREDATOR_TOKENS = {
+  classic: { ring: '#A31320', glow: '#D64045' },
+  dz:      { ring: '#8E1A1A', glow: '#B54A3C' },
+  neon:    { ring: '#FF3B30', glow: '#FF6B57' },
+} as const;
+
+const THREAT_ALERT_RING_R     = 0.42; // warning ring radius (~1.3× pawn radius)
+const THREAT_ALERT_GLOW_R     = 0.50; // alert halo radius (same mass as the capture glow)
+const THREAT_ALERT_BLINK_S    = 1.10; // double-flash period: two quick blinks, then a rest
+const THREAT_ALERT_GLOW_BEAT_S = 0.85; // alert glow breath — faster than the capture echo's 1.3 s
+
+const THREAT_PREDATOR_R0      = 0.62; // converging ring birth radius (~1.9× pawn radius)
+const THREAT_PREDATOR_R1      = 0.34; // converging ring death radius — just outside the pawn body
+const THREAT_PREDATOR_GLOW_R  = 0.44; // tight core glow hugging the pawn
+const THREAT_PREDATOR_SWEEP_S = 1.50; // one closing-in sweep
+
+/** Which half of a threat pair a pawn carries. */
+type ThreatRole = 'target' | 'attacker';
+
+const ThreatAlertMarker = memo(function ThreatAlertMarker({
+  ringColor, glowColor, glowId, reduced,
+}: {
+  ringColor: string;
+  glowColor: string;
+  glowId: string;   // per-player id for the marker's own local radial gradient
+  reduced: boolean; // prefers-reduced-motion or Neon exit-modal stillness
+}) {
+  return (
+    <motion.g pointerEvents="none" aria-hidden
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeOut' } }}
+      exit={{ opacity: 0, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeIn' } }}>
+      <defs>
+        <radialGradient id={glowId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%"  stopColor={glowColor} stopOpacity="0.45"/>
+          <stop offset="60%" stopColor={glowColor} stopOpacity="0.18"/>
+          <stop offset="100%" stopColor={glowColor} stopOpacity="0"/>
+        </radialGradient>
+      </defs>
+
+      {/* Warm alert halo — breathes slightly faster than the capture echo so
+          the two never feel like the same effect. */}
+      <motion.circle cx={0} cy={0} r={THREAT_ALERT_GLOW_R} fill={`url(#${glowId})`}
+        initial={{ opacity: 0 }}
+        animate={reduced
+          ? { opacity: 0.50 }
+          : { opacity: [0.30, 0.55, 0.30], transition: { duration: THREAT_ALERT_GLOW_BEAT_S, repeat: Infinity, ease: 'easeInOut' } }}
+        transition={reduced ? { duration: 0.18, ease: 'easeOut' } : undefined}
+      />
+
+      {/* Dashed warning ring — the dash breaks the round sonar silhouette of
+          the capture echo, and the irregular double-blink (two quick flashes
+          then a rest) reads as tense/urgent rather than conversational. */}
+      <motion.circle cx={0} cy={0} r={THREAT_ALERT_RING_R} fill="none"
+        stroke={ringColor} strokeWidth={0.030} strokeLinecap="round"
+        strokeDasharray="0.09 0.075"
+        initial={{ opacity: 0 }}
+        animate={reduced
+          ? { opacity: 0.55 }
+          : { opacity: [0.30, 0.95, 0.35, 0.95, 0.30], transition: { duration: THREAT_ALERT_BLINK_S, times: [0, 0.16, 0.32, 0.48, 1], repeat: Infinity, ease: 'easeInOut' } }}
+        transition={reduced ? { duration: 0.18, ease: 'easeOut' } : undefined}
+      />
+    </motion.g>
+  );
+});
+
+const ThreatPredatorMarker = memo(function ThreatPredatorMarker({
+  ringColor, glowColor, glowId, reduced,
+}: {
+  ringColor: string;
+  glowColor: string;
+  glowId: string;
+  reduced: boolean;
+}) {
+  return (
+    <motion.g pointerEvents="none" aria-hidden
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeOut' } }}
+      exit={{ opacity: 0, transition: { duration: reduced ? 0.16 : 0.22, ease: 'easeIn' } }}>
+      <defs>
+        <radialGradient id={glowId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%"  stopColor={glowColor} stopOpacity="0.40"/>
+          <stop offset="60%" stopColor={glowColor} stopOpacity="0.15"/>
+          <stop offset="100%" stopColor={glowColor} stopOpacity="0"/>
+        </radialGradient>
+      </defs>
+
+      {/* Tight core glow — hugs the pawn instead of spreading, so the
+          attacker reads as coiled/focused rather than broadcasting. */}
+      <motion.circle cx={0} cy={0} r={THREAT_PREDATOR_GLOW_R} fill={`url(#${glowId})`}
+        initial={{ opacity: 0 }}
+        animate={reduced
+          ? { opacity: 0.50 }
+          : { opacity: [0.28, 0.52, 0.28], transition: { duration: THREAT_PREDATOR_SWEEP_S, repeat: Infinity, ease: 'easeInOut' } }}
+        transition={reduced ? { duration: 0.18, ease: 'easeOut' } : undefined}
+      />
+
+      {/* Closing-in rings — the exact opposite of the capture echo's outward
+          sonar: they shrink toward the pawn and brighten as they close, like
+          a hunter narrowing in. Two staggered copies for a steady hunt
+          rhythm (deliberate, never machine-gun). */}
+      {!reduced && [0, THREAT_PREDATOR_SWEEP_S / 2].map((delay, i) => (
+        <motion.circle key={i} cx={0} cy={0} fill="none"
+          stroke={ringColor} strokeWidth={0.030} strokeLinecap="round"
+          initial={{ r: THREAT_PREDATOR_R0, opacity: 0 }}
+          animate={{
+            r: [THREAT_PREDATOR_R0, THREAT_PREDATOR_R1],
+            opacity: [0, 0.55, 0.85],
+            transition: {
+              duration: THREAT_PREDATOR_SWEEP_S,
+              times: [0, 0.55, 1],
+              delay,
+              repeat: Infinity,
+              ease: 'easeIn',
+            },
+          }}
+        />
+      ))}
+
+      {/* Reduced-motion highlight — the sweep held still: a calm hairline
+          ring hugging the pawn, matching the alert's static treatment. */}
+      {reduced && (
+        <motion.circle cx={0} cy={0} r={0.36} fill="none"
+          stroke={ringColor} strokeWidth={0.026}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.5 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
+        />
+      )}
+    </motion.g>
+  );
+});
+
 // ─── Speaking cue ── (existing) the corner equalizer bars ────────────────────
 // Supporting cue only: a tiny three-bar equalizer beside the player name that
 // confirms *speech* specifically (the aura says "this corner", the bars say
@@ -1522,7 +1674,7 @@ function buildHopPath(
 const PawnToken = memo(function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
   onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand, onDustStep, onDzSparkleStep,
-  stackScale, showSafeStar, paused, speakPulse,
+  stackScale, showSafeStar, paused, speakPulse, threatRole,
 }: {
   pid: string; player: number;
   finalX: number; finalY: number;
@@ -1544,6 +1696,7 @@ const PawnToken = memo(function PawnToken({
   showSafeStar?: boolean; // Neon-only: this pawn is alone on a safe-star cell → renders its own glowing badge on the pawn. Classic/DZ ignore this prop — their safe-space icons are permanent cell fixtures that never attach to a pawn. Defaults to false.
   paused?: boolean; // Neon exit-modal pause: freeze the piece (see SETTLE_TRANSITION). Always false for Classic/DZ.
   speakPulse?: SpeakingKind | null; // capture voice speaking echo: 'primary' while the captor's line is audible, 'reply' while the victim's reply is audible, null otherwise. See CaptureSpeakPulseTarget.
+  threatRole?: ThreatRole | null; // التهديد board-state marker: 'target' = this piece is under threat (amber alert), 'attacker' = this piece threatens someone (crimson predator sweep), null = no threat involvement. See ThreatAlertMarker / ThreatPredatorMarker.
 }) {
   const baseCtrl  = useAnimationControls();
   const arcCtrl   = useAnimationControls();
@@ -1816,6 +1969,15 @@ const PawnToken = memo(function PawnToken({
   const pulseRing = isClassic ? clSolid : isDz ? DZ.BORDER_GOLD : neon;
   const pulseGlow = isClassic ? clSolid : isDz ? dzColor : E.PLAYER_COLORS[player];
 
+  // Threat marker colours — board-level hazard tokens (see the threat marker
+  // section): shared by every player, tuned per board theme, never the player
+  // palette the capture echo above uses.
+  const threatTheme = isClassic ? 'classic' : isDz ? 'dz' : 'neon';
+  const threatAlertRing   = THREAT_ALERT_TOKENS[threatTheme].ring;
+  const threatAlertGlow   = THREAT_ALERT_TOKENS[threatTheme].glow;
+  const threatPredatorRing = THREAT_PREDATOR_TOKENS[threatTheme].ring;
+  const threatPredatorGlow = THREAT_PREDATOR_TOKENS[threatTheme].glow;
+
   return (
     // Outer group: tile-to-tile x/y movement — GPU-composited layer
     <motion.g
@@ -1855,6 +2017,35 @@ const PawnToken = memo(function PawnToken({
               ringColor={pulseRing}
               glowColor={pulseGlow}
               glowId={`speak-pulse-glow-${player}`}
+              reduced={!!pulseReduced}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* التهديد markers — the board-state warning pair, independent of any
+            voice line (they live as long as the threat persists, exactly like
+            a safe-star badge). Target = amber double-blink alert, attacker =
+            crimson closing-in sweep. Rendered under the body beside the
+            capture echo; pointerEvents-none so tap hit-areas are unchanged,
+            and inside the stack-scale group so they shrink with the pawn. */}
+        <AnimatePresence>
+          {threatRole === 'target' && (
+            <ThreatAlertMarker
+              key="threat-target"
+              ringColor={threatAlertRing}
+              glowColor={threatAlertGlow}
+              glowId={`threat-alert-glow-${player}`}
+              reduced={!!pulseReduced}
+            />
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {threatRole === 'attacker' && (
+            <ThreatPredatorMarker
+              key="threat-attacker"
+              ringColor={threatPredatorRing}
+              glowColor={threatPredatorGlow}
+              glowId={`threat-predator-glow-${player}`}
               reduced={!!pulseReduced}
             />
           )}
@@ -2450,6 +2641,26 @@ const BoardSVG = memo(function BoardSVG({
     }),
     [pieces]
   );
+
+  // التهديد roles per pawn, derived from the current board state (re-scanned
+  // automatically every time the committed game state changes — the same
+  // detectThreats the voice event diffs against). 'target' wins when a piece
+  // is both threatened and threatening (a chain of pieces 2 apart): the alert
+  // is the urgent half. Suppressed once a winner exists — the match is over,
+  // nothing left to warn about.
+  const threatRoles = useMemo(() => {
+    if (game.winner !== null) return null;
+    const roles = new Map<string, ThreatRole>();
+    const pairs = E.detectThreats(pieces);
+    for (const pair of pairs) {
+      roles.set(E.pieceId(pair.target.player, pair.target.index), 'target');
+    }
+    for (const pair of pairs) {
+      const attackerId = E.pieceId(pair.attacker.player, pair.attacker.index);
+      if (!roles.has(attackerId)) roles.set(attackerId, 'attacker');
+    }
+    return roles;
+  }, [pieces, game.winner]);
 
   // Per-cell occupant counts (main path / home column only) — drives every
   // theme's safe-star cell 0 / 1 / 2+ occupant states below. Keyed the same
@@ -4057,6 +4268,7 @@ const BoardSVG = memo(function BoardSVG({
             speakPulse={captureSpeakPulse && captureSpeakPulse.player === player && captureSpeakPulse.index === index
               ? captureSpeakPulse.kind
               : null}
+            threatRole={threatRoles?.get(pid) ?? null}
           />
         );
       })}
@@ -4426,6 +4638,10 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const [matchDurationMs, setMatchDurationMs] = useState(() => initialSnapshot?.stats.matchDurationMs ?? 0);
   const matchStartRef = useRef(Date.now() - (initialSnapshot?.stats.matchDurationMs ?? 0));
   const dangerPiecesRef = useRef<DangerSet>(new Set());
+  // التهديد signatures currently on the board (attacker>target pairs), diffed
+  // against after every move resolves so only *new* threats fire the voice
+  // event — a threat that simply persists across a move never re-fires.
+  const threatSignaturesRef = useRef<ReadonlySet<string>>(new Set());
   const captureStreakRef = useRef<CaptureStreak>(null);
 
   // ── Animation queue state (owned here, threaded down to BoardSVG) ─────────
@@ -4828,6 +5044,16 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     const nextDanger = getDangerSet(nextState.pieces, nextState.playerSlots);
     const escapedDanger = previousDanger.has(pid) && !nextDanger.has(pid);
     const hasNewDanger = Array.from(nextDanger).some(dangerPid => !previousDanger.has(dangerPid));
+    // ── التهديد board-state diff ── re-scanned from this move's committed
+    // outcome, exactly like the danger set above (pure engine helper, same
+    // resolution point). Only pairs that did not exist before count as new;
+    // one voice line fires per resolution no matter how many pairs appeared.
+    // The on-board markers (BoardSVG) derive from the same detectThreats over
+    // the live committed state, so they persist exactly as long as a threat.
+    const previousThreats = threatSignaturesRef.current;
+    const nextThreatPairs = E.detectThreats(nextState.pieces);
+    const nextThreatSignatures = new Set(nextThreatPairs.map(pair => E.threatSignature(pair)));
+    const newThreatPairs = nextThreatPairs.filter(pair => !previousThreats.has(E.threatSignature(pair)));
     const safeGathering = !hasMixedColorSafeGathering(currentGame.pieces) && hasMixedColorSafeGathering(nextState.pieces);
     const capturedPlayer = capturedP?.player ?? null;
     const movedPiece = nextState.pieces.find(p => p.player === ps && p.index === is)!;
@@ -4904,8 +5130,24 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       if (opponentBecameNearWin) playVoiceLine('opponent_near_win', { speaker: ps });
       if (forfeitedThreeSixes) playVoiceLine('forfeit_three_sixes', { speaker: ps });
       else if (earnedExtraTurn) playVoiceLine('extra_turn', { speaker: ps });
+      // التهديد — one or more *new* threat pairs appeared with this move.
+      // Simultaneous threats are already a single event here; near-
+      // simultaneous bursts (threats created by consecutive moves) coalesce
+      // further inside the manager's threat run rule, so a burst always
+      // yields one line. Spoken by the attacker of the first pair in
+      // deterministic scan order — the piece issuing the threat, mirroring
+      // how الأكل is spoken by the captor; `piece` names that pawn on the
+      // speaking broadcast for future per-piece voice visuals.
+      if (newThreatPairs.length > 0) {
+        const firstThreat = newThreatPairs[0];
+        playVoiceLine('التهديد', {
+          speaker: firstThreat.attacker.player,
+          piece: firstThreat.attacker.index,
+        });
+      }
       if (hasNewDanger) playVoiceLine('danger', { speaker: ps });
       dangerPiecesRef.current = nextDanger;
+      threatSignaturesRef.current = nextThreatSignatures;
     };
 
     // Fix: handle zero-step edge case (piece already at destination, e.g. relPos=0
@@ -5046,6 +5288,9 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     else if (isDz) playDzWelcomeJingle();
     playVoiceLine('بداية_اللعبة');
     dangerPiecesRef.current = getDangerSet(gameRef.current.pieces, gameRef.current.playerSlots);
+    // Seed the threat baseline (also covers saved-game loads): pre-existing
+    // threats never fire on entry, only threats created by a real move.
+    threatSignaturesRef.current = new Set(E.detectThreats(gameRef.current.pieces).map(E.threatSignature));
     return () => { stopVoiceLines(); resumeBgmForMenu(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -5183,6 +5428,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     const newGame = E.createGame(config.players, config.rule === 'quick' ? 2 : 4, playerSlots);
     setGame(newGame);
     dangerPiecesRef.current = getDangerSet(newGame.pieces, newGame.playerSlots);
+    threatSignaturesRef.current = new Set(E.detectThreats(newGame.pieces).map(E.threatSignature));
     captureStreakRef.current = null;
     stopVoiceLines();
     playVoiceLine('بداية_اللعبة');

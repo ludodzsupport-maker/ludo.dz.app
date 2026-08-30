@@ -176,6 +176,88 @@ function nextPlayer(pieces: Piece[], current: number, slots: readonly number[]):
   return current;
 }
 
+// ─── Threat detection (التهديد) ──────────────────────────────────────────────
+// Pure board-state analysis: which pieces are *threatened* right now?
+//
+// A piece B is threatened when an opponent piece A sits exactly 1 or 2 squares
+// behind B along B's forward path (the shared main loop), i.e. A could land on
+// B's square with a roll of 1 or 2. The safe-square exception mirrors the
+// capture rules in `doMove` exactly: a piece standing on a protected square
+// (SAFE_SET — the engine's protected-square set, the same one the capture
+// check consults) cannot be captured there, and pieces in a home column,
+// finished, or still in base are never capturable, so no threat is reported
+// for any of those.
+//
+// This is deliberately turn/dice-free — the caller decides *when* to scan
+// (the UI re-scans after every move resolves, the same point where the
+// إخراج_بيدق / الأكل events fire) and what to do with the result (voice,
+// board markers, AI). Multiple attackers can threaten the same target (each
+// gets its own pair), and a piece can simultaneously be a target and an
+// attacker (a chain of pieces 2 apart) — callers can pick whichever role
+// matters for their use case.
+export interface PieceRef {
+  player: number;
+  index: number;
+}
+
+export interface ThreatPair {
+  /** The piece that could land on the target with a roll of 1 or 2. */
+  attacker: PieceRef;
+  /** The piece under threat. */
+  target: PieceRef;
+}
+
+export function detectThreats(pieces: readonly Piece[]): ThreatPair[] {
+  // Index main-track pieces by their absolute path square so attacker
+  // lookups are O(1). Stacked pieces share one entry (each occupant is a
+  // distinct potential attacker / target).
+  const bySquare = new Map<number, Piece[]>();
+  for (const piece of pieces) {
+    if (piece.relPos < 0 || piece.relPos >= TRACK_SIZE) continue;
+    const abs = (PLAYER_STARTS[piece.player] + piece.relPos) % MAIN_PATH_SIZE;
+    const occupants = bySquare.get(abs);
+    if (occupants) occupants.push(piece);
+    else bySquare.set(abs, [piece]);
+  }
+
+  const threats: ThreatPair[] = [];
+  for (const target of pieces) {
+    if (target.relPos < 0 || target.relPos >= TRACK_SIZE) continue;
+    const abs = (PLAYER_STARTS[target.player] + target.relPos) % MAIN_PATH_SIZE;
+    // Safe/protected square (player start, star) → a landing opponent cannot
+    // capture here, so this piece is never under threat. Home-column / base /
+    // finished targets are already excluded by the track-range check above.
+    if (SAFE_SET.has(abs)) continue;
+
+    // The two squares directly behind the target along its forward path.
+    const behind = [
+      (abs - 1 + MAIN_PATH_SIZE) % MAIN_PATH_SIZE,
+      (abs - 2 + MAIN_PATH_SIZE) % MAIN_PATH_SIZE,
+    ];
+    for (const behindAbs of behind) {
+      const occupants = bySquare.get(behindAbs);
+      if (!occupants) continue;
+      for (const attacker of occupants) {
+        if (attacker.player === target.player) continue; // own piece never captures
+        threats.push({
+          attacker: { player: attacker.player, index: attacker.index },
+          target: { player: target.player, index: target.index },
+        });
+      }
+    }
+  }
+  return threats;
+}
+
+/**
+ * Stable identity of one threat pair, used to diff the threat set before and
+ * after a move: only pairs that did not exist before count as *new* threats
+ * (a threat that simply persists across a move never re-fires its event).
+ */
+export function threatSignature(pair: ThreatPair): string {
+  return `${pair.attacker.player}:${pair.attacker.index}>${pair.target.player}:${pair.target.index}`;
+}
+
 // ── Game lifecycle ─────────────────────────────────────────────────────────
 export function createGame(numPlayers: number, pawnsPerPlayer = 4, playerSlots?: readonly number[]): GameState {
   const rawSlots = playerSlots ?? Array.from({ length: numPlayers }, (_, i) => i);

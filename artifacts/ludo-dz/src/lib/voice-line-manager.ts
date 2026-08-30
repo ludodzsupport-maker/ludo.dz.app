@@ -23,10 +23,16 @@ import { setSfxDucking } from './sound-manager';
 // priority, never a replacement for it — a new capture still cuts in over a
 // playing capture reply. See CAPTURE_COALESCE_MAX_WAIT_MS and the capture
 // branch in `playVoiceLine`.
+//
+// `التهديد` (threat) is a queue-tier event like `إخراج_بيدق`: it never
+// interrupts, plays immediately when voice is idle, and otherwise queues (or
+// is cancelled) by the same remaining-wait rule as exits. Near-simultaneous
+// threats coalesce into one line using the same run shape as captures — see
+// the threat branch in `playVoiceLine`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Registered voice events. The key is the Arabic folder name under `voice/`. */
-export const VOICE_EVENTS = ['بداية_اللعبة', 'إخراج_بيدق', 'الأكل'] as const;
+export const VOICE_EVENTS = ['بداية_اللعبة', 'إخراج_بيدق', 'الأكل', 'التهديد'] as const;
 export type VoiceLineEvent = (typeof VOICE_EVENTS)[number];
 
 /** Arabic display label for each registered event. */
@@ -34,6 +40,7 @@ export const VOICE_EVENT_LABELS: Readonly<Record<VoiceLineEvent, string>> = {
   'بداية_اللعبة': 'بداية اللعبة',
   'إخراج_بيدق': 'إخراج بيدق',
   'الأكل': 'الأكل',
+  'التهديد': 'التهديد',
 };
 
 // Trigger identifiers still referenced by existing game logic that have not
@@ -558,6 +565,12 @@ const EXIT_EVENT = 'إخراج_بيدق' as const;
 
 /** The capture event — top-priority interrupt + its own stacked-run coalescing. */
 const CAPTURE_EVENT = 'الأكل' as const;
+
+/**
+ * The threat event — queue-tier (like `إخراج_بيدق`), with its own stacked-run
+ * coalescing so a burst of near-simultaneous threats produces a single line.
+ */
+const THREAT_EVENT = 'التهديد' as const;
 
 function isExitEvent(event: VoiceLineTrigger): event is typeof EXIT_EVENT {
   return isRegisteredEvent(event) && event === EXIT_EVENT;
@@ -1086,6 +1099,55 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
       if (run) run.preempted = true;
     }
 
+    playClip({ kind: 'event', event, options: context ?? {} }, clip);
+    return;
+  }
+
+  // ── `التهديد` — queue-tier threat event ──────────────────────────────────
+  // A threat line behaves like `إخراج_بيدق`: it never interrupts anything.
+  // When voice is idle it starts on the spot; when anything else is audible
+  // it queues behind it — but only when the active line is expected to
+  // finish within the wait window (same threshold and the same "will the
+  // active line finish within one conversational beat?" decision as the exit
+  // queue rule, so the two queue-tier events share one knob). A longer wait
+  // cancels the line outright: a threat warning is tied to a board state
+  // that resolves within the next roll or two, so a stale backlog entry is
+  // dropped instead of played late.
+  //
+  // Near-simultaneous threats coalesce with the same remaining-wait run rule
+  // (the capture run shape, reusing EXIT_QUEUE_MAX_WAIT_MS instead of the
+  // capture's wider 1500 ms window — a threat is a warning about a state,
+  // not the event the player most wants heard, so it coalesces slightly more
+  // eagerly):
+  //   • a threat firing while a `التهديد` line is still audible with
+  //     <= EXIT_QUEUE_MAX_WAIT_MS left queues one fresh follow-up line
+  //     (at most one threat line ever waits — a newer threat replaces a
+  //     stale queued one, and the no-immediate-repeat pick keeps it a
+  //     different clip);
+  //   • a threat firing earlier in a running threat line is combined into
+  //     the line already playing — no second line, so simultaneous or
+  //     near-simultaneous threat bursts always produce one audible line.
+  //
+  // No speaker-based cancellation here (unlike the exit rules): the call
+  // site already gates re-fires to *new* threat pairs (threatSignature
+  // diff), so the remaining-wait coalescing above is the only suppression
+  // this event needs.
+  if (event === THREAT_EVENT) {
+    if (isVoiceBusy()) {
+      const remainingWaitMs = getActiveLineRemainingMs();
+      // At most one threat line may ever wait in the queue.
+      queue = queue.filter(q => !(q.kind === 'event' && q.event === THREAT_EVENT));
+      if (remainingWaitMs <= EXIT_QUEUE_MAX_WAIT_MS) {
+        queue.push({ kind: 'event', event, options: context ?? {} });
+      }
+      // Longer remaining wait → the burst is combined into the line already
+      // playing (and any stale queued threat line is dropped by the filter).
+      return;
+    }
+
+    // Voice is idle: play immediately.
+    const clip = pickRandomClip(event);
+    if (!clip) return;
     playClip({ kind: 'event', event, options: context ?? {} }, clip);
     return;
   }
