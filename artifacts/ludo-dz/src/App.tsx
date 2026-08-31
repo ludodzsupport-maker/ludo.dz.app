@@ -14,7 +14,7 @@ import type { GameConfig } from '@/components/GameConfigOverlay';
 import { clearSavedGame, type SavedGameSnapshot } from '@/lib/saved-game';
 
 type Screen = 'welcome' | 'mode-select' | 'settings' | 'about' | 'preparing-match' | 'game';
-export type BoardStyle = 'neon' | 'classic' | 'dz';
+export type BoardStyle = 'neon' | 'classic' | 'dz' | 'normal';
 
 // Splash stays on screen at least this long so its tumble-and-impact
 // choreography always finishes before it's dismissed, but never longer than

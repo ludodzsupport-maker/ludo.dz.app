@@ -11,6 +11,7 @@ import { GamePiece } from './GamePiece';
 import { VictoryScreen } from './VictoryScreen';
 import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
+import * as NM from '../lib/board-theme-normal';
 import type { GameConfig } from './GameConfigOverlay';
 import { supportsDvh } from '../lib/utils';
 import {
@@ -384,10 +385,10 @@ function cubeFaceTransform(fv: number, half: number): string {
 }
 
 function DieFace({
-  value, neon, col, size, rolling, justLanded, dim, classic, dz, paused,
+  value, neon, col, size, rolling, justLanded, dim, classic, dz, normal, paused,
 }: {
   value: number; neon: string; col: string; size: number;
-  rolling?: boolean; justLanded?: boolean; dim?: boolean; classic?: boolean; dz?: boolean;
+  rolling?: boolean; justLanded?: boolean; dim?: boolean; classic?: boolean; dz?: boolean; normal?: boolean;
   paused?: boolean; // Neon exit-modal pause: freeze the tumble. Always false for Classic/DZ.
 }) {
   const opacity = dim ? 0.82 : 1;
@@ -469,22 +470,24 @@ function DieFace({
                 ? `radial-gradient(ellipse at 38% 32%, #fffdf8 0%, #f5e8c8 62%, #e8d4a0 100%)`
                 : dz
                 ? `radial-gradient(ellipse at 38% 32%, #FFFCF2 0%, ${DZ.PATH_CREAM} 58%, #E4CE9C 100%)`
+                : normal
+                ? '#FFFFFF'
                 : `radial-gradient(circle at 36% 28%, rgba(255,255,255,0.26), ${neon}28 42%, ${col}cc)`,
-              border: `${Math.max(1, Math.round(size * 0.038))}px solid ${classic ? '#a87820' : dz ? DZ.BORDER_GOLD : neon}`,
+              border: `${Math.max(1, Math.round(size * 0.038))}px solid ${classic ? '#a87820' : dz ? DZ.BORDER_GOLD : normal ? NM.DICE_INK : neon}`,
               borderRadius: `${size * 0.14}px`,
               overflow: 'hidden',
             }}>
               <svg width={size} height={size} viewBox="-3 -3 6 6"
                 style={{ display: 'block', position: 'absolute', top: 0, left: 0 }}>
                 {/* Glass sheen — neon only */}
-                {!classic && !dz && (
+                {!classic && !dz && !normal && (
                   <rect x="-2.6" y="-2.7" width="2.1" height="0.76" rx="0.30"
                     fill="white" opacity="0.20"/>
                 )}
                 {/* Dots — classic: dark on cream; DZ: deep green on cream with fine gold ring (zellige tile edge) */}
                 {d.map(([dx, dy], i) => (
                   <circle key={i} cx={dx} cy={dy} r="0.52"
-                    fill={classic ? '#1e0e00' : dz ? DZ.BORDER_DEEP : neon}
+                    fill={classic ? '#1e0e00' : dz ? DZ.BORDER_DEEP : normal ? NM.DICE_INK : neon}
                     stroke={dz ? DZ.BORDER_GOLD : 'none'}
                     strokeWidth={dz ? '0.14' : '0'}
                     strokeOpacity={dz ? 0.72 : 0}/>
@@ -568,16 +571,18 @@ const CornerDice = memo(function CornerDice({
   const isClassic   = boardStyle === 'classic';
   const isDz        = boardStyle === 'dz';
   const isNeon      = boardStyle === 'neon';
+  const isNormal    = boardStyle === 'normal';
   const clSolid     = CL_SOLID[player as 0|1|2|3];
   const clLight     = CL_LIGHT[player as 0|1|2|3];
   const clBorder    = CL_BORDER[player as 0|1|2|3];
   const dzColor     = DZ.HOME_COLORS[player as 0|1|2|3];
+  const nmColor     = NM.HOME_COLORS[player as 0|1|2|3];
   // Speaking-indicator accent — follows each theme's "active" vocabulary so the
   // cue reads as native rather than bolted on (Classic: player solid, DZ: gold,
-  // Neon: neon). The aura pairs it with the player's own colour for the halo so
-  // the corner is still identifiable at a glance in every theme.
-  const speechColor = isClassic ? clSolid : isDz ? DZ.BORDER_GOLD : neon;
-  const speechBloom = isClassic ? clSolid : isDz ? dzColor : col;
+  // Neon: neon, Normal: flat player colour). The aura pairs it with the player's
+  // own colour for the halo so the corner is still identifiable in every theme.
+  const speechColor = isClassic ? clSolid : isDz ? DZ.BORDER_GOLD : isNormal ? nmColor : neon;
+  const speechBloom = isClassic ? clSolid : isDz ? dzColor : isNormal ? nmColor : col;
   // Panel geometry shared by the card itself and its speaking aura, so the two
   // scale and round identically instead of drifting apart.
   const panelScale  = isActive ? 1.08 : 0.88;
@@ -614,17 +619,17 @@ const CornerDice = memo(function CornerDice({
           width: 0, height: 0,
           borderLeft: `${TAIL_W}px solid transparent`,
           borderRight: `${TAIL_W}px solid transparent`,
-          [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? 'rgba(160,120,32,0.28)' : isDz ? 'rgba(201,162,39,0.22)' : 'rgba(255,255,255,0.05)'}`,
+          [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? 'rgba(160,120,32,0.28)' : isDz ? 'rgba(201,162,39,0.22)' : isNormal ? 'rgba(46,93,184,0.35)' : 'rgba(255,255,255,0.05)'}`,
         }}/>
         <div style={{
           width: '100%', height: '100%',
           borderRadius: isClassic ? 10 : 16,
-          background: isClassic ? 'rgba(240,228,190,0.45)' : isDz ? 'rgba(0,58,29,0.40)' : 'rgba(3,10,22,0.40)',
-          border: `1px solid ${isClassic ? 'rgba(160,120,32,0.32)' : isDz ? 'rgba(201,162,39,0.28)' : 'rgba(255,255,255,0.04)'}`,
+          background: isClassic ? 'rgba(240,228,190,0.45)' : isDz ? 'rgba(0,58,29,0.40)' : isNormal ? 'rgba(217,167,181,0.40)' : 'rgba(3,10,22,0.40)',
+          border: `1px solid ${isClassic ? 'rgba(160,120,32,0.32)' : isDz ? 'rgba(201,162,39,0.28)' : isNormal ? 'rgba(46,93,184,0.40)' : 'rgba(255,255,255,0.04)'}`,
           opacity: 0.5,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: isClassic ? 'rgba(160,120,32,0.18)' : isDz ? 'rgba(201,162,39,0.22)' : '#1a2a40' }}/>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: isClassic ? 'rgba(160,120,32,0.18)' : isDz ? 'rgba(201,162,39,0.22)' : isNormal ? 'rgba(46,93,184,0.30)' : '#1a2a40' }}/>
         </div>
       </div>
     );
@@ -650,8 +655,8 @@ const CornerDice = memo(function CornerDice({
         width: 0, height: 0,
         borderLeft: `${TAIL_W}px solid transparent`,
         borderRight: `${TAIL_W}px solid transparent`,
-        [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? (isActive ? '#a07820' : 'rgba(160,120,32,0.32)') : isDz ? (isActive ? DZ.BORDER_GOLD : 'rgba(201,162,39,0.35)') : (isActive ? neon : col + '55')}`,
-        filter: isClassic ? 'none' : isDz ? (isActive ? `drop-shadow(0 0 3px ${DZ.BORDER_GOLD}90)` : 'none') : (isActive ? `drop-shadow(0 0 3px ${neon})` : 'none'),
+        [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? (isActive ? '#a07820' : 'rgba(160,120,32,0.32)') : isDz ? (isActive ? DZ.BORDER_GOLD : 'rgba(201,162,39,0.35)') : isNormal ? (isActive ? NM.DICE_FRAME : 'rgba(46,93,184,0.45)') : (isActive ? neon : col + '55')}`,
+        filter: isClassic ? 'none' : isDz ? (isActive ? `drop-shadow(0 0 3px ${DZ.BORDER_GOLD}90)` : 'none') : isNormal ? 'none' : (isActive ? `drop-shadow(0 0 3px ${neon})` : 'none'),
         transition: 'border-color 0.4s',
         pointerEvents: 'none',
       }}/>
@@ -684,6 +689,12 @@ const CornerDice = memo(function CornerDice({
               `0 0 0 1.5px ${DZ.BORDER_GOLD}, 0 0 0 3.5px ${DZ.BORDER_DEEP}, 0 0 0 5px ${DZ.BORDER_GOLD}40, 0 6px 18px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,238,190,0.36)`,
             ]
           : `0 0 0 1px ${DZ.BORDER_GOLD}52, 0 0 0 2px ${DZ.BORDER_DEEP}88, 0 3px 12px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,238,190,0.14)`,
+      } : isNormal ? {
+        scale: panelScale,
+        opacity: isActive ? 1 : 0.78,
+        boxShadow: isActive
+          ? `0 5px 14px rgba(0,0,0,0.35)`
+          : `0 2px 8px rgba(0,0,0,0.22)`,
       } : {
         scale: panelScale,
         opacity: isActive ? 1 : 0.68,
@@ -703,7 +714,13 @@ const CornerDice = memo(function CornerDice({
             opacity:   { duration: 0.38, ease: 'easeOut' },
             boxShadow: SETTLE_TRANSITION,
           }
-        : (isClassic || isDz)
+        : isNormal
+          ? {
+              scale:     { type: 'spring', stiffness: 260, damping: 28 },
+              opacity:   { duration: 0.38, ease: 'easeOut' },
+              boxShadow: { duration: 0.3 },
+            }
+          : (isClassic || isDz)
           ? {
               scale:     { type: 'spring', stiffness: 260, damping: 28 },
               opacity:   { duration: 0.38, ease: 'easeOut' },
@@ -730,6 +747,8 @@ const CornerDice = memo(function CornerDice({
           ? (isActive
             ? `linear-gradient(160deg, #003820 0%, #001a0e 55%, ${dzColor}22 100%)`
             : `linear-gradient(160deg, #002814 0%, #00110a 55%, ${dzColor}10 100%)`)
+          : isNormal
+          ? NM.DICE_FRAME
           : (isActive
             ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
             : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`),
@@ -737,9 +756,11 @@ const CornerDice = memo(function CornerDice({
           ? (isActive ? `1.5px solid ${clBorder}` : `1px solid rgba(160,120,32,0.48)`)
           : isDz
           ? `2px solid ${isActive ? DZ.BORDER_GOLD : DZ.BORDER_GOLD + '65'}`
+          : isNormal
+          ? 'none'
           : `1.5px solid ${isActive ? neon : col + '55'}`,
-        backdropFilter: (isClassic || isDz) ? 'none' : 'blur(10px)',
-        WebkitBackdropFilter: (isClassic || isDz) ? 'none' : 'blur(10px)',
+        backdropFilter: (isClassic || isDz || isNormal) ? 'none' : 'blur(10px)',
+        WebkitBackdropFilter: (isClassic || isDz || isNormal) ? 'none' : 'blur(10px)',
         transition: 'background 0.4s, border-color 0.4s',
         overflow: 'hidden',
         userSelect: 'none',
@@ -751,6 +772,16 @@ const CornerDice = memo(function CornerDice({
         transformOrigin: panelOrigin,
       }}
     >
+      {/* Normal — dusty pink/mauve inner panel. The solid blue card body shows
+          through around it as the two-tone "frame". Painted behind the content
+          (negative z-index inside this stacking context) so the die/name sit
+          on top of it. */}
+      {isNormal && (
+        <div style={{
+          position: 'absolute', inset: 5, borderRadius: 7,
+          background: NM.DICE_PANEL, zIndex: -1, pointerEvents: 'none',
+        }}/>
+      )}
       {/* DZ — zellige diamond lattice texture + corner najma rivets */}
       {isDz && (
         <svg width="100%" height="100%" viewBox={`0 0 ${PANEL_W} ${PANEL_H}`}
@@ -776,7 +807,7 @@ const CornerDice = memo(function CornerDice({
         </svg>
       )}
       {/* Active edge shimmer — neon only */}
-      {isActive && !isClassic && !isDz && (
+      {isActive && !isClassic && !isDz && !isNormal && (
         <motion.div style={{
           position: 'absolute',
           top: 0, left: 0, right: 0, height: 1.5,
@@ -878,7 +909,7 @@ const CornerDice = memo(function CornerDice({
           </svg>
         ) : (
           <motion.div
-            animate={isClassic ? {} : (isActive
+            animate={(isClassic || isNormal) ? {} : (isActive
               ? (paused
                   ? { boxShadow: `0 0 3px ${neon}80` }
                   : { boxShadow: [`0 0 3px ${neon}80`, `0 0 10px ${neon}`, `0 0 3px ${neon}80`] })
@@ -886,10 +917,10 @@ const CornerDice = memo(function CornerDice({
             transition={paused ? SETTLE_TRANSITION : { duration: 1.4, repeat: Infinity }}
             style={{
               width: 6, height: 6, borderRadius: '50%',
-              background: isClassic ? clSolid : col,
+              background: isClassic ? clSolid : isNormal ? nmColor : col,
               flexShrink: 0,
-              boxShadow: isClassic ? `0 0 0 1px rgba(160,120,32,0.42)` : undefined,
-              opacity: isActive ? 1 : (isClassic ? 0.60 : 0.50),
+              boxShadow: isClassic ? `0 0 0 1px rgba(160,120,32,0.42)` : isNormal ? `0 0 0 1px rgba(58,58,58,0.28)` : undefined,
+              opacity: isActive ? 1 : (isClassic ? 0.60 : isNormal ? 0.70 : 0.50),
             }}
           />
         )}
@@ -899,6 +930,8 @@ const CornerDice = memo(function CornerDice({
             ? (isActive ? CL_ARROW[player as 0|1|2|3] : 'rgba(100,70,20,0.48)')
             : isDz
             ? (isActive ? DZ.BORDER_GOLD : dzColor + 'B0')
+            : isNormal
+            ? (isActive ? NM.DICE_INK : 'rgba(58,58,58,0.55)')
             : (isActive ? neon : col + '90'),
           letterSpacing: '0.06em', textTransform: 'uppercase',
           lineHeight: 1,
@@ -907,7 +940,7 @@ const CornerDice = memo(function CornerDice({
           {isDz && lang === 'fr' ? name : name.slice(0, 4)}
         </span>
         <SpeakingIndicator color={speechColor} active={!!speaking}/>
-        {isAI && <Bot size={8} color={isClassic ? 'rgba(80,50,10,0.42)' : isDz ? 'rgba(201,162,39,0.60)' : 'rgba(255,255,255,0.30)'} style={{ flexShrink: 0 }}/>}
+        {isAI && <Bot size={8} color={isClassic ? 'rgba(80,50,10,0.42)' : isDz ? 'rgba(201,162,39,0.60)' : isNormal ? 'rgba(58,58,58,0.45)' : 'rgba(255,255,255,0.30)'} style={{ flexShrink: 0 }}/>}
       </div>
 
       {/* Die face with pulse ring — perspective establishes the 3D rendering context */}
@@ -915,7 +948,7 @@ const CornerDice = memo(function CornerDice({
         {canTap && !rolling && (
           <motion.div style={{
             position: 'absolute', inset: -6, borderRadius: 10,
-            border: `1.5px solid ${isClassic ? clBorder : isDz ? DZ.BORDER_GOLD : neon}`,
+            border: `1.5px solid ${isClassic ? clBorder : isDz ? DZ.BORDER_GOLD : isNormal ? NM.DICE_INK : neon}`,
             pointerEvents: 'none',
           }}
             animate={paused ? { scale: 1, opacity: 0.80 } : { scale: [1, 1.22, 1], opacity: [0.80, 0, 0.80] }}
@@ -930,6 +963,7 @@ const CornerDice = memo(function CornerDice({
           dim={!isActive}
           classic={isClassic}
           dz={isDz}
+          normal={isNormal}
           paused={paused}
         />
       </div>
@@ -943,15 +977,15 @@ const CornerDice = memo(function CornerDice({
               exit={{ opacity: 0, y: -2 }}
               style={{
                 fontFamily: isDz ? 'Cairo, sans-serif' : 'Rajdhani, sans-serif', fontSize: 9, fontWeight: 700,
-                color: isClassic ? CL_ARROW[player as 0|1|2|3] : isDz ? DZ.BORDER_GOLD : neon, letterSpacing: '0.08em',
-                textShadow: isClassic ? 'none' : isDz ? `0 0 4px ${DZ.BORDER_GOLD}66` : `0 0 7px ${neon}`,
+                color: isClassic ? CL_ARROW[player as 0|1|2|3] : isDz ? DZ.BORDER_GOLD : isNormal ? NM.DICE_INK : neon, letterSpacing: '0.08em',
+                textShadow: isClassic || isNormal ? 'none' : isDz ? `0 0 4px ${DZ.BORDER_GOLD}66` : `0 0 7px ${neon}`,
               }}>
               {lang === 'ar' ? 'ارمِ' : 'TAP'}
             </motion.span>
           ) : isRollingMe ? (
             <motion.span key="roll"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              style={{ fontFamily: isDz ? 'Cairo, sans-serif' : 'Rajdhani, sans-serif', fontSize: 9, color: isClassic ? 'rgba(100,70,20,0.38)' : isDz ? 'rgba(220,200,150,0.42)' : 'rgba(255,255,255,0.40)' }}>
+              style={{ fontFamily: isDz ? 'Cairo, sans-serif' : 'Rajdhani, sans-serif', fontSize: 9, color: isClassic ? 'rgba(100,70,20,0.38)' : isDz ? 'rgba(220,200,150,0.42)' : isNormal ? 'rgba(58,58,58,0.45)' : 'rgba(255,255,255,0.40)' }}>
               …
             </motion.span>
           ) : null}
@@ -973,9 +1007,11 @@ const CornerDice = memo(function CornerDice({
                 ? (st === 'done' ? clSolid : st === 'on' ? `${clSolid}bb` : st === 'home' ? `${clSolid}50` : 'rgba(180,140,40,0.10)')
                 : isDz
                 ? (st === 'done' ? DZ.BORDER_GOLD : st === 'on' ? dzColor : st === 'home' ? `${dzColor}55` : 'rgba(201,162,39,0.12)')
+                : isNormal
+                ? (st === 'done' ? nmColor : st === 'on' ? nmColor : st === 'home' ? `${nmColor}50` : 'rgba(58,58,58,0.15)')
                 : (st === 'done' ? neon : st === 'on' ? col : `${col}35`),
-              border: `0.5px solid ${isClassic ? (st !== 'none' ? `${clBorder}72` : 'rgba(160,120,32,0.26)') : isDz ? (st !== 'none' ? `${DZ.BORDER_GOLD}80` : 'rgba(201,162,39,0.25)') : col + '45'}`,
-              boxShadow: (isClassic || isDz)
+              border: `0.5px solid ${isClassic ? (st !== 'none' ? `${clBorder}72` : 'rgba(160,120,32,0.26)') : isDz ? (st !== 'none' ? `${DZ.BORDER_GOLD}80` : 'rgba(201,162,39,0.25)') : isNormal ? (st !== 'none' ? 'rgba(58,58,58,0.40)' : 'rgba(58,58,58,0.18)') : col + '45'}`,
+              boxShadow: (isClassic || isDz || isNormal)
                 ? 'none'
                 : (st === 'done' ? `0 0 5px ${neon}` : 'none'),
               transition: 'all 0.3s',
@@ -1869,7 +1905,7 @@ function buildHopPath(
 // 45% of step duration, then descends and snaps to canonical stacking position.
 const PawnToken = memo(function PawnToken({
   pid, player, finalX, finalY, startX, startY, hopSteps, hopMs, springCfg, isMovable, onPieceClick,
-  onLastHopLand, onDefeatArrived, isClassic, isDz, onStepLand, onDustStep, onDzSparkleStep,
+  onLastHopLand, onDefeatArrived, isClassic, isDz, isNormal, onStepLand, onDustStep, onDzSparkleStep,
   stackScale, showSafeStar, paused, speakPulse, threatRole, escapeMarkerId, onEscapeMarkerDone,
 }: {
   pid: string; player: number;
@@ -1885,6 +1921,7 @@ const PawnToken = memo(function PawnToken({
   onDefeatArrived?: () => void; // fires when defeated piece reaches home → impact flash
   isClassic?: boolean; // Classic Board theme only — swaps hex/neon body for a 3D dome token
   isDz?: boolean; // DZ Board theme only — swaps hex/neon body for an onion-dome lantern token
+  isNormal?: boolean; // Normal Board theme only — swaps hex/neon body for a flat white map-pin token
   onStepLand?: (x: number, y: number, neon: string) => void; // Neon-only: fires at every hop-step landing (see HopBurstEffect)
   onDustStep?: (x: number, y: number) => void; // Classic-only: fires at every hop-step's vacated cell (see DustPuffEffect)
   onDzSparkleStep?: (x: number, y: number) => void; // DZ-only: gold glint left at every vacated hop cell
@@ -2049,12 +2086,14 @@ const PawnToken = memo(function PawnToken({
         prevX = step.x;
         prevY = step.y;
 
-        // ── Neon-only per-step light burst ───────────────────────────────────
+        // ── Neon per-step light burst (Normal shares only the haptic) ────────
         // Fires the instant the pawn physically lands on THIS cell — for every
         // step of a multi-cell move, not just the last. Purely visual: does not
         // gate or delay game-state resolution (still handled by onLastHopRef
         // below on the final step only). Classic/DZ boards are untouched since
-        // onStepLand is only ever wired up for this callback path.
+        // onStepLand is only ever wired up for this callback path; Normal
+        // reaches it for the shared vibratePawnStep haptic but its flat theme
+        // suppresses the burst (see handleNeonHopLand).
         if (!stale() && !isClassic && !isDz) {
           onStepLandRef.current?.(step.x, step.y, E.PLAYER_NEONS[player]);
         }
@@ -2145,11 +2184,29 @@ const PawnToken = memo(function PawnToken({
   const clSolid   = CL_SOLID[player as 0|1|2|3];
   const clBorder  = CL_BORDER[player as 0|1|2|3];
   const dzColor   = DZ.HOME_COLORS[player as 0|1|2|3];
+  const nmColor   = NM.HOME_COLORS[player as 0|1|2|3];
   const domeR     = 0.275;
   const domeCY    = -0.06;
   const baseRX    = 0.30;
   const baseRY    = 0.10;
   const baseCY    = 0.19;
+  // Normal-only pin geometry — a larger, chunky location-pin marker so the flat
+  // pawn reads as a real game piece at board scale. Sized independently of the
+  // shared dome geometry above (that stays Classic/DZ-only). The tail tangent
+  // points are derived from the head circle so the silhouette stays a smooth,
+  // single closed shape for any size tweak.
+  const nmHeadR   = 0.28;  // round head radius
+  const nmHeadCY  = -0.12; // head centre Y (upper part of the cell)
+  const nmTipY    = 0.34;  // pointed tail tip
+  const nmCircleR = 0.19;  // solid player-colour circle in the head
+  const nmTopY    = nmHeadCY - nmHeadR;
+  const nmD       = nmTipY - nmHeadCY;
+  const nmTy      = nmHeadCY + (nmHeadR * nmHeadR) / nmD;
+  const nmTx      = nmHeadR * Math.sqrt(Math.max(0, nmD * nmD - nmHeadR * nmHeadR)) / nmD;
+  // Teardrop outline: top point → arc down the right side of the head → straight
+  // to the tail tip → back up the left side → arc over the crown → close. Both
+  // arcs are < 180°, so large-arc=0 is unambiguous.
+  const nmPath = `M 0,${nmTopY.toFixed(3)} A ${nmHeadR},${nmHeadR} 0 0 1 ${nmTx.toFixed(3)},${nmTy.toFixed(3)} L 0,${nmTipY.toFixed(3)} L ${(-nmTx).toFixed(3)},${nmTy.toFixed(3)} A ${nmHeadR},${nmHeadR} 0 0 1 0,${nmTopY.toFixed(3)} Z`;
   // DZ-only pedestal geometry — a taller/wider foot plus a stepped collar band at the
   // neck, so the onion-dome reads as resting on a solid plinth instead of a flat disc.
   // Deliberately separate from baseRX/baseRY/baseCY above so Classic's pedestal is
@@ -2201,8 +2258,9 @@ const PawnToken = memo(function PawnToken({
       <motion.g animate={scaleCtrl} initial={{ scale: stackScaleVal }} style={{ willChange: 'transform' }}>
 
         {/* Ground shadow — anchored to base elevation, NOT lifted by arc */}
-        <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
-          fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : 'rgba(0,0,0,0.62)'}
+        <ellipse cx={isNormal ? 0.02 : 0.04} cy={isNormal ? 0.33 : HR*0.90}
+          rx={isNormal ? 0.30 : HR*0.70} ry={isNormal ? 0.075 : HR*0.18}
+          fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : isNormal ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.62)'}
           filter={isClassic ? 'url(#cl-pawn-shadow)' : isDz ? 'url(#dz-pawn-shadow)' : undefined}/>
 
         {/* Capture speaking echo — breathes under the piece while a capture
@@ -2331,6 +2389,34 @@ const PawnToken = memo(function PawnToken({
             {/* Eight-point star finial */}
             <polygon points={starPoints(0, domeCY - 1.15*domeR - 0.075, 0.075, 0.030, 8)} fill={DZ.BORDER_GOLD}/>
             <circle cx={0} cy={domeCY - 1.15*domeR - 0.075} r="0.022" fill="#fff" fillOpacity="0.7"/>
+          </>
+        ) : isNormal ? (
+          <>
+            {/* Flat white map-pin / location-marker pawn — Normal board only.
+                A chunky white teardrop body with a solid player-colour circle in
+                the head and a soft drop shadow beneath (the ground-shadow ellipse
+                above). No gloss, no gradients, no neon — just a clean, legible
+                game piece. */}
+            {/* Movable highlight — quiet flat dark ring around the pin head */}
+            {isMovable && (
+              <motion.circle cx={0} cy={nmHeadCY} r={nmHeadR + 0.10}
+                fill="none" stroke="rgba(58,58,58,0.55)" strokeWidth="0.030"
+                animate={{ opacity: [0.25, 0.80, 0.25] }}
+                transition={{ duration: 1.0, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            )}
+
+            {/* White map-pin body — solid, rounded head tapering to a point */}
+            <path
+              d={nmPath}
+              fill="#FFFFFF"
+              stroke="rgba(0,0,0,0.28)"
+              strokeWidth="0.024"
+              strokeLinejoin="round"
+            />
+
+            {/* Solid player-colour circle centred in the pin head */}
+            <circle cx={0} cy={nmHeadCY} r={nmCircleR} fill={nmColor} />
           </>
         ) : (
           <>
@@ -2855,6 +2941,7 @@ const BoardSVG = memo(function BoardSVG({
   const activeColor = E.PLAYER_COLORS[game.activePlayer];
   const isClassic   = boardStyle === 'classic';
   const isDz        = boardStyle === 'dz';
+  const isNormal    = boardStyle === 'normal';
   // Neon exit-modal pause — always false for Classic/DZ (see BoardSVGProps).
   const isPaused = paused === true;
   // Classic palette: uses module-level CL_SOLID / CL_LIGHT / CL_BORDER / CL_ARROW
@@ -3320,7 +3407,7 @@ const BoardSVG = memo(function BoardSVG({
       </defs>
 
       {/* ── Background ── */}
-      <rect width="15" height="15" fill={isClassic ? '#EEE9DF' : isDz ? DZ.BOARD_BG : '#030b16'}/>
+      <rect width="15" height="15" fill={isClassic ? '#EEE9DF' : isDz ? DZ.BOARD_BG : isNormal ? NM.PATH_WHITE : '#030b16'}/>
       {/* Classic: linen cross-hatch paper grain — the feel of a premium printed board */}
       {isClassic && <rect width="15" height="15" fill="url(#cl-linen)"/>}
       {/* Classic: very soft warm golden spotlight — light from above hitting the centre */}
@@ -3714,6 +3801,57 @@ const BoardSVG = memo(function BoardSVG({
           );
         }
 
+        if (isNormal) {
+          // Normal home base — the standard finished-Ludo look: a solid
+          // saturated quadrant with a white, bordered inset "tray" where the
+          // four pieces sit. The inset frame uses a deeper shade of the home
+          // colour so the base reads as a proper tray, not a flat block.
+          const solid  = NM.HOME_COLORS[player as 0|1|2|3];
+          const border = NM.HOME_BASE_BORDER[player as 0|1|2|3];
+          return (
+            <g key={`hz-${player}`}>
+              {/* Solid saturated quadrant */}
+              <rect x={zc} y={zr} width="6" height="6" fill={solid}
+                fillOpacity={exists ? 1 : 0.30}/>
+              {/* White base inset */}
+              <rect x={zc+0.55} y={zr+0.55} width="4.90" height="4.90" rx="0.45"
+                fill="#FFFFFF" fillOpacity={exists ? 1 : 0.55}/>
+              {/* Coloured border — one shade deeper than the quadrant */}
+              <rect x={zc+0.55} y={zr+0.55} width="4.90" height="4.90" rx="0.45"
+                fill="none" stroke={border} strokeWidth="0.08"
+                strokeOpacity={exists ? 1 : 0.55}/>
+              {/* Faint inner hairline — subtle tray depth without a gradient */}
+              <rect x={zc+0.72} y={zr+0.72} width="4.56" height="4.56" rx="0.30"
+                fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="0.018"/>
+              {/* Four pawn slots — faint circles so an empty base still reads */}
+              {E.HOME_BASES[player].map(([br, bc], si) => (
+                <circle key={si} cx={bc+0.5} cy={br+0.5} r="0.40"
+                  fill="none" stroke="rgba(0,0,0,0.10)" strokeWidth="0.02"/>
+              ))}
+              {/* Home-impact flash on defeat arrival — flat, colour-only, at the
+                  returning piece's own home slot */}
+              {homeImpact?.player === player && (() => {
+                const base = E.HOME_BASES[player][homeImpact.index] ?? [zr + 3, zc + 3];
+                return (
+                  <motion.circle
+                    key={homeImpact.id}
+                    cx={base[1] + 0.5} cy={base[0] + 0.5} r={0.46}
+                    fill={solid}
+                    initial={{ scale: 1.5, fillOpacity: 0.80 }}
+                    animate={{ scale: 1, fillOpacity: 0 }}
+                    transition={{ duration: 0.55, ease: 'easeOut' }}
+                  />
+                );
+              })()}
+              {/* Flat outer hairline */}
+              <rect x={zc} y={zr} width="6" height="6" fill="none"
+                stroke={NM.BORDER_DARK}
+                strokeWidth={isCurrent ? 0.08 : 0.04}
+                strokeOpacity={isCurrent ? 0.9 : exists ? 0.5 : 0.2}/>
+            </g>
+          );
+        }
+
         return (
           <g key={`hz-${player}`}>
 
@@ -3910,9 +4048,9 @@ const BoardSVG = memo(function BoardSVG({
 
         // Visual rule: ONLY homecol (middle lane) cells get player color.
         // Strip and path cells stay neutral/dark for clean contrast.
-        let fill    = isClassic ? '#FDF8E6' : isDz ? DZ.PATH_CREAM : '#0d1f38';
+        let fill    = isClassic ? '#FDF8E6' : isDz ? DZ.PATH_CREAM : isNormal ? NM.PATH_WHITE : '#0d1f38';
         let fillOp  = 1;
-        let stroke  = isClassic ? 'rgba(110,68,10,0.34)' : isDz ? DZ.PATH_HAIRLINE : 'rgba(255,255,255,0.06)';
+        let stroke  = isClassic ? 'rgba(110,68,10,0.34)' : isDz ? DZ.PATH_HAIRLINE : isNormal ? NM.PATH_HAIRLINE : 'rgba(255,255,255,0.06)';
         let useGlow = false;
 
         if (cell.kind === 'homecol') {
@@ -3921,14 +4059,14 @@ const BoardSVG = memo(function BoardSVG({
             ? (player === 0 ? c - 1 : 13 - c)   // horizontal arms
             : (player === 1 ? r - 1 : 13 - r);   // vertical arms
           const t = Math.max(0, Math.min(1, depth / 5));
-          fill    = isClassic ? CL_SOLID[player as 0|1|2|3] : isDz ? DZ.STRIP_COLORS[player as 0|1|2|3] : E.PLAYER_COLORS[player];
+          fill    = isClassic ? CL_SOLID[player as 0|1|2|3] : isDz ? DZ.STRIP_COLORS[player as 0|1|2|3] : isNormal ? NM.STRIP_COLORS[player as 0|1|2|3] : E.PLAYER_COLORS[player];
           fillOp  = game.playerSlots.includes(player)
-            ? (isClassic || isDz ? 0.88 + t * 0.10 : 0.18 + t * 0.52)
-            : (isClassic || isDz ? 0.18 : 0.04);
+            ? (isClassic || isDz ? 0.88 + t * 0.10 : isNormal ? 1 : 0.18 + t * 0.52)
+            : (isClassic || isDz || isNormal ? 0.18 : 0.04);
           stroke  = game.playerSlots.includes(player)
-            ? (isClassic ? CL_BORDER[player as 0|1|2|3] : isDz ? DZ.BORDER_DEEP : E.PLAYER_NEONS[player])
+            ? (isClassic ? CL_BORDER[player as 0|1|2|3] : isDz ? DZ.BORDER_DEEP : isNormal ? NM.BORDER_DARK : E.PLAYER_NEONS[player])
             : 'transparent';
-          useGlow = !isClassic && !isDz && game.playerSlots.includes(player) && t > 0.5;
+          useGlow = !isClassic && !isDz && !isNormal && game.playerSlots.includes(player) && t > 0.5;
         }
         // strip + path → remain the neutral dark fill defined above,
         // EXCEPT the 4 exit squares (below), which get their house tint.
@@ -3978,7 +4116,7 @@ const BoardSVG = memo(function BoardSVG({
                 fill="rgba(140,90,20,0.045)" pointerEvents="none"/>
             )}
             {/* Subtle glass sheen — neon mode only */}
-            {!isClassic && !isDz && (
+            {!isClassic && !isDz && !isNormal && (
               <rect x={c+0.04} y={r+0.04} width="0.28" height="0.13" rx="0.05"
                 fill="rgba(255,255,255,0.07)"/>
             )}
@@ -4031,6 +4169,22 @@ const BoardSVG = memo(function BoardSVG({
                       <polygon
                         points={starPoints(c+0.45, r+0.73, 0.052, 0.021, 5)}
                         fill={player >= 0 ? DZ.PLAYER_GATE_INKS[player as 0|1|2|3] : DZ.BORDER_DEEP}/>
+                    </g>
+                  </>
+                ) : isNormal ? (
+                  <>
+                    {/* Normal: flat player-coloured exit square + solid direction arrow */}
+                    <rect x={c} y={r} width="1" height="1"
+                      fill={player >= 0 ? NM.HOME_COLORS[player as 0|1|2|3] : 'transparent'}
+                      fillOpacity={0.92}/>
+                    <g transform={`rotate(${exitRotDeg}, ${c+0.5}, ${r+0.5})`}>
+                      <path
+                        d={`M ${c+0.30},${r+0.26} L ${c+0.54},${r+0.50} L ${c+0.30},${r+0.74}`}
+                        fill="none"
+                        stroke={player >= 0 ? NM.ARROW_INKS[player as 0|1|2|3] : 'rgba(58,58,58,0.70)'}
+                        strokeWidth="0.078" strokeLinecap="round" strokeLinejoin="round"
+                        strokeOpacity={0.95}
+                      />
                     </g>
                   </>
                 ) : (
@@ -4188,6 +4342,23 @@ const BoardSVG = memo(function BoardSVG({
                   </g>
                 );
               }
+              if (isNormal) {
+                // Normal: permanent flat star marker — always rendered, never
+                // hides and never attaches to a pawn (same fixture rule as
+                // Classic/DZ). Flat dark-grey fill, high contrast on the white
+                // path; a crisp hairline halo appears when a pawn occupies it.
+                return (
+                  <g transform={T}>
+                    <polygon
+                      points="0.500,0.200 0.571,0.403 0.785,0.407 0.614,0.537 0.676,0.743 0.500,0.620 0.324,0.743 0.386,0.537 0.215,0.407 0.429,0.403"
+                      fill={NM.STAR_INK} fillOpacity="0.85"/>
+                    {occCount > 0 && (
+                      <rect x="0.045" y="0.045" width="0.91" height="0.91" rx="0.09"
+                        fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="0.045"/>
+                    )}
+                  </g>
+                );
+              }
               return (
                 // NOTE: static translate must live on a plain <g> ancestor — see
                 // the comment above about Framer Motion overriding SVG transform attributes.
@@ -4281,13 +4452,13 @@ const BoardSVG = memo(function BoardSVG({
       {!isDz && (
         <>
           <polygon points="6,6 9,6 7.5,7.5"
-            fill={isClassic ? CL_SOLID[1] : E.PLAYER_COLORS[1]} opacity={game.playerSlots.includes(1) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
+            fill={isClassic ? CL_SOLID[1] : isNormal ? NM.HOME_COLORS[1] : E.PLAYER_COLORS[1]} opacity={game.playerSlots.includes(1) ? (isClassic || isNormal ? 0.96 : 0.58) : (isClassic || isNormal ? 0.28 : 0.14)}/>
           <polygon points="9,6 9,9 7.5,7.5"
-            fill={isClassic ? CL_SOLID[2] : E.PLAYER_COLORS[2]} opacity={game.playerSlots.includes(2) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
+            fill={isClassic ? CL_SOLID[2] : isNormal ? NM.HOME_COLORS[2] : E.PLAYER_COLORS[2]} opacity={game.playerSlots.includes(2) ? (isClassic || isNormal ? 0.96 : 0.58) : (isClassic || isNormal ? 0.28 : 0.14)}/>
           <polygon points="9,9 6,9 7.5,7.5"
-            fill={isClassic ? CL_SOLID[3] : E.PLAYER_COLORS[3]} opacity={game.playerSlots.includes(3) ? (isClassic ? 0.96 : 0.58) : (isClassic ? 0.28 : 0.14)}/>
+            fill={isClassic ? CL_SOLID[3] : isNormal ? NM.HOME_COLORS[3] : E.PLAYER_COLORS[3]} opacity={game.playerSlots.includes(3) ? (isClassic || isNormal ? 0.96 : 0.58) : (isClassic || isNormal ? 0.28 : 0.14)}/>
           <polygon points="6,9 6,6 7.5,7.5"
-            fill={isClassic ? CL_SOLID[0] : E.PLAYER_COLORS[0]} opacity={isClassic ? 0.96 : 0.58}/>
+            fill={isClassic ? CL_SOLID[0] : isNormal ? NM.HOME_COLORS[0] : E.PLAYER_COLORS[0]} opacity={(isClassic || isNormal) ? 0.96 : 0.58}/>
         </>
       )}
       {isDz && (
@@ -4319,11 +4490,11 @@ const BoardSVG = memo(function BoardSVG({
           <line x1="6" y1="9" x2="7.5" y2="7.5" stroke="rgba(0,0,0,0.18)" strokeWidth="0.040"/>
         </>
       )}
-      {/* Center area border — gilt for Classic, subtle white for Neon, deep green for DZ */}
+      {/* Center area border — gilt for Classic, subtle white for Neon, deep green for DZ, flat dark for Normal */}
       <rect x="6" y="6" width="3" height="3" fill="none"
-        stroke={isClassic ? 'url(#clbevel)' : isDz ? DZ.BORDER_DEEP : 'rgba(255,255,255,0.12)'}
-        strokeWidth={isClassic ? 0.042 : isDz ? 0.050 : 0.055}
-        strokeOpacity={isClassic ? 0.72 : isDz ? 0.85 : 1}/>
+        stroke={isClassic ? 'url(#clbevel)' : isDz ? DZ.BORDER_DEEP : isNormal ? NM.BORDER_DARK : 'rgba(255,255,255,0.12)'}
+        strokeWidth={isClassic ? 0.042 : isDz ? 0.050 : isNormal ? 0.050 : 0.055}
+        strokeOpacity={isClassic ? 0.72 : isDz ? 0.85 : isNormal ? 0.7 : 1}/>
       {isDz ? (
         <>
           {/* Warm ambient bloom beneath the medallion — soft vignette on the gold field */}
@@ -4434,6 +4605,9 @@ const BoardSVG = memo(function BoardSVG({
           {/* Jewel micro hotspot — pin-point peak brilliance */}
           <circle cx="7.470" cy="7.466" r="0.020" fill="white" fillOpacity="0.99"/>
         </>
+      ) : isNormal ? (
+        /* Normal: flat neutral centre dot — simple, no ornament */
+        <circle cx="7.5" cy="7.5" r="0.16" fill="rgba(58,58,58,0.35)"/>
       ) : (
         /* Neon: white glow dot */
         <circle cx="7.5" cy="7.5" r="0.52" fill="white" opacity="0.16"/>
@@ -4476,6 +4650,12 @@ const BoardSVG = memo(function BoardSVG({
             </g>
           ))}
         </>
+      ) : isNormal ? (
+        <>
+          {/* Flat dark outer frame — simple, high contrast, no ornaments */}
+          <rect x="0.08" y="0.08" width="14.84" height="14.84"
+            fill="none" rx="0.10" stroke={NM.BORDER_DARK} strokeWidth="0.14" strokeOpacity="1"/>
+        </>
       ) : (
         <motion.rect x="0.05" y="0.05" width="14.90" height="14.90"
           fill="none" rx="0.20"
@@ -4491,7 +4671,7 @@ const BoardSVG = memo(function BoardSVG({
       )}
 
     </>
-  ), [activeNeon, boardStyle, game, homeImpact, isClassic, isDz, movableHighlights, animatingHomeSlots, safeCellOccupancy, isPaused]);
+  ), [activeNeon, boardStyle, game, homeImpact, isClassic, isDz, isNormal, movableHighlights, animatingHomeSlots, safeCellOccupancy, isPaused]);
 
   return (
     <svg viewBox="0 0 15 15"
@@ -4575,6 +4755,7 @@ const BoardSVG = memo(function BoardSVG({
             onDefeatArrived={anim.onArrival}
             isClassic={isClassic}
             isDz={isDz}
+            isNormal={isNormal}
             onStepLand={onHopStepLand}
             onDustStep={onDustStep}
             onDzSparkleStep={onDzSparkleStep}
@@ -5081,6 +5262,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   const isClassic   = boardStyle === 'classic';
   const isDz        = boardStyle === 'dz';
   const isNeon      = boardStyle === 'neon';
+  const isNormal    = boardStyle === 'normal';
   // Neon only: fully pause the board while the exit-confirmation modal is
   // open. The modal's backdrop is intentionally semi-transparent, and the
   // Neon board's bright continuous animations (plus any in-flight hop/VFX)
@@ -5276,15 +5458,17 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   // hop burst. It does not alter the hop sequence, move resolution, or VFX;
   // its explicit board-style guard keeps Classic and DZ entirely unchanged.
   const handleNeonHopLand = useCallback((x: number, y: number, neon: string) => {
-    spawnHopBurst(x, y, neon);
+    // The glowing hop-burst VFX is Neon-only; the Normal board reaches this
+    // callback purely for the shared per-step haptic (flat theme, no bursts).
+    if (isNeon) spawnHopBurst(x, y, neon);
     // pawnTiming.hopMs is the active pawn-speed slider's per-hop duration
     // (continuous value, just read here) — lets the blip's envelope track
     // the slider instead of staying fixed-length. See playNeonPawnMove's
     // bounded scale in sound-manager.ts.
     if (isNeon) playNeonPawnMove(pawnTiming.hopMs);
-    // Haptics are theme-independent: this callback is only ever invoked when
-    // Neon is active (see PawnToken's per-step guard), so exactly one of the
-    // three handle*Step callbacks fires per physical hop regardless of theme.
+    // Haptics are theme-independent: this callback is invoked when Neon or
+    // Normal is active (see PawnToken's per-step guard), so exactly one of
+    // the three handle*Step callbacks fires per physical hop regardless of theme.
     vibratePawnStep();
   }, [isNeon, spawnHopBurst, pawnTiming]);
 
@@ -5863,6 +6047,8 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             // Green-and-ivory silk sweep — #006233 remains the prominent anchor.
             'linear-gradient(112deg, #003c1f 0%, #006233 34%, #0b6e3b 47%, #174a2d 62%, #062d18 100%)',
           ].join(', ')
+        : isNormal
+        ? '#232838'
         : 'linear-gradient(175deg, #060f1d 0%, #09152a 55%, #050d18 100%)' }}
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -5924,15 +6110,17 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             borderRadius: 22,
             overflow: 'visible',
             padding: '6px',
-            background: (isClassic || isDz)
+            background: (isClassic || isDz || isNormal)
               ? 'transparent'
               : 'radial-gradient(ellipse 120% 100% at 50% 50%, #0e2647 0%, #030b16 70%)',
-            border: (isClassic || isDz) ? 'none' : '1px solid rgba(255,255,255,0.07)',
+            border: (isClassic || isDz || isNormal) ? 'none' : '1px solid rgba(255,255,255,0.07)',
           }}
           animate={exitPause
             ? { boxShadow: boardShadowAnimation.boxShadow[0] }
-            : boardShadowAnimation}
-          transition={exitPause ? SETTLE_TRANSITION : boardShadowTransition}>
+            : (isNormal
+              ? { boxShadow: '0 10px 30px rgba(0,0,0,0.45)' }
+              : boardShadowAnimation)}
+          transition={exitPause ? SETTLE_TRANSITION : (isNormal ? { duration: 0.3 } : boardShadowTransition)}>
 
           {/* Inner felt — live SVG board, clipped to the rounded frame */}
           <div style={{
@@ -5942,6 +6130,8 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             overflow: 'hidden',
             boxShadow: (isClassic || isDz)
               ? 'inset 0 6px 32px rgba(0,0,0,0.78), inset 0 0 80px rgba(0,0,0,0.48)'
+              : isNormal
+              ? 'inset 0 0 0 1px rgba(0,0,0,0.10)'
               : 'inset 0 4px 20px rgba(0,0,0,0.60), inset 0 0 0 1px rgba(255,255,255,0.05)',
           }}>
             <BoardSVG

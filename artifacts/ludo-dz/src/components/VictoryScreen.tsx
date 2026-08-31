@@ -11,6 +11,7 @@ import { GamePiece } from './GamePiece';
 import { MascotCharacter } from './MascotCharacter';
 import * as E from '../lib/ludo-engine';
 import * as DZ from '../lib/board-theme-dz';
+import * as NM from '../lib/board-theme-normal';
 import type { BoardStyle } from '../App';
 import { supportsDvh } from '../lib/utils';
 
@@ -95,8 +96,11 @@ export function VictoryScreen({
   const isAr      = lang === 'ar';
   const isClassic = boardStyle === 'classic';
   const isDz      = boardStyle === 'dz';
+  const isNormal  = boardStyle === 'normal';
 
-  const winnerColor = isDz ? DZ.HOME_COLORS[winner] : E.PLAYER_COLORS[winner];
+  const winnerColor = isDz ? DZ.HOME_COLORS[winner]
+    : isNormal ? NM.HOME_COLORS[winner]
+    : E.PLAYER_COLORS[winner];
   const winnerGlow  = isDz ? DZ.PLAYER_ACCENT_COLORS[winner] : E.PLAYER_NEONS[winner];
   const winnerName  = isAr ? E.PLAYER_NAMES_AR[winner] : E.PLAYER_NAMES_FR[winner].toUpperCase();
 
@@ -116,6 +120,8 @@ export function VictoryScreen({
     chipBorder: 'rgba(201,162,39,0.32)',
     confettiShape: 'petal' as ConfettiShape,
     confettiColors: ['#C9A227', '#FFDC64', winnerColor, '#FCE9B0'],
+    ctaBg: `linear-gradient(135deg, ${winnerColor}cc, ${winnerColor}88)`,
+    ctaShadow: `0 0 20px ${winnerColor}40`,
   } : isDz ? {
     scrim: 'radial-gradient(ellipse 120% 100% at 50% 38%, rgba(0,84,45,0.5) 0%, rgba(2,13,8,0.95) 75%)',
     cardBg: `linear-gradient(165deg, ${winnerColor}26 0%, rgba(3,38,21,0.97) 42%, rgba(2,15,9,0.98) 100%)`,
@@ -128,6 +134,23 @@ export function VictoryScreen({
     chipBorder: 'rgba(201,162,39,0.34)',
     confettiShape: 'diamond' as ConfettiShape,
     confettiColors: [DZ.BORDER_GOLD, winnerColor, DZ.PATH_CREAM, DZ.BOARD_BG],
+    ctaBg: `linear-gradient(135deg, ${winnerColor}cc, ${winnerColor}88)`,
+    ctaShadow: `0 0 20px ${winnerColor}40`,
+  } : isNormal ? {
+    // Normal: flat, high-contrast — solid fills only, no gradients/glow.
+    scrim: 'rgba(10,13,22,0.94)',
+    cardBg: 'rgba(24,29,46,0.98)',
+    borderOuter: NM.DICE_FRAME,
+    borderInner: 'rgba(255,255,255,0.18)',
+    ringGlow: `0 0 60px ${winnerColor}40`,
+    eyebrow: 'rgba(255,255,255,0.55)',
+    gold: winnerColor,
+    chipBg: 'rgba(255,255,255,0.06)',
+    chipBorder: 'rgba(255,255,255,0.16)',
+    confettiShape: 'spark' as ConfettiShape,
+    confettiColors: [...NM.HOME_COLORS],
+    ctaBg: winnerColor,
+    ctaShadow: '0 6px 16px rgba(0,0,0,0.35)',
   } : {
     scrim: 'rgba(3,11,22,0.92)',
     cardBg: `linear-gradient(150deg, ${winnerColor}22 0%, rgba(6,14,26,0.97) 100%)`,
@@ -140,6 +163,8 @@ export function VictoryScreen({
     chipBorder: `${winnerGlow}35`,
     confettiShape: 'spark' as ConfettiShape,
     confettiColors: [...E.PLAYER_NEONS],
+    ctaBg: `linear-gradient(135deg, ${winnerColor}cc, ${winnerColor}88)`,
+    ctaShadow: `0 0 20px ${winnerColor}40`,
   };
 
   // Standings — winner pinned first, others by pieces-home desc, then captures desc.
@@ -193,7 +218,7 @@ export function VictoryScreen({
             "joy" state (hop + stretch + sparkles), glowing in the theme of
             the board the match was played on. */}
         <div className="relative">
-          <MascotCharacter player={winner} mood="joy" size={88} isClassic={isClassic} isDz={isDz} isNeon={!isClassic && !isDz} />
+          <MascotCharacter player={winner} mood="joy" size={88} isClassic={isClassic} isDz={isDz} isNeon={!isClassic && !isDz && !isNormal} />
           {(isClassic || isDz) && (
             <Sparkles size={18} color={theme.gold}
               className="absolute -top-1 -right-2"
@@ -246,7 +271,7 @@ export function VictoryScreen({
           <div className="flex flex-col" style={{ gap: 6 }}>
             {standings.map(s => {
               const isWinnerRow  = s.slot === winner;
-              const color        = isDz ? DZ.HOME_COLORS[s.slot] : E.PLAYER_COLORS[s.slot];
+              const color        = isDz ? DZ.HOME_COLORS[s.slot] : isNormal ? NM.HOME_COLORS[s.slot] : E.PLAYER_COLORS[s.slot];
               const name         = isAr ? E.PLAYER_NAMES_AR[s.slot] : E.PLAYER_NAMES_FR[s.slot];
               const isTopAttacker = !isWinnerRow && s.captures > 0 && s.captures === maxOtherCaptures;
               return (
@@ -296,10 +321,10 @@ export function VictoryScreen({
             whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
             style={{
               flex: 1, padding: '11px 0', borderRadius: 18, cursor: 'pointer',
-              background: `linear-gradient(135deg, ${winnerColor}cc, ${winnerColor}88)`,
+              background: theme.ctaBg,
               border: `1.5px solid ${theme.gold}`,
               color: '#fff', fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 13,
-              boxShadow: `0 0 20px ${winnerColor}40`,
+              boxShadow: theme.ctaShadow,
             }}>
             {isAr ? 'جديد' : 'Rejouer'}
           </motion.button>

@@ -43,6 +43,16 @@ function useThemeTokens(boardStyle: BoardStyle) {
       label: 'rgba(255,238,196,0.72)',
     };
   }
+  if (boardStyle === 'normal') {
+    return {
+      scrim: 'radial-gradient(ellipse 120% 100% at 50% 38%, rgba(60,86,124,0.5) 0%, rgba(10,12,20,0.95) 75%)',
+      track: 'rgba(68,114,196,0.24)',
+      arcFrom: '#8FB4E8', arcMid: '#4472C4', arcTo: '#2C4C86',
+      glow: 'rgba(68,114,196,0.55)',
+      icon: '#7FA5DB',
+      label: 'rgba(214,226,246,0.72)',
+    };
+  }
   return {
     scrim: 'rgba(3,11,22,0.92)',
     track: 'rgba(0,255,238,0.20)',

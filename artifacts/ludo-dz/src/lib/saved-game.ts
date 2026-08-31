@@ -71,7 +71,7 @@ export function validateSavedGameSnapshot(value: unknown): SavedGameSnapshot | n
   if (value.version !== SAVED_GAME_VERSION) return null;
   if (typeof value.savedAt !== 'string' || Number.isNaN(Date.parse(value.savedAt))) return null;
   if (!isValidGameConfig(value.config) || !isValidGameState(value.game)) return null;
-  if (value.boardStyle !== undefined && value.boardStyle !== 'neon' && value.boardStyle !== 'classic' && value.boardStyle !== 'dz') return null;
+  if (value.boardStyle !== undefined && value.boardStyle !== 'neon' && value.boardStyle !== 'classic' && value.boardStyle !== 'dz' && value.boardStyle !== 'normal') return null;
   if (!Array.isArray(value.lastDice) || !value.lastDice.every(die => Number.isInteger(die))) return null;
   // Speed fields: accept the new continuous sliders (0–100), the retired
   // three-mode animSpeed (migrated on load), or neither (defaults) — but
