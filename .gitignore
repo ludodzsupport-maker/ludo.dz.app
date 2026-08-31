@@ -56,3 +56,6 @@ Thumbs.db
 # cordova/node_modules is already covered by the generic `node_modules` rule above.
 /cordova/platforms/
 /cordova/plugins/
+
+# Offline-rendered verification previews (see ludo-sound-architecture.md) — not shipped assets
+artifacts/ludo-dz/sound-preview/
