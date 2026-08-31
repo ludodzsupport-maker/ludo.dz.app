@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RotateCcw, X } from "lucide-react";
+import { RotateCcw, X, Check } from "lucide-react";
 import { playIconTap, playNavBack, playSelection, playStartPress, playToggleClick } from "../lib/sound-manager";
 import { supportsDvh } from "../lib/utils";
 import { readSavedGame, type SavedGameSnapshot } from "../lib/saved-game";
+import { BOARD_STYLES } from "../lib/board-style-pref";
 import type { BoardStyle } from "../App";
 import * as DZ from "../lib/board-theme-dz";
 import * as NM from "../lib/board-theme-normal";
+import { BoardThemeThumbnail, BOARD_THEME_ACCENTS } from "./BoardThemeThumbnail";
 import { MascotCharacter } from "./MascotCharacter";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -34,6 +36,8 @@ interface GameConfigOverlayProps {
   /** Called with the paused game that belongs to this mode, when the player resumes it. */
   onResume: (snapshot: SavedGameSnapshot) => void;
   boardStyle: BoardStyle;
+  /** Live board-style updates from the quick switcher (same persisted preference as Settings). */
+  onBoardStyleChange: (style: BoardStyle) => void;
 }
 
 // ─── Translations ─────────────────────────────────────────────────────────────
@@ -59,6 +63,12 @@ const T = {
     teamup:         "Paramètres",
     teamupSub:      "Attaque · Passe de Tour",
     settingsTitle:  "Paramètres d'équipe",
+    // board-theme quick switcher (same wording as the Settings sheet)
+    themeLabel:     "Style du plateau",
+    themeNeon:      "Neon Board",
+    themeClassic:   "Classic Board",
+    themeDz:        "DZ Board",
+    themeNormal:    "Normal Board",
     // team-mode specific
     sectionTeam:    "Options d'équipe",
     playersFixed:   "4 joueurs — mode équipe",
@@ -88,6 +98,12 @@ const T = {
     teamup:         "إعدادات اللعب",
     teamupSub:      "هجوم · تمرير الدور",
     settingsTitle:  "إعدادات اللعبة",
+    // board-theme quick switcher (same wording as the Settings sheet)
+    themeLabel:     "نمط اللوحة",
+    themeNeon:      "نيون بورد",
+    themeClassic:   "بورد كلاسيكي",
+    themeDz:        "لوحة DZ",
+    themeNormal:    "البورد العادي",
     // team-mode specific
     sectionTeam:    "خيارات الفريق",
     playersFixed:   "٤ لاعبين — وضع الفريق",
@@ -313,6 +329,81 @@ function SectionLabel({ label, neon }: { label: string; neon: string }) {
   );
 }
 
+// ─── Board-theme quick switcher ───────────────────────────────────────────────
+// A deliberately quiet one-row control: a small muted label + four mini-board
+// swatches (the exact artwork the Settings picker shows, condensed). It sits
+// below the primary match-setup choices (rules, players, colour) in both size
+// and brightness, so it reads as an appearance nicety — a quick "which board
+// do I see" — rather than a match option. It writes the same persisted
+// BoardStyle preference as Settings (single source of truth).
+type ConfigCopy = (typeof T)["fr"] | (typeof T)["ar"];
+
+function BoardThemeSwitcher({ boardStyle, onChange, t }: {
+  boardStyle: BoardStyle;
+  onChange: (style: BoardStyle) => void;
+  t: ConfigCopy;
+}) {
+  const themeName = (s: BoardStyle) =>
+    s === "neon" ? t.themeNeon : s === "classic" ? t.themeClassic : s === "dz" ? t.themeDz : t.themeNormal;
+  return (
+    <div className="flex items-center gap-2.5 mb-5" role="group" aria-label={t.themeLabel}>
+      {/* Muted, start-aligned micro-label — one visual tier below SectionLabel */}
+      <span
+        className="font-heading font-bold uppercase flex-shrink-0"
+        style={{ fontSize: "9px", letterSpacing: "0.16em", color: "rgba(255,255,255,0.42)" }}
+      >
+        {t.themeLabel}
+      </span>
+      <div className="flex items-center gap-1.5 flex-shrink-0 ms-auto">
+        {BOARD_STYLES.map((s) => {
+          const active = boardStyle === s;
+          const accent = BOARD_THEME_ACCENTS[s];
+          return (
+            <motion.button
+              key={s}
+              onClick={() => { if (!active) { playSelection(); onChange(s); } }}
+              whileHover={{ scale: active ? 1 : 1.08 }}
+              whileTap={{ scale: 0.90 }}
+              aria-label={themeName(s)}
+              aria-pressed={active}
+              className="relative rounded-[9px] flex items-center justify-center flex-shrink-0"
+              style={{
+                width: "38px",
+                height: "38px",
+                background: active ? `${accent}1c` : "rgba(255,255,255,0.04)",
+                border: `1.5px solid ${active ? accent : "rgba(255,255,255,0.12)"}`,
+                boxShadow: active ? `0 0 12px ${accent}40` : "none",
+                opacity: active ? 1 : 0.72,
+                transition: "background 0.20s ease, border-color 0.20s ease, box-shadow 0.20s ease, opacity 0.20s ease",
+              }}
+            >
+              <BoardThemeThumbnail boardStyle={s} size={28} style={{ display: "block", borderRadius: "5px" }}/>
+              {active && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 22 }}
+                  className="absolute rounded-full flex items-center justify-center"
+                  style={{
+                    width: "14px",
+                    height: "14px",
+                    top: "-4px",
+                    insetInlineEnd: "-4px",
+                    background: accent,
+                    boxShadow: `0 0 7px ${accent}90`,
+                  }}
+                >
+                  <Check className="text-black" style={{ width: "9px", height: "9px" }} strokeWidth={3.5}/>
+                </motion.span>
+              )}
+            </motion.button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Small pawn silhouette for player-count chips ────────────────────────────
 function PawnSilhouette({ color, size = 10 }: { color: string; size?: number }) {
   return (
@@ -339,7 +430,7 @@ function themePlayerColors(boardStyle: BoardStyle): readonly string[] {
 }
 
 // ─── Main overlay ─────────────────────────────────────────────────────────────
-export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume, boardStyle }: GameConfigOverlayProps) {
+export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume, boardStyle, onBoardStyleChange }: GameConfigOverlayProps) {
   const [rule,         setRule]         = useState<Rule>("classic");
   const [players,      setPlayers]      = useState(4);
   const [humanColor,   setHumanColor]  = useState(0);
@@ -700,6 +791,9 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume, boar
               })}
             </div>
           )}
+
+          {/* ── BOARD THEME — quiet quick switcher (same preference as Settings) ── */}
+          <BoardThemeSwitcher boardStyle={boardStyle} onChange={onBoardStyleChange} t={t}/>
 
           {/* ── START CTA (+ per-mode resume, only when this mode has a paused game) ── */}
           <div className="flex items-stretch gap-2.5">

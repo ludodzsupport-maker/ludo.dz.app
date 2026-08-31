@@ -13,6 +13,8 @@ interface GameModeScreenProps {
   onStart: (config: GameConfig) => void;
   onResume: (snapshot: SavedGameSnapshot) => void;
   boardStyle: BoardStyle;
+  /** Live board-style updates from the pre-match config sheet (same persisted preference as Settings). */
+  onBoardStyleChange: (style: BoardStyle) => void;
 }
 
 // ─── Translations ─────────────────────────────────────────────────────────────
@@ -791,7 +793,7 @@ function ComingSoonPopup({
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export function GameModeScreen({ lang, onBack, onStart, onResume, boardStyle }: GameModeScreenProps) {
+export function GameModeScreen({ lang, onBack, onStart, onResume, boardStyle, onBoardStyleChange }: GameModeScreenProps) {
   const t = TRANSLATIONS[lang];
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
 
@@ -942,6 +944,7 @@ export function GameModeScreen({ lang, onBack, onStart, onResume, boardStyle }: 
             mode={selectedMode}
             lang={lang}
             boardStyle={boardStyle}
+            onBoardStyleChange={onBoardStyleChange}
             onClose={() => setSelectedMode(null)}
             onStart={(config: GameConfig) => {
               setSelectedMode(null);
