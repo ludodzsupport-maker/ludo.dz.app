@@ -39,6 +39,7 @@ import {
   playNeonDiceRoll,
   playNeonPawnMove,
   playNeonWelcomeJingle,
+  playNormalCapture,
   playNormalDiceRoll,
   playNormalPawnMove,
   playPrimaryAction,
@@ -5362,11 +5363,17 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     rollingRef.current = true;
     clearRollTimers();
 
-    // Read timing before triggering audio so the shared Classic/DZ sample and
-    // this cycle() share an exact duration. The local slow-end override
-    // remains dice-roll-only; slider values and Neon timing stay untouched.
+    // Read timing before triggering audio so the shared Classic/DZ/Normal
+    // sample and this cycle() share an exact duration. The local slow-end
+    // override remains dice-roll-only; slider values and Neon timing stay
+    // untouched. Normal joins the override because it now plays that same
+    // recorded sample: its ordinary slow window runs up to 3590 ms at slider
+    // 0, which would stretch the 1.109 s take to ~0.31x and read as a
+    // slow-motion rumble instead of a dice roll. With the override, Normal's
+    // computed roll duration is identical to Classic's and DZ's at every
+    // slider position (1708 ms below slider 10, `diceTiming` above it).
     const { cycles, baseMs, stepMs } =
-      (isClassic || isDz) && diceSpeed <= CLASSIC_SLOW_DICE_MAX_SPEED ? CLASSIC_SLOW_DICE_TIMING : diceTiming;
+      (isClassic || isDz || isNormal) && diceSpeed <= CLASSIC_SLOW_DICE_MAX_SPEED ? CLASSIC_SLOW_DICE_TIMING : diceTiming;
     const rollDurationMs = getRollDurationMs({ cycles, baseMs, stepMs });
 
     if (isNeon) playNeonDiceRoll(rollDurationMs);
@@ -5714,6 +5721,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       if (capturedPid && lastStep) {
         setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() });
         if (isClassic) playClassicCapture();
+        else if (isNormal) playNormalCapture();
         // Haptics are theme-independent: fires on every capture regardless
         // of which board style's SFX is gated above.
         vibrateCaptureOrWin();
@@ -5747,6 +5755,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       if (capturedPid && lastStep) {
         setShockwave({ x: lastStep.x, y: lastStep.y, neon: captorNeon, id: Date.now() });
         if (isClassic) playClassicCapture();
+        else if (isNormal) playNormalCapture();
         // Haptics are theme-independent: fires on every capture regardless
         // of which board style's SFX is gated above.
         vibrateCaptureOrWin();

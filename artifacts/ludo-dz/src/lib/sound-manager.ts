@@ -1471,21 +1471,31 @@ export function playDzWelcomeJingle(): void {
 // ─── Normal board cues ───────────────────────────────────────────────────────
 // The "Normal" theme is the flat, brightly-coloured, classic finished-Ludo
 // look (plain red/blue/yellow/green home bases on a white board — see
-// `board-theme-normal.ts`). Its cues are synthesized rather than fetched
-// audio so they start instantly, add no asset overhead, and are crisp at any
-// display scale — the same rationale as Neon/Classic/DZ. The theme's sonic
-// personality is deliberately playful and "game-y" (a friendly family board
-// game feel): a bouncy wooden hop for pawn steps and a bright little dice
-// rattle for rolls. Both connect through `getSfxDestination` so they inherit
-// the shared ducking, mute, and BGM-EQ behaviour of every other cue.
+// `board-theme-normal.ts`). Its dice roll shares the one recorded sample every
+// other theme uses (see `playNormalDiceRoll` below). Its two *piece* cues are
+// synthesized here and are deliberately cartoon-flavoured, which is what sets
+// them apart from the other themes' materials (Neon's digital blip, Classic's
+// dry marble clack, DZ's low resonant plop):
+//
+//   • pawn hop → a springy "boing" with a small settle bounce
+//   • capture  → a comedic "bonk + gulp + ding" gotcha
+//
+// Both are multi-layer cues whose pitch and filter *move*: that movement — not
+// the waveform choice — is what makes a short game cue read as designed
+// cartoon sound rather than a flat click or a bare beep. Both connect through
+// `getSfxDestination`, so they inherit the shared ducking, mute, and BGM-EQ
+// behaviour of every other cue, and both are Normal-only: no helper below is
+// shared with another theme, and none of the shared helpers
+// (`scheduleWoodKnock`, `scheduleClassicPawnBody`, `scheduleDzPlop`,
+// `scheduleDzKnock`) are touched, so Classic/DZ/Neon are provably unaffected.
 let normalNoiseBuffer: AudioBuffer | null = null;
 
 /**
- * Dedicated noise texture for the Normal family only — distinct from the
- * Neon (0.28), wood (0.62), and DZ (0.48) buffers so the Normal theme keeps
- * its own timbre. A mid correlation (0.46) rounds the high end off into a
- * soft, slightly padded "board game" contact rather than a harsh rattle or a
- * dull thud — matching the flat, friendly visual style.
+ * Dedicated noise texture for the Normal piece cues only — distinct from the
+ * Neon (0.28), wood (0.62), and DZ (0.48/0.40) buffers so retuning this theme
+ * can never bleed into another. A light correlation (0.30) keeps it snappy and
+ * bright where the hop needs a "pop" consonant, while a lowpass still rounds
+ * it into a soft breath for the capture's gulp instead of a hiss.
  */
 function getNormalNoiseBuffer(context: AudioContext): AudioBuffer {
   if (normalNoiseBuffer?.sampleRate === context.sampleRate) return normalNoiseBuffer;
@@ -1493,23 +1503,135 @@ function getNormalNoiseBuffer(context: AudioContext): AudioBuffer {
   const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
   const samples = buffer.getChannelData(0);
   for (let i = 0; i < samples.length; i++) {
-    const previous = i === 0 ? 0 : samples[i - 1] * 0.46;
-    samples[i] = previous + (Math.random() * 2 - 1) * 0.66;
+    const previous = i === 0 ? 0 : samples[i - 1] * 0.30;
+    samples[i] = previous + (Math.random() * 2 - 1) * 0.7;
   }
   normalNoiseBuffer = buffer;
   return buffer;
 }
 
 /**
- * Normal board pawn step: a bouncy, playful "tap/hop" — Ludo-King-style
- * wooden feel. A soft filtered-noise contact transient stands in for the
- * piece tapping the tile, and a quick sine that flicks up then settles back
- * down gives the little upward "hop" that makes a moving piece read as light
- * and cheerful rather than a dull knock. `hopMs` — the caller's own per-hop
- * animation length, unchanged here — scales the envelope (bounded, see
+ * Modulator ratio for the hop's rubbery twang. Deliberately inharmonic (not
+ * 2.0 or 3.0) so the FM sidebands read as a stretched-rubber "twang" rather
+ * than as a bell or a clean brass tone.
+ */
+const NORMAL_HOP_FM_RATIO = 2.76;
+
+/**
+ * One cartoon "boing" — the complete voice behind the Normal pawn hop, used
+ * twice per hop (the hop itself, then a much smaller settle bounce).
+ *
+ * Three moving parts, which is what keeps it from reading as a flat click:
+ *
+ *   1. a fast *upward* sine sweep plus a hairline bandpassed air tick. An
+ *      upward sweep is what the ear reads as a "pop"/bubble; a static or
+ *      downward blip of the same length just reads as a click.
+ *   2. a triangle body whose pitch rises hard over the first ~26 ms and then
+ *      falls back down — the hop arc, i.e. the piece leaving the tile and
+ *      coming back to rest.
+ *   3. two modulators on that body, both decaying to nothing: an audio-rate
+ *      FM at `NORMAL_HOP_FM_RATIO` (the rubbery twang of a stretched spring)
+ *      and a ~34→21 Hz vibrato (the "bwoi-oi-oi" wobble a real spring makes
+ *      after being plucked). A warble that *settles* is the single strongest
+ *      cue for "springy/cartoon", and neither layer achieves it alone.
+ *
+ * `depth` scales both modulators and `tail` the body's decay, so the settle
+ * bounce is a lighter, shorter take on the same voice rather than a second,
+ * unrelated sound — the two always read as one event.
+ */
+function scheduleNormalBoing(
+  context: AudioContext,
+  bus: AudioNode,
+  startTime: number,
+  { amp, freq, scale, depth = 1, tail = 1 }: {
+    amp: number; freq: number; scale: number; depth?: number; tail?: number;
+  },
+): void {
+  const bodyEnd = 0.105 * scale * tail;
+
+  // ── Layer 1: takeoff "pop" ────────────────────────────────────────────
+  const pop = context.createOscillator();
+  pop.type = "sine";
+  pop.frequency.setValueAtTime(freq * 2.5, startTime);
+  pop.frequency.exponentialRampToValueAtTime(freq * 4.1, startTime + 0.010 * scale);
+  const popGain = context.createGain();
+  popGain.gain.setValueAtTime(0.0001, startTime);
+  popGain.gain.linearRampToValueAtTime(amp * 0.46, startTime + 0.002);
+  popGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.014 * scale);
+  pop.connect(popGain).connect(bus);
+  pop.start(startTime);
+  pop.stop(startTime + 0.016 * scale + 0.01);
+
+  // Air tick — a hairline bandpassed transient that gives the pop a
+  // consonant, so it still cuts through on small phone speakers where the
+  // 340 Hz body itself is weak.
+  const air = context.createBufferSource();
+  air.buffer = getNormalNoiseBuffer(context);
+  const airFilter = context.createBiquadFilter();
+  airFilter.type = "bandpass";
+  airFilter.frequency.setValueAtTime(freq * 5.2, startTime);
+  airFilter.Q.value = 1.1;
+  const airGain = context.createGain();
+  airGain.gain.setValueAtTime(0.0001, startTime);
+  airGain.gain.linearRampToValueAtTime(amp * 0.22 * depth, startTime + 0.002);
+  airGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.009 * scale);
+  air.connect(airFilter).connect(airGain).connect(bus);
+  air.start(startTime);
+  air.stop(startTime + 0.011 * scale + 0.01);
+
+  // ── Layer 2: spring body — the hop arc ────────────────────────────────
+  const body = context.createOscillator();
+  body.type = "triangle";
+  body.frequency.setValueAtTime(freq * 0.84, startTime);
+  body.frequency.exponentialRampToValueAtTime(freq * 1.46, startTime + 0.026 * scale);
+  body.frequency.exponentialRampToValueAtTime(freq * 0.96, startTime + bodyEnd);
+
+  // ── Layer 3a: rubber twang — audio-rate FM, decaying depth ────────────
+  const twang = context.createOscillator();
+  twang.type = "sine";
+  twang.frequency.setValueAtTime(freq * NORMAL_HOP_FM_RATIO, startTime);
+  twang.frequency.exponentialRampToValueAtTime(freq * NORMAL_HOP_FM_RATIO * 0.66, startTime + 0.07 * scale * tail);
+  const twangDepth = context.createGain();
+  twangDepth.gain.setValueAtTime(freq * 1.15 * depth, startTime);
+  twangDepth.gain.exponentialRampToValueAtTime(freq * 0.04, startTime + 0.07 * scale * tail);
+  twang.connect(twangDepth).connect(body.frequency);
+  twang.start(startTime);
+  twang.stop(startTime + 0.08 * scale * tail + 0.02);
+
+  // ── Layer 3b: spring wobble — decaying vibrato ────────────────────────
+  const wobble = context.createOscillator();
+  wobble.type = "sine";
+  wobble.frequency.setValueAtTime(34, startTime);
+  wobble.frequency.linearRampToValueAtTime(21, startTime + bodyEnd);
+  const wobbleDepth = context.createGain();
+  wobbleDepth.gain.setValueAtTime(freq * 0.26 * depth, startTime);
+  wobbleDepth.gain.exponentialRampToValueAtTime(freq * 0.01, startTime + bodyEnd);
+  wobble.connect(wobbleDepth).connect(body.frequency);
+  wobble.start(startTime);
+  wobble.stop(startTime + bodyEnd + 0.02);
+
+  const bodyGain = context.createGain();
+  bodyGain.gain.setValueAtTime(0.0001, startTime);
+  bodyGain.gain.linearRampToValueAtTime(amp, startTime + 0.004);
+  bodyGain.gain.exponentialRampToValueAtTime(0.0001, startTime + bodyEnd + 0.012 * scale * tail);
+  body.connect(bodyGain).connect(bus);
+  body.start(startTime);
+  body.stop(startTime + bodyEnd + 0.02 * scale * tail + 0.02);
+}
+
+/**
+ * Normal board pawn hop: a playful, springy cartoon "boing" — the piece
+ * bouncing off the tile rather than tapping it. A single main boing plus a
+ * much smaller second bounce ~72 ms later is what makes it feel bouncy and
+ * alive instead of one flat blip; that second hit is deliberately short,
+ * quiet, and higher (`tail: 0.5`, `depth: 0.5`) so a rapid multi-hop dash
+ * reads as a springy run and never as an echo or a tail.
+ *
+ * `hopMs` — the caller's own per-hop animation length for the active speed
+ * setting, unchanged here — scales the envelope (bounded, see
  * `pawnStepTimeScale`) exactly as the Neon/Classic/DZ pawn cues do, so the
- * tap tracks Fast/Rapid and Slow hop timing consistently; a small per-hop
- * pitch jitter keeps a long multi-hop dash from sounding mechanical.
+ * hop tracks Fast/Rapide and Lent consistently; a small per-hop pitch jitter
+ * (±6 %) keeps a long dash from sounding mechanical.
  */
 export function playNormalPawnMove(hopMs?: number): void {
   if (!soundEnabled) return;
@@ -1518,89 +1640,165 @@ export function playNormalPawnMove(hopMs?: number): void {
   lastNormalPawnAt = nowMs;
 
   const scale = pawnStepTimeScale(hopMs);
-  const jitter = 0.96 + Math.random() * 0.08;
+  const jitter = 0.94 + Math.random() * 0.12;
   playSynthCue((context, now) => {
-    // Contact transient — the piece tapping the board tile.
-    const noise = context.createBufferSource();
-    noise.buffer = getNormalNoiseBuffer(context);
-    const noiseFilter = context.createBiquadFilter();
-    noiseFilter.type = "bandpass";
-    noiseFilter.frequency.setValueAtTime(1500 * jitter, now);
-    noiseFilter.Q.value = 1.0;
-    const noiseGain = context.createGain();
-    noiseGain.gain.setValueAtTime(0.0001, now);
-    noiseGain.gain.linearRampToValueAtTime(0.16, now + 0.003);
-    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.028 * scale);
-    noise.connect(noiseFilter).connect(noiseGain).connect(getSfxDestination(context));
-    noise.start(now);
-    noise.stop(now + 0.032 * scale + 0.02);
-
-    // Hop body — quick upward pitch flick then settle, the bouncy "hop".
-    const hop = context.createOscillator();
-    hop.type = "triangle";
-    hop.frequency.setValueAtTime(300 * jitter, now);
-    hop.frequency.exponentialRampToValueAtTime(520 * jitter, now + 0.022 * scale);
-    hop.frequency.exponentialRampToValueAtTime(380 * jitter, now + 0.05 * scale);
-    const hopGain = context.createGain();
-    hopGain.gain.setValueAtTime(0.0001, now);
-    hopGain.gain.linearRampToValueAtTime(0.24, now + 0.004);
-    hopGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055 * scale);
-    hop.connect(hopGain).connect(getSfxDestination(context));
-    hop.start(now);
-    hop.stop(now + 0.06 * scale + 0.02);
+    scheduleNormalBoing(context, getSfxDestination(context), now, {
+      amp: 0.30, freq: 340 * jitter, scale,
+    });
+    // Settle bounce — the "extra juice" layer: a lighter, shorter repeat of
+    // the same voice, so the hop lands as a bounce instead of stopping cold.
+    scheduleNormalBoing(context, getSfxDestination(context), now + 0.072 * scale, {
+      amp: 0.105, freq: 402 * jitter, scale, depth: 0.5, tail: 0.5,
+    });
   });
 }
 
 /**
- * Normal board dice: a bright, original synthesized rattle rather than the
- * shared recorded Classic sample, so the flat "classic finished Ludo" theme
- * keeps its own cheerful personality. A short burst of filtered noise with a
- * quick alternating bandpass sweep reads as small dice tumbling, and a
- * settled low "tock" at the roll's end (a downward-gliding triangle, the
- * same hop voice as the pawn step) marks the dice coming to rest exactly when
- * the roll animation lands. `rollDurationMs` is the caller's own roll-
- * animation length, unchanged here.
+ * Normal board capture: a comedic "gotcha" in three beats — a soft bonk as
+ * the moving piece lands on its victim, a cartoon *gulp* as the victim
+ * disappears, and a bright little "ding" as the punchline. Total ≈ 300 ms, so
+ * it never lingers over the shockwave VFX or the next turn's roll.
+ *
+ * Deliberately its own sound rather than a louder hop: the gulp's
+ * up-then-down pitch glide through a resonant formant band is what reads as a
+ * swallow, and it shares nothing with `scheduleNormalBoing` (untouched above)
+ * but the theme's one noise buffer. Kept punchy but never harsh or violent —
+ * no distortion, a band-limited transient instead of a bright crash, and no
+ * sustained low end — so a capture reads as funny, which is the register the
+ * rest of this game's audio (and its mascot commentary) lives in.
+ */
+export function playNormalCapture(): void {
+  playSynthCue((context, now) => {
+    const bus = context.createGain();
+    bus.gain.setValueAtTime(1, now);
+    bus.connect(getSfxDestination(context));
+
+    // ── Beat 1: bonk — the landing impact ───────────────────────────────
+    // A fast downward sine glide is a "bonk": solid and weighty, but round
+    // rather than aggressive, because there is no noise crash on top of it.
+    const bonk = context.createOscillator();
+    bonk.type = "sine";
+    bonk.frequency.setValueAtTime(300, now);
+    bonk.frequency.exponentialRampToValueAtTime(126, now + 0.055);
+    const bonkGain = context.createGain();
+    bonkGain.gain.setValueAtTime(0.0001, now);
+    bonkGain.gain.linearRampToValueAtTime(0.40, now + 0.005);
+    bonkGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.085);
+    bonk.connect(bonkGain).connect(bus);
+    bonk.start(now);
+    bonk.stop(now + 0.1);
+
+    // Contact air — a short, band-limited breath that marks the moment of
+    // contact without adding a bright, violent "crack".
+    const air = context.createBufferSource();
+    air.buffer = getNormalNoiseBuffer(context);
+    const airFilter = context.createBiquadFilter();
+    airFilter.type = "bandpass";
+    airFilter.frequency.setValueAtTime(1250, now);
+    airFilter.Q.value = 0.8;
+    const airGain = context.createGain();
+    airGain.gain.setValueAtTime(0.0001, now);
+    airGain.gain.linearRampToValueAtTime(0.17, now + 0.003);
+    airGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.020);
+    air.connect(airFilter).connect(airGain).connect(bus);
+    air.start(now);
+    air.stop(now + 0.03);
+
+    // ── Beat 2: the gulp ────────────────────────────────────────────────
+    // The signature of a cartoon swallow: pitch goes UP fast and then
+    // collapses DOWN, sweeping *through* a resonant band that stays roughly
+    // where it is. That band is the throat — the cue swells as the pitch
+    // climbs into it and empties as the pitch falls back out, which is what
+    // reads as a "gulp" rather than a clean whistle. A parallel dry path
+    // keeps the body present wherever the pitch sits outside the band, so
+    // the swallow never thins out mid-glide (tuning note: a narrow,
+    // pitch-chasing Q≈5.5 band starves the fundamental by ~28 dB and the
+    // whole beat disappears under the bonk — measured, not guessed).
+    const gulpStart = now + 0.048;
+    const gulpGain = context.createGain();
+    gulpGain.gain.setValueAtTime(0.0001, gulpStart);
+    gulpGain.gain.linearRampToValueAtTime(0.44, gulpStart + 0.026);
+    gulpGain.gain.exponentialRampToValueAtTime(0.0001, gulpStart + 0.155);
+    gulpGain.connect(bus);
+
+    const formant = context.createBiquadFilter();
+    formant.type = "bandpass";
+    formant.Q.value = 2.0;
+    formant.frequency.setValueAtTime(620, gulpStart);
+    formant.frequency.linearRampToValueAtTime(920, gulpStart + 0.055);
+    formant.frequency.linearRampToValueAtTime(560, gulpStart + 0.14);
+    formant.connect(gulpGain);
+
+    const gulp = context.createOscillator();
+    gulp.type = "sine";
+    gulp.frequency.setValueAtTime(190, gulpStart);
+    gulp.frequency.exponentialRampToValueAtTime(640, gulpStart + 0.055);
+    gulp.frequency.exponentialRampToValueAtTime(155, gulpStart + 0.14);
+    gulp.connect(formant);
+    // Dry path — the unfiltered fundamental, quieter than the wet path but
+    // never gated by the resonance.
+    const gulpDry = context.createGain();
+    gulpDry.gain.setValueAtTime(0.5, gulpStart);
+    gulp.connect(gulpDry).connect(gulpGain);
+    gulp.start(gulpStart);
+    gulp.stop(gulpStart + 0.17);
+
+    // Throat partial — same glide a hair above the octave, resonant path
+    // only, so the swallow has a body without turning into a two-note
+    // whistle.
+    const throat = context.createOscillator();
+    throat.type = "sine";
+    throat.frequency.setValueAtTime(190 * 2.02, gulpStart);
+    throat.frequency.exponentialRampToValueAtTime(640 * 2.02, gulpStart + 0.055);
+    throat.frequency.exponentialRampToValueAtTime(155 * 2.02, gulpStart + 0.14);
+    const throatGain = context.createGain();
+    throatGain.gain.setValueAtTime(0.20, gulpStart);
+    throat.connect(throatGain).connect(formant);
+    throat.start(gulpStart);
+    throat.stop(gulpStart + 0.17);
+
+    // ── Beat 3: the "gotcha" ding ───────────────────────────────────────
+    // A short, bright bell as the comedic full stop — the "ha!" that tells
+    // the player a capture landed. Inharmonic upper partial keeps it a bell
+    // rather than a flute note.
+    const dingStart = now + 0.19;
+    const ding = context.createOscillator();
+    ding.type = "sine";
+    ding.frequency.setValueAtTime(1568, dingStart); // G6
+    const dingGain = context.createGain();
+    dingGain.gain.setValueAtTime(0.0001, dingStart);
+    dingGain.gain.linearRampToValueAtTime(0.105, dingStart + 0.006);
+    dingGain.gain.exponentialRampToValueAtTime(0.0001, dingStart + 0.085);
+    ding.connect(dingGain).connect(bus);
+    ding.start(dingStart);
+    ding.stop(dingStart + 0.13);
+
+    const dingOvertone = context.createOscillator();
+    dingOvertone.type = "sine";
+    dingOvertone.frequency.setValueAtTime(1568 * 2.42, dingStart);
+    const dingOvertoneGain = context.createGain();
+    dingOvertoneGain.gain.setValueAtTime(0.0001, dingStart);
+    dingOvertoneGain.gain.linearRampToValueAtTime(0.032, dingStart + 0.004);
+    dingOvertoneGain.gain.exponentialRampToValueAtTime(0.0001, dingStart + 0.045);
+    dingOvertone.connect(dingOvertoneGain).connect(bus);
+    dingOvertone.start(dingStart);
+    dingOvertone.stop(dingStart + 0.06);
+  });
+}
+
+/**
+ * Normal board dice: delegates to Classic's recorded dice roll on purpose —
+ * the same sharing DZ already does. `playClassicDiceRoll` owns loading and
+ * timing the shared `sounds/dice-roll-classic.wav` sample, so Normal now uses
+ * the exact same source, gain, playback-rate, trimming, and end-of-roll
+ * behaviour as Classic/DZ/Neon, with no separate dice asset of its own. This
+ * small theme-specific hook is kept (rather than calling
+ * `playClassicDiceRoll` from `GameBoardScreen`) to preserve the existing
+ * per-theme trigger pattern; Normal's pawn hop and capture stay on their own
+ * dedicated functions above.
  */
 export function playNormalDiceRoll(rollDurationMs: number): void {
-  playSynthCue((context, now) => {
-    const rollSec = Math.max(0.05, rollDurationMs / 1000);
-
-    // Rattle — a fast-decaying noise burst with a sweeping bandpass so it
-    // reads as the dice tumbling around in the cup/tray rather than one
-    // static hiss.
-    const rattle = context.createBufferSource();
-    rattle.buffer = getNormalNoiseBuffer(context);
-    const rattleFilter = context.createBiquadFilter();
-    rattleFilter.type = "bandpass";
-    rattleFilter.Q.value = 1.4;
-    rattleFilter.frequency.setValueAtTime(900, now);
-    rattleFilter.frequency.linearRampToValueAtTime(2600, now + rollSec * 0.55);
-    rattleFilter.frequency.linearRampToValueAtTime(1200, now + rollSec);
-    const rattleGain = context.createGain();
-    rattleGain.gain.setValueAtTime(0.0001, now);
-    rattleGain.gain.linearRampToValueAtTime(0.20, now + 0.01);
-    rattleGain.gain.exponentialRampToValueAtTime(0.0001, now + rollSec);
-    rattle.connect(rattleFilter).connect(rattleGain).connect(getSfxDestination(context));
-    // Loop the short buffer for the whole roll so the rattle lasts as long
-    // as the animation at every speed preset.
-    rattle.loop = true;
-    rattle.start(now);
-    rattle.stop(now + rollSec + 0.02);
-
-    // Settle "tock" — the dice landing, gliding down like the pawn hop so
-    // the Normal family stays coherent. Lands exactly when the animation does.
-    const settle = context.createOscillator();
-    settle.type = "triangle";
-    settle.frequency.setValueAtTime(380, now + rollSec);
-    settle.frequency.exponentialRampToValueAtTime(220, now + rollSec + 0.06);
-    const settleGain = context.createGain();
-    settleGain.gain.setValueAtTime(0.0001, now + rollSec);
-    settleGain.gain.linearRampToValueAtTime(0.22, now + rollSec + 0.006);
-    settleGain.gain.exponentialRampToValueAtTime(0.0001, now + rollSec + 0.07);
-    settle.connect(settleGain).connect(getSfxDestination(context));
-    settle.start(now + rollSec);
-    settle.stop(now + rollSec + 0.08);
-  });
+  playClassicDiceRoll(rollDurationMs);
 }
 
 function getAudio(name: UiSoundName): HTMLAudioElement | null {
