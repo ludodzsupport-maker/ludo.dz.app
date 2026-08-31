@@ -125,6 +125,7 @@ const STORAGE_KEY = "ludo-dz:sound-effects-enabled";
 const NEON_PAWN_MIN_INTERVAL_MS = 38;
 const CLASSIC_PAWN_MIN_INTERVAL_MS = 46;
 const DZ_PAWN_MIN_INTERVAL_MS = 42;
+const NORMAL_PAWN_MIN_INTERVAL_MS = 40;
 
 // Both pawn-step cues (Neon and Classic) were originally hand-tuned against
 // the "normal" animation speed's hop duration. `hopMs` — the caller's own
@@ -158,6 +159,7 @@ let dzNoiseBuffer: AudioBuffer | null = null;
 let lastNeonPawnAt = 0;
 let lastClassicPawnAt = 0;
 let lastDzPawnAt = 0;
+let lastNormalPawnAt = 0;
 
 function readStoredPreference(): boolean {
   if (typeof window === "undefined") return true;
@@ -1463,6 +1465,141 @@ export function playDzWelcomeJingle(): void {
       amp: 0.30, freq: D5, decay: 0.90,
       shimmer: { amp: 0.09, freq: 2600, decay: 0.7 },
     });
+  });
+}
+
+// ─── Normal board cues ───────────────────────────────────────────────────────
+// The "Normal" theme is the flat, brightly-coloured, classic finished-Ludo
+// look (plain red/blue/yellow/green home bases on a white board — see
+// `board-theme-normal.ts`). Its cues are synthesized rather than fetched
+// audio so they start instantly, add no asset overhead, and are crisp at any
+// display scale — the same rationale as Neon/Classic/DZ. The theme's sonic
+// personality is deliberately playful and "game-y" (a friendly family board
+// game feel): a bouncy wooden hop for pawn steps and a bright little dice
+// rattle for rolls. Both connect through `getSfxDestination` so they inherit
+// the shared ducking, mute, and BGM-EQ behaviour of every other cue.
+let normalNoiseBuffer: AudioBuffer | null = null;
+
+/**
+ * Dedicated noise texture for the Normal family only — distinct from the
+ * Neon (0.28), wood (0.62), and DZ (0.48) buffers so the Normal theme keeps
+ * its own timbre. A mid correlation (0.46) rounds the high end off into a
+ * soft, slightly padded "board game" contact rather than a harsh rattle or a
+ * dull thud — matching the flat, friendly visual style.
+ */
+function getNormalNoiseBuffer(context: AudioContext): AudioBuffer {
+  if (normalNoiseBuffer?.sampleRate === context.sampleRate) return normalNoiseBuffer;
+  const duration = 0.12;
+  const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+  const samples = buffer.getChannelData(0);
+  for (let i = 0; i < samples.length; i++) {
+    const previous = i === 0 ? 0 : samples[i - 1] * 0.46;
+    samples[i] = previous + (Math.random() * 2 - 1) * 0.66;
+  }
+  normalNoiseBuffer = buffer;
+  return buffer;
+}
+
+/**
+ * Normal board pawn step: a bouncy, playful "tap/hop" — Ludo-King-style
+ * wooden feel. A soft filtered-noise contact transient stands in for the
+ * piece tapping the tile, and a quick sine that flicks up then settles back
+ * down gives the little upward "hop" that makes a moving piece read as light
+ * and cheerful rather than a dull knock. `hopMs` — the caller's own per-hop
+ * animation length, unchanged here — scales the envelope (bounded, see
+ * `pawnStepTimeScale`) exactly as the Neon/Classic/DZ pawn cues do, so the
+ * tap tracks Fast/Rapid and Slow hop timing consistently; a small per-hop
+ * pitch jitter keeps a long multi-hop dash from sounding mechanical.
+ */
+export function playNormalPawnMove(hopMs?: number): void {
+  if (!soundEnabled) return;
+  const nowMs = typeof performance === "undefined" ? Date.now() : performance.now();
+  if (nowMs - lastNormalPawnAt < NORMAL_PAWN_MIN_INTERVAL_MS) return;
+  lastNormalPawnAt = nowMs;
+
+  const scale = pawnStepTimeScale(hopMs);
+  const jitter = 0.96 + Math.random() * 0.08;
+  playSynthCue((context, now) => {
+    // Contact transient — the piece tapping the board tile.
+    const noise = context.createBufferSource();
+    noise.buffer = getNormalNoiseBuffer(context);
+    const noiseFilter = context.createBiquadFilter();
+    noiseFilter.type = "bandpass";
+    noiseFilter.frequency.setValueAtTime(1500 * jitter, now);
+    noiseFilter.Q.value = 1.0;
+    const noiseGain = context.createGain();
+    noiseGain.gain.setValueAtTime(0.0001, now);
+    noiseGain.gain.linearRampToValueAtTime(0.16, now + 0.003);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.028 * scale);
+    noise.connect(noiseFilter).connect(noiseGain).connect(getSfxDestination(context));
+    noise.start(now);
+    noise.stop(now + 0.032 * scale + 0.02);
+
+    // Hop body — quick upward pitch flick then settle, the bouncy "hop".
+    const hop = context.createOscillator();
+    hop.type = "triangle";
+    hop.frequency.setValueAtTime(300 * jitter, now);
+    hop.frequency.exponentialRampToValueAtTime(520 * jitter, now + 0.022 * scale);
+    hop.frequency.exponentialRampToValueAtTime(380 * jitter, now + 0.05 * scale);
+    const hopGain = context.createGain();
+    hopGain.gain.setValueAtTime(0.0001, now);
+    hopGain.gain.linearRampToValueAtTime(0.24, now + 0.004);
+    hopGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055 * scale);
+    hop.connect(hopGain).connect(getSfxDestination(context));
+    hop.start(now);
+    hop.stop(now + 0.06 * scale + 0.02);
+  });
+}
+
+/**
+ * Normal board dice: a bright, original synthesized rattle rather than the
+ * shared recorded Classic sample, so the flat "classic finished Ludo" theme
+ * keeps its own cheerful personality. A short burst of filtered noise with a
+ * quick alternating bandpass sweep reads as small dice tumbling, and a
+ * settled low "tock" at the roll's end (a downward-gliding triangle, the
+ * same hop voice as the pawn step) marks the dice coming to rest exactly when
+ * the roll animation lands. `rollDurationMs` is the caller's own roll-
+ * animation length, unchanged here.
+ */
+export function playNormalDiceRoll(rollDurationMs: number): void {
+  playSynthCue((context, now) => {
+    const rollSec = Math.max(0.05, rollDurationMs / 1000);
+
+    // Rattle — a fast-decaying noise burst with a sweeping bandpass so it
+    // reads as the dice tumbling around in the cup/tray rather than one
+    // static hiss.
+    const rattle = context.createBufferSource();
+    rattle.buffer = getNormalNoiseBuffer(context);
+    const rattleFilter = context.createBiquadFilter();
+    rattleFilter.type = "bandpass";
+    rattleFilter.Q.value = 1.4;
+    rattleFilter.frequency.setValueAtTime(900, now);
+    rattleFilter.frequency.linearRampToValueAtTime(2600, now + rollSec * 0.55);
+    rattleFilter.frequency.linearRampToValueAtTime(1200, now + rollSec);
+    const rattleGain = context.createGain();
+    rattleGain.gain.setValueAtTime(0.0001, now);
+    rattleGain.gain.linearRampToValueAtTime(0.20, now + 0.01);
+    rattleGain.gain.exponentialRampToValueAtTime(0.0001, now + rollSec);
+    rattle.connect(rattleFilter).connect(rattleGain).connect(getSfxDestination(context));
+    // Loop the short buffer for the whole roll so the rattle lasts as long
+    // as the animation at every speed preset.
+    rattle.loop = true;
+    rattle.start(now);
+    rattle.stop(now + rollSec + 0.02);
+
+    // Settle "tock" — the dice landing, gliding down like the pawn hop so
+    // the Normal family stays coherent. Lands exactly when the animation does.
+    const settle = context.createOscillator();
+    settle.type = "triangle";
+    settle.frequency.setValueAtTime(380, now + rollSec);
+    settle.frequency.exponentialRampToValueAtTime(220, now + rollSec + 0.06);
+    const settleGain = context.createGain();
+    settleGain.gain.setValueAtTime(0.0001, now + rollSec);
+    settleGain.gain.linearRampToValueAtTime(0.22, now + rollSec + 0.006);
+    settleGain.gain.exponentialRampToValueAtTime(0.0001, now + rollSec + 0.07);
+    settle.connect(settleGain).connect(getSfxDestination(context));
+    settle.start(now + rollSec);
+    settle.stop(now + rollSec + 0.08);
   });
 }
 

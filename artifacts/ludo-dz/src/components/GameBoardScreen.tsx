@@ -39,6 +39,8 @@ import {
   playNeonDiceRoll,
   playNeonPawnMove,
   playNeonWelcomeJingle,
+  playNormalDiceRoll,
+  playNormalPawnMove,
   playPrimaryAction,
   resumeBgmForMenu,
 } from '../lib/sound-manager';
@@ -3823,10 +3825,14 @@ const BoardSVG = memo(function BoardSVG({
               {/* Faint inner hairline — subtle tray depth without a gradient */}
               <rect x={zc+0.72} y={zr+0.72} width="4.56" height="4.56" rx="0.30"
                 fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="0.018"/>
-              {/* Four pawn slots — faint circles so an empty base still reads */}
+              {/* Four pawn slots — outlined rings so an empty base still reads.
+                  A hollow circle (stroke only, never filled) marks where a
+                  piece sits when it is away; the darker, slightly thicker
+                  outline keeps it legible against the white tray while staying
+                  clearly distinct from an occupied coloured pin on top. */}
               {E.HOME_BASES[player].map(([br, bc], si) => (
                 <circle key={si} cx={bc+0.5} cy={br+0.5} r="0.40"
-                  fill="none" stroke="rgba(0,0,0,0.10)" strokeWidth="0.02"/>
+                  fill="none" stroke="rgba(58,58,58,0.42)" strokeWidth="0.034"/>
               ))}
               {/* Home-impact flash on defeat arrival — flat, colour-only, at the
                   returning piece's own home slot */}
@@ -5366,6 +5372,7 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     if (isNeon) playNeonDiceRoll(rollDurationMs);
     else if (isClassic) playClassicDiceRoll(rollDurationMs);
     else if (isDz) playDzDiceRoll(rollDurationMs);
+    else if (isNormal) playNormalDiceRoll(rollDurationMs);
     // Haptics are theme-independent (unlike the synthesized cues above), so
     // every roll gets a pulse regardless of which board style is active.
     vibrateDiceRoll();
@@ -5466,11 +5473,12 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     // the slider instead of staying fixed-length. See playNeonPawnMove's
     // bounded scale in sound-manager.ts.
     if (isNeon) playNeonPawnMove(pawnTiming.hopMs);
+    else if (isNormal) playNormalPawnMove(pawnTiming.hopMs);
     // Haptics are theme-independent: this callback is invoked when Neon or
     // Normal is active (see PawnToken's per-step guard), so exactly one of
     // the three handle*Step callbacks fires per physical hop regardless of theme.
     vibratePawnStep();
-  }, [isNeon, spawnHopBurst, pawnTiming]);
+  }, [isNeon, isNormal, spawnHopBurst, pawnTiming]);
 
   // Mirrors handleNeonHopLand above, but hooks the existing Classic-only dust
   // puff callback instead. It does not alter the hop sequence, move
