@@ -12,6 +12,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { AnimatePresence } from 'framer-motion';
 import type { GameConfig } from '@/components/GameConfigOverlay';
 import { clearSavedGame, type SavedGameSnapshot } from '@/lib/saved-game';
+import { DEFAULT_BOARD_STYLE, readStoredBoardStyle, writeStoredBoardStyle } from '@/lib/board-style-pref';
 
 type Screen = 'welcome' | 'mode-select' | 'settings' | 'about' | 'preparing-match' | 'game';
 export type BoardStyle = 'neon' | 'classic' | 'dz' | 'normal';
@@ -34,7 +35,12 @@ function AppContent() {
   const [screen, setScreen]           = useState<Screen>('welcome');
   const [lang, setLang]               = useState<'fr' | 'ar'>('fr');
   const [gameConfig, setGameConfig]   = useState<GameConfig | null>(null);
-  const [boardStyle, setBoardStyle]   = useState<BoardStyle>('classic');
+  // Board style is a persisted preference (lib/board-style-pref): seeded from
+  // localStorage at boot, falling back to the app default ('normal') for fresh
+  // installs. Every explicit pick — Settings sheet or pre-match switcher —
+  // goes through handleSetBoardStyle, the single mutator that updates state
+  // and writes the preference back in one step.
+  const [boardStyle, setBoardStyle]   = useState<BoardStyle>(() => readStoredBoardStyle() ?? DEFAULT_BOARD_STYLE);
   const [resumingSnapshot, setResumingSnapshot] = useState<SavedGameSnapshot | null>(null);
   const [, startScreenTransition]      = useTransition();
 
@@ -43,6 +49,14 @@ function AppContent() {
       setScreen(nextScreen);
     });
   }, [startScreenTransition]);
+
+  // Single mutator for user-driven board-style changes (Settings picker and
+  // the pre-match switcher): updates runtime state and persists the choice so
+  // it is restored on the next launch, wherever it was changed from.
+  const handleSetBoardStyle = useCallback((style: BoardStyle) => {
+    setBoardStyle(style);
+    writeStoredBoardStyle(style);
+  }, []);
 
   // Tap-to-skip on the splash screen: dismisses splash early and unlocks
   // the AudioContext in the same gesture event, so BGM starts fading in
@@ -106,6 +120,11 @@ function AppContent() {
 
   // Resuming is offered per game mode, from that mode's configuration sheet,
   // so the snapshot always arrives already matched to the selected mode.
+  // The snapshot's own boardStyle wins for the resumed session (the save was
+  // started under that skin); it intentionally bypasses the persisting setter
+  // so restoring an old save never overwrites the player's current theme
+  // preference. Saves from before themes existed fall back to 'classic', the
+  // default those builds were played with.
   const handleResumeSavedGame = useCallback((snapshot: SavedGameSnapshot) => {
     setResumingSnapshot(snapshot);
     setGameConfig(snapshot.config);
@@ -138,6 +157,7 @@ function AppContent() {
               onStart={handleStartGame}
               onResume={handleResumeSavedGame}
               boardStyle={boardStyle}
+              onBoardStyleChange={handleSetBoardStyle}
             />
           ) : screen === 'settings' ? (
             <SettingsScreen
@@ -145,7 +165,7 @@ function AppContent() {
               lang={lang}
               setLang={setLang}
               boardStyle={boardStyle}
-              setBoardStyle={setBoardStyle}
+              setBoardStyle={handleSetBoardStyle}
               onBack={() => navigate('welcome')}
               onAbout={() => navigate('about')}
             />
