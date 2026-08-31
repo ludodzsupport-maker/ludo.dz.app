@@ -43,10 +43,21 @@ import { setSfxDucking } from './sound-manager';
 //     ahead) and the exit yields, even though `إخراج_بيدق` is the baseline
 //     queue-and-wait event;
 //   • like every queue-tier event it never interrupts anything else.
+//
+// `ضمّ` (lap completion) fires when a piece completes its full circuit — the
+// shared loop, its home column — and lands on its final home slot. It is
+// queue-tier like the others (it never interrupts anything) and coalesces with
+// the standard remaining-wait run rule, with one special relationship: vs a
+// playing `الأكل` line it uses the near/far wait-and-threshold decision (see
+// the ضمّ branch in `playVoiceLine`) — the capture line is never interrupted,
+// but a long capture exchange never delays the milestone either. The
+// colour-completing arrival (the colour's last piece reaching home, i.e. the
+// colour finishing the game) never fires this event: that moment belongs to
+// the victory/finish event, so the call site gates it.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Registered voice events. The key is the Arabic folder name under `voice/`. */
-export const VOICE_EVENTS = ['بداية_اللعبة', 'إخراج_بيدق', 'الأكل', 'التهديد', 'الهروب'] as const;
+export const VOICE_EVENTS = ['بداية_اللعبة', 'إخراج_بيدق', 'الأكل', 'التهديد', 'الهروب', 'ضمّ'] as const;
 export type VoiceLineEvent = (typeof VOICE_EVENTS)[number];
 
 /** Arabic display label for each registered event. */
@@ -56,6 +67,7 @@ export const VOICE_EVENT_LABELS: Readonly<Record<VoiceLineEvent, string>> = {
   'الأكل': 'الأكل',
   'التهديد': 'التهديد',
   'الهروب': 'الهروب',
+  'ضمّ': 'ضمّ',
 };
 
 // Trigger identifiers still referenced by existing game logic that have not
@@ -190,6 +202,14 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
  * giving them the same "one conversational beat" window keeps one knob for one
  * question and makes the pair behave symmetrically. Only `الأكل` — the event
  * the player most wants heard — widens it, with CAPTURE_COALESCE_MAX_WAIT_MS.
+ *
+ * `ضمّ` reuses it too, for both of its decisions (coalescing vs another `ضمّ`
+ * line, and the near/far priority call vs a playing `الأكل` line). Same
+ * reasoning as the threat/escape pair: it is the identical "will the active
+ * line finish within one conversational beat?" question about the same class
+ * of line, and `ضمّ` has no interrupt privilege that would justify widening
+ * its window the way the top-priority `الأكل` does — so a second knob at the
+ * same value would just be a duplicate dial for one question.
  */
 export const EXIT_QUEUE_MAX_WAIT_MS = 1200;
 
@@ -603,6 +623,16 @@ const THREAT_EVENT = 'التهديد' as const;
  */
 const ESCAPE_EVENT = 'الهروب' as const;
 
+/**
+ * The lap-completion event — a piece finished its full circuit and landed on
+ * its final home slot (the call site never fires it for the colour-completing
+ * arrival). Queue-tier: it never interrupts anything. It coalesces with the
+ * standard remaining-wait run rule, and its one special relationship is with a
+ * playing `الأكل` line — near/far wait-and-threshold, see the ضمّ branch in
+ * `playVoiceLine`.
+ */
+const FINISH_EVENT = 'ضمّ' as const;
+
 function isExitEvent(event: VoiceLineTrigger): event is typeof EXIT_EVENT {
   return isRegisteredEvent(event) && event === EXIT_EVENT;
 }
@@ -688,6 +718,47 @@ function insertEscapeByPriority(line: QueuedLine): void {
 
   // Queue full: `إخراج_بيدق` yields its slot so the escape is never the line
   // that gets dropped by the cap.
+  if (queue.length >= MAX_QUEUE_SIZE) {
+    const exitAt = queue.findIndex(q => q.kind === 'event' && q.event === EXIT_EVENT);
+    if (exitAt !== -1) {
+      queue.splice(exitAt, 1);
+      if (exitAt < insertAt) insertAt--;
+    }
+  }
+
+  // Still full (no exit line to yield): the ordinary cap applies, same as every
+  // other queue-tier event.
+  if (queue.length >= MAX_QUEUE_SIZE) return;
+
+  queue.splice(insertAt, 0, line);
+}
+
+/**
+ * Queue-tier ordering for `ضمّ` — same insertion contract as
+ * `insertEscapeByPriority`, reached from the far branch of the ضمّ-vs-الأكل
+ * rule: the finish line is placed ahead of every other waiting queue-tier line
+ * (exits, threats, escapes) but still behind `الأكل` lines and reply lines,
+ * which always outrank it.
+ *
+ * A finished lap is one of the match's milestone beats — the per-piece goal of
+ * the whole game — so when the queue is at MAX_QUEUE_SIZE an `إخراج_بيدق` line
+ * yields its slot rather than pushing the milestone out (same yield rule the
+ * escape uses; a dropped line never starts, so the yielded exit never reserves
+ * a reply of its own).
+ */
+function insertFinishByPriority(line: QueuedLine): void {
+  // Skip past the entries that outrank ضمّ: الأكل and reply lines.
+  let insertAt = 0;
+  while (insertAt < queue.length) {
+    const entry = queue[insertAt];
+    const outranksFinish = entry.kind === 'reply'
+      || (entry.kind === 'event' && entry.event === CAPTURE_EVENT);
+    if (!outranksFinish) break;
+    insertAt++;
+  }
+
+  // Queue full: `إخراج_بيدق` yields its slot so ضمّ is never the line that
+  // gets dropped by the cap.
   if (queue.length >= MAX_QUEUE_SIZE) {
     const exitAt = queue.findIndex(q => q.kind === 'event' && q.event === EXIT_EVENT);
     if (exitAt !== -1) {
@@ -1281,6 +1352,102 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
       // Otherwise: one combined beat (an `الهروب` line already playing speaks
       // for this escape too) or a stale line (anything else still has a long
       // way to run) — both are covered by the filter above clearing the queue.
+      return;
+    }
+
+    // Voice is idle: play immediately.
+    const clip = pickRandomClip(event);
+    if (!clip) return;
+    playClip({ kind: 'event', event, options: context ?? {} }, clip);
+    return;
+  }
+
+  // ── `ضمّ` — queue-tier lap-completion event ────────────────────────────────
+  // A piece completed its full circuit and landed on its final home slot (the
+  // call site suppresses the colour-completing arrival — that moment belongs
+  // to the victory event, not this one). It never interrupts anything, and it
+  // is shaped by three rules:
+  //
+  // 1. Run-based coalescing, the same shape as `التهديد`/`الهروب`: a `ضمّ`
+  //    firing while a `ضمّ` line is still audible with
+  //    <= EXIT_QUEUE_MAX_WAIT_MS left is a separate event — one fresh
+  //    (different-clip) follow-up line is queued; a `ضمّ` firing earlier in
+  //    the running line is combined into it — the two finishes are one beat
+  //    and the running line already speaks for both. At most one `ضمّ` line
+  //    ever waits: a newer finish re-owns the pending slot.
+  //
+  // 2. Near/far priority vs a playing `الأكل` line (the realistic collision:
+  //    a capture earns the captor an extra turn, and that very turn can carry
+  //    one of its pieces home). `الأكل` is never interrupted — this is queue
+  //    ordering, not preemption — but a long capture exchange never delays the
+  //    milestone either. How much of the running `الأكل` line is left decides:
+  //      • <= EXIT_QUEUE_MAX_WAIT_MS → queue normally: the capture line is
+  //        about to end, so the ordinary queue already delivers `ضمّ` right
+  //        after it (a reserved capture reply yields by the standing
+  //        future-event priority rule — a foreign event queued ahead drops a
+  //        pending reply, it is never delayed);
+  //      • >  EXIT_QUEUE_MAX_WAIT_MS → `ضمّ` takes priority instead: the
+  //        pending capture reply is dropped on the spot and `ضمّ` is inserted
+  //        ahead of every other waiting line, so it plays the instant the
+  //        `الأكل` line ends naturally — it never sits through the rest of a
+  //        long capture exchange (primary + gap + reply) nor behind queued
+  //        exits/threats.
+  //
+  // 3. Any other audible line (an exit/threat/escape line, or a reply of any
+  //    event): the default queue-tier behavior — queue if there is room. A
+  //    milestone is never dropped just because an unrelated line is long, but
+  //    the MAX_QUEUE_SIZE cap still applies.
+  if (event === FINISH_EVENT) {
+    // Empty pool = safe no-op: never queue, never cancel a capture reply, and
+    // never disturb a line that is already waiting, just to leave silence.
+    // (The folder ships empty until the clips are recorded.)
+    if ((eventPools.get(event) ?? []).length === 0) return;
+
+    if (isVoiceBusy()) {
+      // At most one `ضمّ` line may ever wait in the queue — a newer finish
+      // re-owns the pending slot (the same convention as the threat / escape /
+      // exit branches: a burst of finishes colliding behind one busy line is
+      // one beat, the newest piece's; a genuinely separate second finish
+      // arrives once the first `ضمّ` line is audible and is decided by the
+      // run rule below).
+      queue = queue.filter(q => !(q.kind === 'event' && q.event === FINISH_EVENT));
+
+      // Rule 1 — coalescing vs an audible ضمّ line.
+      if (activeLineInfo?.event === FINISH_EVENT) {
+        if (getActiveLineRemainingMs() <= EXIT_QUEUE_MAX_WAIT_MS) {
+          queue.push({ kind: 'event', event, options: context ?? {} });
+        }
+        // Longer remaining wait → one combined beat: the running `ضمّ` line
+        // already speaks for this finish too (the filter above also clears any
+        // stale queued ضمّ line).
+        return;
+      }
+
+      // Rule 2 — near/far priority vs a playing الأكل line.
+      if (activeLineInfo?.event === CAPTURE_EVENT) {
+        if (getActiveLineRemainingMs() <= EXIT_QUEUE_MAX_WAIT_MS) {
+          // Near: the capture line is nearly over — ordinary queueing already
+          // delivers ضمّ right after it.
+          queue.push({ kind: 'event', event, options: context ?? {} });
+        } else {
+          // Far: ضمّ takes priority over the reserved capture reply (dropped,
+          // never delayed — the standing future-event rule) and over every
+          // queued line, while the `الأكل` line itself keeps playing to its
+          // natural end.
+          if (pendingReply && pendingReply.event === CAPTURE_EVENT) {
+            cancelPendingReplyForFutures();
+          }
+          insertFinishByPriority({ kind: 'event', event, options: context ?? {} });
+        }
+        return;
+      }
+
+      // Rule 3 — any other audible line (or the primary→reply gap): the
+      // default queue-tier behavior, identical to the generic branch below.
+      if (queue.length < MAX_QUEUE_SIZE) {
+        queue.push({ kind: 'event', event, options: context ?? {} });
+        cancelPendingReplyForFutures();
+      }
       return;
     }
 
