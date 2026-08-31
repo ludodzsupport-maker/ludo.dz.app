@@ -82,6 +82,16 @@ export interface GameState {
   dice:            number;
   diceRolled:      boolean;
   winner:          number | null;
+  /**
+   * Colours that have completed every one of their pieces this session, in
+   * the order they finished — the session's placement ladder (index 0 = 1st).
+   * `winner` only ever names the *latest* finisher (the pause point the
+   * victory screen resumes from via `continueAfterFinish`); the full
+   * 1st/2nd/3rd/4th order across the whole match lives here. Optional at
+   * runtime only so saves from before this field existed still load — every
+   * write path defaults it to [].
+   */
+  finishOrder?:    readonly number[];
   phase:           'rolling' | 'selecting' | 'done';
   movable:         string[];
   consecutiveSixes: number;
@@ -318,6 +328,7 @@ export function createGame(numPlayers: number, pawnsPerPlayer = 4, playerSlots?:
     pieces, activePlayer: startingPlayer, numPlayers,
     playerSlots: slots,
     dice: 0, diceRolled: false, winner: null,
+    finishOrder: [],
     phase: 'rolling', movable: [],
     consecutiveSixes: 0, lastCapture: false, message: '',
   };
@@ -441,7 +452,14 @@ export function doMove(state: GameState, pid: string): GameState {
   // Win check
   const won = pieces.filter(p => p.player === ps).every(p => p.relPos === FINISHED_POS);
   if (won) {
-    return { ...state, pieces, winner: ps, phase: 'done', movable: [], diceRolled: false, lastCapture: false, message: '' };
+    return {
+      ...state, pieces,
+      // Append the colour to the session's placement ladder. Defensive `?? []`
+      // so a save from before this field existed upgrades in place instead of
+      // crashing on spread. (`winner` below names only this latest finisher.)
+      finishOrder: [...(state.finishOrder ?? []), ps],
+      winner: ps, phase: 'done', movable: [], diceRolled: false, lastCapture: false, message: '',
+    };
   }
 
   // Extra-turn logic: roll 6 or capture (but forfeit after 3 consecutive 6s)
@@ -461,6 +479,47 @@ export function doMove(state: GameState, pid: string): GameState {
     ...state, pieces,
     dice: 0, diceRolled: false, movable: [], phase: 'rolling',
     lastCapture: captured, message,
+  };
+}
+
+// ─── Continue after a finish (placement play) ─────────────────────────────────
+// The first colour to finish pauses the match on the victory screen. When the
+// players choose to continue (2nd/3rd places are still open), the engine
+// resumes the match: the finished colour's turn ends with its finish and it
+// leaves the rotation for good (`nextPlayer` skips colours whose every piece
+// is finished), the turn passes to the next colour still playing, and
+// `winner`/`phase` reset so the ordinary rolling loop takes over. The next
+// colour to finish sets `winner`/`phase: 'done'` again — the same pause point,
+// where the same choice can be offered — while `finishOrder` keeps growing, so
+// the UI can rank the whole session (1st/2nd/3rd/4th) no matter how many
+// colours finished.
+export function continueAfterFinish(state: GameState): GameState {
+  if (state.winner === null) return state;
+
+  const ladder = state.finishOrder ?? [];
+  // doMove already appended the winner; the includes() guard only makes a
+  // stray double call idempotent.
+  const finishOrder = ladder.includes(state.winner) ? ladder : [...ladder, state.winner];
+
+  // Placement play is only defined while a contest remains: with fewer than
+  // two colours still on the board there is no "next place" left to play for
+  // (a lone remaining colour is last by elimination), so the state is final.
+  const stillPlaying = state.playerSlots.filter(slot =>
+    !state.pieces.filter(p => p.player === slot).every(p => p.relPos === FINISHED_POS));
+  if (stillPlaying.length < 2) return state;
+
+  return {
+    ...state,
+    finishOrder,
+    winner: null,
+    phase: 'rolling',
+    // The finished colour's turn ended with its finishing move (doMove's win
+    // branch does not advance the rotation), so resume at the next colour
+    // still playing. nextPlayer skips finished colours, so the winner stays
+    // out of the rotation from here on.
+    activePlayer: nextPlayer(state.pieces, state.winner, state.playerSlots),
+    dice: 0, diceRolled: false, movable: [],
+    consecutiveSixes: 0, lastCapture: false, message: '',
   };
 }
 

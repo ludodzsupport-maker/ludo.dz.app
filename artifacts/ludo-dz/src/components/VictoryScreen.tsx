@@ -6,7 +6,7 @@
 // it does not touch engine logic.
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, Footprints, Swords, Sparkles, Crown } from 'lucide-react';
+import { Clock, Footprints, Swords, Sparkles, Crown, Play } from 'lucide-react';
 import { GamePiece } from './GamePiece';
 import { MascotCharacter } from './MascotCharacter';
 import * as E from '../lib/ludo-engine';
@@ -25,6 +25,16 @@ interface VictoryScreenProps {
   matchDurationMs: number;
   onPlayAgain: () => void;
   onMenu: () => void;
+  /**
+   * Placement play: resume the match after this finish so the remaining
+   * colours can play on for the next places. Provided only while two or more
+   * colours are still on the board (with one left there is nothing left to
+   * contest — it is last by elimination and this screen is final). Absent →
+   * the button is not rendered and the match-end layout is unchanged.
+   */
+  onContinue?: () => void;
+  /** The human's colour in computer mode — drives the personal result note. */
+  humanPlayer?: number;
 }
 
 function formatDuration(ms: number): string {
@@ -89,6 +99,7 @@ function StatChip({ icon, value, label, bg, border }:
 // ─── Main component ───────────────────────────────────────────────────────────
 export function VictoryScreen({
   game, lang, boardStyle, isComputer, moveCount, captureCounts, matchDurationMs, onPlayAgain, onMenu,
+  onContinue, humanPlayer,
 }: VictoryScreenProps) {
   if (game.winner === null) return null; // parent already guards this; kept for type-narrowing safety
 
@@ -97,6 +108,40 @@ export function VictoryScreen({
   const isClassic = boardStyle === 'classic';
   const isDz      = boardStyle === 'dz';
   const isNormal  = boardStyle === 'normal';
+
+  // ── Placement context ── the session's finish ladder (1st = index 0) and
+  // where the headline colour sits on it. This screen appears once per colour
+  // that finishes: it celebrates the *latest* finisher (game.winner) and ranks
+  // everyone by actual finish order below. finishOrder is optional at runtime
+  // (pre-ladder saves); an unknown place falls back to the classic
+  // "VAINQUEUR" presentation. The French place labels typeset their ordinal
+  // with a styled superscript ("2ᵉ") — the display fonts have no U+1D49
+  // glyph, so the E is raised and shrunk in CSS instead of relying on font
+  // fallback.
+  const finishOrder  = game.finishOrder ?? [];
+  const finishPlace  = finishOrder.indexOf(winner); // 0-based, -1 = legacy/unknown
+  const matchWinner  = finishOrder[0] ?? winner;    // the colour that won the match
+  const isFirstPlace = finishPlace <= 0;
+  const placeSup = (n: number): ReactNode => (
+    <>
+      {n}<span style={{ fontSize: '0.7em', verticalAlign: 'super', letterSpacing: '0.02em' }}>E</span>
+      {' PLACE'}
+    </>
+  );
+  const placeLabel: ReactNode = isFirstPlace
+    ? (isAr ? 'الفائز' : 'VAINQUEUR')
+    : isAr
+      ? (finishPlace === 1 ? 'المركز الثاني' : finishPlace === 2 ? 'المركز الثالث' : 'المركز الرابع')
+      : placeSup(finishPlace + 1);
+  const isHumanFinisher = isComputer && humanPlayer !== undefined && winner === humanPlayer;
+  // The personal note stays reserved for actually winning the match; a human
+  // 2nd/3rd-place finish gets its own placement note instead.
+  const personalNote = !isHumanFinisher ? null
+    : isFirstPlace ? (isAr ? '🎉 لقد فزت!' : '🎉 Vous avez gagné !')
+    : finishPlace === 1 ? (isAr ? '🎉 حصلت على المركز الثاني' : '🎉 Vous terminez 2e')
+    : finishPlace === 2 ? (isAr ? '🎉 حصلت على المركز الثالث' : '🎉 Vous terminez 3e')
+    : (isAr ? '🎉 حصلت على المركز الرابع' : '🎉 Vous terminez 4e');
+  const hasContinue = onContinue !== undefined;
 
   const winnerColor = isDz ? DZ.HOME_COLORS[winner]
     : isNormal ? NM.HOME_COLORS[winner]
@@ -167,7 +212,11 @@ export function VictoryScreen({
     ctaShadow: `0 0 20px ${winnerColor}40`,
   };
 
-  // Standings — winner pinned first, others by pieces-home desc, then captures desc.
+  // Standings — the session's placement ladder first (actual finish order,
+  // 1st → last), then the colours still on the board by pieces-home desc, then
+  // captures desc. On a mid-match pause screen the still-playing colours rank
+  // below every finisher; on the final screen this yields the full
+  // 1st/2nd/3rd/4th order across the whole session.
   const standingsRaw = game.playerSlots.map(slot => {
     const pieces = game.pieces.filter(p => p.player === slot);
     return {
@@ -177,14 +226,17 @@ export function VictoryScreen({
       captures: captureCounts[slot] ?? 0,
     };
   });
-  const standings = [...standingsRaw].sort((a, b) => {
-    if (a.slot === winner) return -1;
-    if (b.slot === winner) return 1;
-    return b.home - a.home || b.captures - a.captures;
-  });
-  const maxOtherCaptures = Math.max(0, ...standingsRaw.filter(s => s.slot !== winner).map(s => s.captures));
+  const finishRank = (slot: number): number => {
+    const idx = finishOrder.indexOf(slot);
+    return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+  };
+  const standings = [...standingsRaw].sort((a, b) =>
+    finishRank(a.slot) - finishRank(b.slot)
+    || b.home - a.home
+    || b.captures - a.captures);
+  // "Top attacker" badge — the best capture tally outside the match winner.
+  const maxOtherCaptures = Math.max(0, ...standingsRaw.filter(s => s.slot !== matchWinner).map(s => s.captures));
   const totalCaptures = standingsRaw.reduce((sum, s) => sum + s.captures, 0);
-  const showPersonalWin = isComputer && winner === 0;
 
   return (
     <motion.div
@@ -226,11 +278,13 @@ export function VictoryScreen({
           )}
         </div>
 
-        {/* Winner name block */}
+        {/* Winner name block — the *latest* finisher (see placement context
+            above): "VAINQUEUR" for the match winner, its place on the ladder
+            for every later finish. */}
         <div className="text-center">
           <p style={{ fontFamily: 'var(--font-sans)', fontSize: 12, letterSpacing: '0.14em',
             color: theme.eyebrow, marginBottom: 4 }}>
-            {isAr ? 'الفائز' : 'VAINQUEUR'}
+            {placeLabel}
           </p>
           <div className="flex items-center justify-center" style={{ gap: 8 }}>
             <GamePiece color={winnerColor} className="w-5 h-8" />
@@ -239,10 +293,10 @@ export function VictoryScreen({
               {winnerName}
             </p>
           </div>
-          {showPersonalWin && (
+          {personalNote && (
             <p style={{ fontFamily: 'var(--font-sans)', fontSize: 13, marginTop: 4,
               color: theme.gold, opacity: 0.9 }}>
-              {isAr ? '🎉 لقد فزت!' : '🎉 Vous avez gagné !'}
+              {personalNote}
             </p>
           )}
         </div>
@@ -269,8 +323,12 @@ export function VictoryScreen({
             </div>
           </div>
           <div className="flex flex-col" style={{ gap: 6 }}>
-            {standings.map(s => {
-              const isWinnerRow  = s.slot === winner;
+            {standings.map((s, rank) => {
+              // The crown/glow row is the *match winner* (1st on the ladder),
+              // not merely the latest finisher this screen headlines — on a
+              // continued match's later pauses the two differ, and CLASSEMENT
+              // must keep ranking the session, not the last event.
+              const isWinnerRow  = s.slot === matchWinner;
               const color        = isDz ? DZ.HOME_COLORS[s.slot] : isNormal ? NM.HOME_COLORS[s.slot] : E.PLAYER_COLORS[s.slot];
               const name         = isAr ? E.PLAYER_NAMES_AR[s.slot] : E.PLAYER_NAMES_FR[s.slot];
               const isTopAttacker = !isWinnerRow && s.captures > 0 && s.captures === maxOtherCaptures;
@@ -281,6 +339,13 @@ export function VictoryScreen({
                     background: isWinnerRow ? `${color}1c` : 'rgba(255,255,255,0.03)',
                     border: `1px solid ${isWinnerRow ? color + '55' : 'rgba(255,255,255,0.06)'}`,
                   }}>
+                  <span style={{
+                    fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700,
+                    color: isWinnerRow ? theme.gold : 'rgba(255,255,255,0.45)',
+                    width: 13, textAlign: 'center', flexShrink: 0,
+                  }}>
+                    {rank + 1}
+                  </span>
                   <span style={{
                     width: 8, height: 8, borderRadius: 999, background: color, flexShrink: 0,
                     boxShadow: isWinnerRow ? `0 0 8px ${color}` : undefined,
@@ -315,16 +380,42 @@ export function VictoryScreen({
           </div>
         </div>
 
-        {/* CTAs */}
+        {/* CTAs — placement play first when offered, then the session actions.
+            "Continuer la partie" is the primary action of this pause (it keeps
+            THIS match going), so it takes the gold treatment and Rejouer steps
+            down to a secondary style — one primary CTA per screen; with no
+            continue offered (final screen) the layout is exactly as before. */}
+        {onContinue && (
+          <div className="w-full flex flex-col items-center" style={{ gap: 6, marginTop: 4 }}>
+            <motion.button onClick={onContinue}
+              whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+              style={{
+                width: '100%', padding: '12px 0', borderRadius: 18, cursor: 'pointer',
+                background: theme.ctaBg,
+                border: `1.5px solid ${theme.gold}`,
+                color: '#fff', fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 13,
+                boxShadow: theme.ctaShadow,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}>
+              <Play size={15} color="#fff" style={{ transform: isAr ? 'scaleX(-1)' : undefined }} />
+              {isAr ? 'متابعة اللعب' : 'Continuer la partie'}
+            </motion.button>
+            <p style={{ fontFamily: 'var(--font-sans)', fontSize: 10.5, margin: 0,
+              color: theme.eyebrow, letterSpacing: '0.04em' }}>
+              {isAr ? 'تكملة المراكز المتبقية' : 'Déterminer les places suivantes'}
+            </p>
+          </div>
+        )}
         <div className="flex w-full" style={{ gap: 10, marginTop: 4 }}>
           <motion.button onClick={onPlayAgain}
             whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
             style={{
               flex: 1, padding: '11px 0', borderRadius: 18, cursor: 'pointer',
-              background: theme.ctaBg,
-              border: `1.5px solid ${theme.gold}`,
-              color: '#fff', fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 13,
-              boxShadow: theme.ctaShadow,
+              background: hasContinue ? 'rgba(255,255,255,0.07)' : theme.ctaBg,
+              border: hasContinue ? '1.5px solid rgba(255,255,255,0.16)' : `1.5px solid ${theme.gold}`,
+              color: hasContinue ? 'rgba(255,255,255,0.72)' : '#fff',
+              fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: 13,
+              boxShadow: hasContinue ? undefined : theme.ctaShadow,
             }}>
             {isAr ? 'جديد' : 'Rejouer'}
           </motion.button>

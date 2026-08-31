@@ -58,6 +58,10 @@ function isValidGameState(value: unknown): value is GameState {
     && Number.isInteger(value.consecutiveSixes)
     && typeof value.lastCapture === 'boolean'
     && typeof value.message === 'string'
+    // Placement ladder (continue-after-finish sessions): absent in pre-ladder
+    // saves — accepted as absent, rejected when present but garbage.
+    && (value.finishOrder === undefined
+      || (Array.isArray(value.finishOrder) && value.finishOrder.every(slot => Number.isInteger(slot))))
     && value.pieces.every(piece => isRecord(piece)
       && Number.isInteger(piece.player)
       && Number.isInteger(piece.index)
