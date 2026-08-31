@@ -5673,7 +5673,19 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
       if (safeGathering) playVoiceLine('safe_gathering', { speaker: ps });
       if (exitedHome) playVoiceLine('إخراج_بيدق', { speaker: ps, playersInGame: currentGame.playerSlots });
       if (enteredFinalStretch) playVoiceLine('final_stretch', { speaker: ps });
-      if (isHomeFinish) playVoiceLine('piece_home', { speaker: ps });
+      // ضمّ — the mover's pawn has run its full circuit: the shared loop, its
+      // home column, and this hop just landed it on its final home slot.
+      // Spoken by the owning player, `piece` naming the finished pawn on the
+      // speaking broadcast. Suppressed for the colour-completing arrival: when
+      // this pawn is the colour's last one still out, the moment is the
+      // colour finishing the game and belongs to the victory event, not to
+      // ضمّ — `nextState.winner` is set by exactly that arrival (including in
+      // a continued match, where a later colour's completion is again a
+      // finish, not a lap completion).
+      if (isHomeFinish) {
+        playVoiceLine('piece_home', { speaker: ps });
+        if (nextState.winner === null) playVoiceLine('ضمّ', { speaker: ps, piece: is });
+      }
       if (nearMiss) playVoiceLine('near_miss', { speaker: ps });
       if (opponentBecameNearWin) playVoiceLine('opponent_near_win', { speaker: ps });
       if (forfeitedThreeSixes) playVoiceLine('forfeit_three_sixes', { speaker: ps });
@@ -5978,6 +5990,18 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     }
   }, [showExitConfirm, isNeon, clearMoveRecoveryTimer, resumePausedMove]);
 
+  // ── Continue after a finish (placement play) ──────────────────────────────
+  // Lifts the victory pause: the finished colour leaves the rotation (its
+  // pieces are all home and nextPlayer skips it from here on), the turn
+  // passes to the next colour still playing, and the ordinary rolling loop
+  // takes over until the next colour finishes — where the same choice is
+  // offered again while two or more colours remain. No timers to clear and no
+  // animation to unlock: the pause sits on phase 'done' with no roll or move
+  // in flight, so the whole handoff is one engine transition.
+  const handleContinuePlay = useCallback(() => {
+    setGame(prev => E.continueAfterFinish(prev));
+  }, []);
+
   // ── Restart ───────────────────────────────────────────────────────────────
   const handleRestart = useCallback(() => {
     rollSequenceRef.current += 1;
@@ -6007,6 +6031,13 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     setMatchDurationMs(0);
     matchStartRef.current = Date.now();
   }, [clearRollTimers, config.players, config.rule, playerSlots, unlockMoveInteraction]);
+
+  // ── Placement play availability — while the victory pause is up, how many
+  // colours are still on the board? Two or more → the match can be continued
+  // for the remaining places; one or zero → the standings are final (a lone
+  // remaining colour is last by elimination).
+  const colorsStillPlaying = game.winner === null ? 0 : game.playerSlots.filter(slot =>
+    !game.pieces.filter(p => p.player === slot).every(p => p.relPos === E.FINISHED_POS)).length;
 
   // ── Status text ───────────────────────────────────────────────────────────
   const statusMsg =
@@ -6288,6 +6319,13 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             moveCount={moveCount} captureCounts={captureCounts} matchDurationMs={matchDurationMs}
             onPlayAgain={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playPrimaryAction(); handleRestart(); }}
             onMenu={() => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playNavBack(); onBack(); }}
+            // Placement play: only while a contest remains — with one colour
+            // left there is no next place to play for (it is last by
+            // elimination), so the screen is final and no continue is offered.
+            onContinue={colorsStillPlaying >= 2
+              ? () => { isNeon ? playNeonClick() : isClassic ? playClassicClick() : isDz ? playDzClick() : playPrimaryAction(); handleContinuePlay(); }
+              : undefined}
+            humanPlayer={humanPlayer}
           />
         )}
       </AnimatePresence>
