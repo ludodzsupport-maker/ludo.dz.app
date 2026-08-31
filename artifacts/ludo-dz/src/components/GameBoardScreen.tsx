@@ -619,17 +619,17 @@ const CornerDice = memo(function CornerDice({
           width: 0, height: 0,
           borderLeft: `${TAIL_W}px solid transparent`,
           borderRight: `${TAIL_W}px solid transparent`,
-          [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? 'rgba(160,120,32,0.28)' : isDz ? 'rgba(201,162,39,0.22)' : isNormal ? 'rgba(68,114,196,0.35)' : 'rgba(255,255,255,0.05)'}`,
+          [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? 'rgba(160,120,32,0.28)' : isDz ? 'rgba(201,162,39,0.22)' : isNormal ? 'rgba(46,93,184,0.35)' : 'rgba(255,255,255,0.05)'}`,
         }}/>
         <div style={{
           width: '100%', height: '100%',
           borderRadius: isClassic ? 10 : 16,
-          background: isClassic ? 'rgba(240,228,190,0.45)' : isDz ? 'rgba(0,58,29,0.40)' : isNormal ? 'rgba(240,216,224,0.40)' : 'rgba(3,10,22,0.40)',
-          border: `1px solid ${isClassic ? 'rgba(160,120,32,0.32)' : isDz ? 'rgba(201,162,39,0.28)' : isNormal ? 'rgba(68,114,196,0.40)' : 'rgba(255,255,255,0.04)'}`,
+          background: isClassic ? 'rgba(240,228,190,0.45)' : isDz ? 'rgba(0,58,29,0.40)' : isNormal ? 'rgba(217,167,181,0.40)' : 'rgba(3,10,22,0.40)',
+          border: `1px solid ${isClassic ? 'rgba(160,120,32,0.32)' : isDz ? 'rgba(201,162,39,0.28)' : isNormal ? 'rgba(46,93,184,0.40)' : 'rgba(255,255,255,0.04)'}`,
           opacity: 0.5,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: isClassic ? 'rgba(160,120,32,0.18)' : isDz ? 'rgba(201,162,39,0.22)' : isNormal ? 'rgba(68,114,196,0.30)' : '#1a2a40' }}/>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: isClassic ? 'rgba(160,120,32,0.18)' : isDz ? 'rgba(201,162,39,0.22)' : isNormal ? 'rgba(46,93,184,0.30)' : '#1a2a40' }}/>
         </div>
       </div>
     );
@@ -655,7 +655,7 @@ const CornerDice = memo(function CornerDice({
         width: 0, height: 0,
         borderLeft: `${TAIL_W}px solid transparent`,
         borderRight: `${TAIL_W}px solid transparent`,
-        [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? (isActive ? '#a07820' : 'rgba(160,120,32,0.32)') : isDz ? (isActive ? DZ.BORDER_GOLD : 'rgba(201,162,39,0.35)') : isNormal ? (isActive ? NM.DICE_FRAME : 'rgba(68,114,196,0.45)') : (isActive ? neon : col + '55')}`,
+        [tailBorderSide]: `${TAIL_H}px solid ${isClassic ? (isActive ? '#a07820' : 'rgba(160,120,32,0.32)') : isDz ? (isActive ? DZ.BORDER_GOLD : 'rgba(201,162,39,0.35)') : isNormal ? (isActive ? NM.DICE_FRAME : 'rgba(46,93,184,0.45)') : (isActive ? neon : col + '55')}`,
         filter: isClassic ? 'none' : isDz ? (isActive ? `drop-shadow(0 0 3px ${DZ.BORDER_GOLD}90)` : 'none') : isNormal ? 'none' : (isActive ? `drop-shadow(0 0 3px ${neon})` : 'none'),
         transition: 'border-color 0.4s',
         pointerEvents: 'none',
@@ -748,7 +748,7 @@ const CornerDice = memo(function CornerDice({
             ? `linear-gradient(160deg, #003820 0%, #001a0e 55%, ${dzColor}22 100%)`
             : `linear-gradient(160deg, #002814 0%, #00110a 55%, ${dzColor}10 100%)`)
           : isNormal
-          ? NM.DICE_PANEL
+          ? NM.DICE_FRAME
           : (isActive
             ? `linear-gradient(145deg, ${col}38 0%, ${col}12 100%)`
             : `linear-gradient(145deg, ${col}26 0%, ${col}0e 100%)`),
@@ -757,7 +757,7 @@ const CornerDice = memo(function CornerDice({
           : isDz
           ? `2px solid ${isActive ? DZ.BORDER_GOLD : DZ.BORDER_GOLD + '65'}`
           : isNormal
-          ? `4px solid ${NM.DICE_FRAME}`
+          ? 'none'
           : `1.5px solid ${isActive ? neon : col + '55'}`,
         backdropFilter: (isClassic || isDz || isNormal) ? 'none' : 'blur(10px)',
         WebkitBackdropFilter: (isClassic || isDz || isNormal) ? 'none' : 'blur(10px)',
@@ -772,6 +772,16 @@ const CornerDice = memo(function CornerDice({
         transformOrigin: panelOrigin,
       }}
     >
+      {/* Normal — dusty pink/mauve inner panel. The solid blue card body shows
+          through around it as the two-tone "frame". Painted behind the content
+          (negative z-index inside this stacking context) so the die/name sit
+          on top of it. */}
+      {isNormal && (
+        <div style={{
+          position: 'absolute', inset: 5, borderRadius: 7,
+          background: NM.DICE_PANEL, zIndex: -1, pointerEvents: 'none',
+        }}/>
+      )}
       {/* DZ — zellige diamond lattice texture + corner najma rivets */}
       {isDz && (
         <svg width="100%" height="100%" viewBox={`0 0 ${PANEL_W} ${PANEL_H}`}
@@ -2377,13 +2387,19 @@ const PawnToken = memo(function PawnToken({
               />
             )}
 
-            {/* Teardrop / pin silhouette — white fill, pointed tip toward the board */}
-            <path d="M0,0.30 C 0.14,0.16 0.27,0.05 0.27,-0.05 A 0.27 0.27 0 1 1 -0.27,-0.05 C -0.27,0.05 -0.14,0.16 0,0.30 Z"
+            {/* White map-pin body — one solid teardrop: the large arc (sweep 0)
+                sweeps OVER the top of the head, so the round top and the
+                pointed tail form a single closed location-pin silhouette. */}
+            <path
+              d="M 0,0.30 L 0.194,0.134 A 0.275,0.275 0 1 0 -0.194,0.134 Z"
               fill="#FFFFFF"
-              stroke="rgba(0,0,0,0.16)" strokeWidth="0.015" strokeLinejoin="round"/>
+              stroke="rgba(0,0,0,0.25)"
+              strokeWidth="0.022"
+              strokeLinejoin="round"
+            />
 
-            {/* Solid player-colour circle inside the pin head */}
-            <circle cx={0} cy={domeCY} r="0.16" fill={nmColor}/>
+            {/* Solid player-colour circle centred in the pin head */}
+            <circle cx={0} cy={domeCY} r="0.16" fill={nmColor} />
           </>
         ) : (
           <>

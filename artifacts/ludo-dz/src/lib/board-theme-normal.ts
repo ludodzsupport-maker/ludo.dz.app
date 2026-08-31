@@ -31,12 +31,13 @@ export const PATH_HAIRLINE = 'rgba(0, 0, 0, 0.14)';
 export const BORDER_DARK = '#333333';
 
 // ─── Dice-card tokens ────────────────────────────────────────────────────────
-// Two-tone flat card (confirmed with the user): a medium/mid blue outer frame
-// and a lighter dusty pink/mauve panel in the centre where the dice face sits.
-// The panel is deliberately light so the blue frame reads as a clearly
-// distinct outer tone on every card, active or not.
-export const DICE_FRAME = '#4472C4'; // medium blue outer frame
-export const DICE_PANEL = '#F0D8E0'; // light dusty pink/mauve centre panel
+// Two-tone flat card (confirmed with the user): a solid, saturated medium-blue
+// outer frame wrapping a dusty pink/mauve inner panel where the dice face sits.
+// The frame is the card's own background (a solid blue band), and the panel is
+// an inset rectangle behind the die — so both tones are clearly visible on
+// every card, active or inactive.
+export const DICE_FRAME = '#2E5DB8'; // saturated medium-blue outer frame
+export const DICE_PANEL = '#D9A7B5'; // dusty pink/mauve centre panel
 export const DICE_INK   = '#3A3A3A'; // dark pips / label ink on the card
 
 // Directional-arrow ink for each player's start square. Red / blue / green are
