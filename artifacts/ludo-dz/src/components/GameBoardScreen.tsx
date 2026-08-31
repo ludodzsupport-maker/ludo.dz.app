@@ -624,7 +624,7 @@ const CornerDice = memo(function CornerDice({
         <div style={{
           width: '100%', height: '100%',
           borderRadius: isClassic ? 10 : 16,
-          background: isClassic ? 'rgba(240,228,190,0.45)' : isDz ? 'rgba(0,58,29,0.40)' : isNormal ? 'rgba(217,167,181,0.40)' : 'rgba(3,10,22,0.40)',
+          background: isClassic ? 'rgba(240,228,190,0.45)' : isDz ? 'rgba(0,58,29,0.40)' : isNormal ? 'rgba(240,216,224,0.40)' : 'rgba(3,10,22,0.40)',
           border: `1px solid ${isClassic ? 'rgba(160,120,32,0.32)' : isDz ? 'rgba(201,162,39,0.28)' : isNormal ? 'rgba(68,114,196,0.40)' : 'rgba(255,255,255,0.04)'}`,
           opacity: 0.5,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -757,7 +757,7 @@ const CornerDice = memo(function CornerDice({
           : isDz
           ? `2px solid ${isActive ? DZ.BORDER_GOLD : DZ.BORDER_GOLD + '65'}`
           : isNormal
-          ? `2.5px solid ${isActive ? NM.DICE_FRAME : NM.DICE_FRAME + 'B0'}`
+          ? `4px solid ${NM.DICE_FRAME}`
           : `1.5px solid ${isActive ? neon : col + '55'}`,
         backdropFilter: (isClassic || isDz || isNormal) ? 'none' : 'blur(10px)',
         WebkitBackdropFilter: (isClassic || isDz || isNormal) ? 'none' : 'blur(10px)',
@@ -3769,39 +3769,30 @@ const BoardSVG = memo(function BoardSVG({
         }
 
         if (isNormal) {
-          // Normal home zone — flat, fully-saturated quadrant with a plain white
-          // square inset for the four starting pieces. No gradients, textures,
-          // or ornamentation; high contrast only.
+          // Normal home zone — one solid, flat, fully-saturated quadrant from
+          // edge to edge. The four pieces sit directly on this colour; there is
+          // no white inset panel. No gradients, textures, or ornamentation.
           const solid = NM.HOME_COLORS[player as 0|1|2|3];
           return (
             <g key={`hz-${player}`}>
               {/* Solid saturated quadrant */}
               <rect x={zc} y={zr} width="6" height="6" fill={solid}
                 fillOpacity={exists ? 1 : 0.30}/>
-              {/* Plain white home-base inset — where the four pieces start */}
-              <rect x={zc+0.40} y={zr+0.40} width="5.20" height="5.20" rx="0.10"
-                fill={NM.HOME_INSET} fillOpacity={exists ? 1 : 0.55}/>
-              {/* Flat hairline around the inset */}
-              <rect x={zc+0.40} y={zr+0.40} width="5.20" height="5.20" rx="0.10"
-                fill="none" stroke="rgba(0,0,0,0.12)" strokeWidth="0.02"/>
-              {/* Pawn-slot rings — flat circles marking where the four pins park */}
-              {E.HOME_BASES[player].map(([br, bc], si) => (
-                <g key={si}>
-                  <circle cx={bc+0.5} cy={br+0.5} r="0.40"
-                    fill="none" stroke="rgba(0,0,0,0.14)" strokeWidth="0.02"/>
-                  {/* Home-impact flash on defeat arrival — flat, colour-only */}
-                  {homeImpact?.player === player && homeImpact?.index === si && (
-                    <motion.circle
-                      key={homeImpact.id}
-                      cx={bc+0.5} cy={br+0.5} r={0.46}
-                      fill={solid}
-                      initial={{ scale: 1.5, fillOpacity: 0.80 }}
-                      animate={{ scale: 1, fillOpacity: 0 }}
-                      transition={{ duration: 0.55, ease: 'easeOut' }}
-                    />
-                  )}
-                </g>
-              ))}
+              {/* Home-impact flash on defeat arrival — flat, colour-only, at the
+                  returning piece's own home slot */}
+              {homeImpact?.player === player && (() => {
+                const base = E.HOME_BASES[player][homeImpact.index] ?? [zr + 3, zc + 3];
+                return (
+                  <motion.circle
+                    key={homeImpact.id}
+                    cx={base[1] + 0.5} cy={base[0] + 0.5} r={0.46}
+                    fill={solid}
+                    initial={{ scale: 1.5, fillOpacity: 0.80 }}
+                    animate={{ scale: 1, fillOpacity: 0 }}
+                    transition={{ duration: 0.55, ease: 'easeOut' }}
+                  />
+                );
+              })()}
               {/* Flat outer hairline */}
               <rect x={zc} y={zr} width="6" height="6" fill="none"
                 stroke={NM.BORDER_DARK}

@@ -952,11 +952,6 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                           <rect x="37" y="1"  width="22" height="22" rx="2" fill={NM.HOME_COLORS[1]}/>
                           <rect x="37" y="37" width="22" height="22" rx="2" fill={NM.HOME_COLORS[2]}/>
                           <rect x="1"  y="37" width="22" height="22" rx="2" fill={NM.HOME_COLORS[3]}/>
-                          {/* White home-base insets */}
-                          <rect x="3"   y="3"   width="18" height="18" rx="1.5" fill={NM.HOME_INSET}/>
-                          <rect x="39"  y="3"   width="18" height="18" rx="1.5" fill={NM.HOME_INSET}/>
-                          <rect x="39"  y="39"  width="18" height="18" rx="1.5" fill={NM.HOME_INSET}/>
-                          <rect x="3"   y="39"  width="18" height="18" rx="1.5" fill={NM.HOME_INSET}/>
                           {/* White cross lanes */}
                           <rect x="23" y="1"  width="14" height="58" fill={NM.PATH_WHITE}/>
                           <rect x="1"  y="23" width="58" height="14" fill={NM.PATH_WHITE}/>
