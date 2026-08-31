@@ -952,6 +952,15 @@ export function SettingsScreen({ lang, setLang, boardStyle, setBoardStyle, onBac
                           <rect x="37" y="1"  width="22" height="22" rx="2" fill={NM.HOME_COLORS[1]}/>
                           <rect x="37" y="37" width="22" height="22" rx="2" fill={NM.HOME_COLORS[2]}/>
                           <rect x="1"  y="37" width="22" height="22" rx="2" fill={NM.HOME_COLORS[3]}/>
+                          {/* White base insets with coloured borders */}
+                          <rect x="3"  y="3"  width="18" height="18" rx="2" fill="#FFFFFF"/>
+                          <rect x="39" y="3"  width="18" height="18" rx="2" fill="#FFFFFF"/>
+                          <rect x="39" y="39" width="18" height="18" rx="2" fill="#FFFFFF"/>
+                          <rect x="3"  y="39" width="18" height="18" rx="2" fill="#FFFFFF"/>
+                          <rect x="3"  y="3"  width="18" height="18" rx="2" fill="none" stroke={NM.HOME_BASE_BORDER[0]} strokeWidth="0.8"/>
+                          <rect x="39" y="3"  width="18" height="18" rx="2" fill="none" stroke={NM.HOME_BASE_BORDER[1]} strokeWidth="0.8"/>
+                          <rect x="39" y="39" width="18" height="18" rx="2" fill="none" stroke={NM.HOME_BASE_BORDER[2]} strokeWidth="0.8"/>
+                          <rect x="3"  y="39" width="18" height="18" rx="2" fill="none" stroke={NM.HOME_BASE_BORDER[3]} strokeWidth="0.8"/>
                           {/* White cross lanes */}
                           <rect x="23" y="1"  width="14" height="58" fill={NM.PATH_WHITE}/>
                           <rect x="1"  y="23" width="58" height="14" fill={NM.PATH_WHITE}/>

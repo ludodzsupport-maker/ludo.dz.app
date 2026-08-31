@@ -2190,6 +2190,23 @@ const PawnToken = memo(function PawnToken({
   const baseRX    = 0.30;
   const baseRY    = 0.10;
   const baseCY    = 0.19;
+  // Normal-only pin geometry — a larger, chunky location-pin marker so the flat
+  // pawn reads as a real game piece at board scale. Sized independently of the
+  // shared dome geometry above (that stays Classic/DZ-only). The tail tangent
+  // points are derived from the head circle so the silhouette stays a smooth,
+  // single closed shape for any size tweak.
+  const nmHeadR   = 0.28;  // round head radius
+  const nmHeadCY  = -0.12; // head centre Y (upper part of the cell)
+  const nmTipY    = 0.34;  // pointed tail tip
+  const nmCircleR = 0.19;  // solid player-colour circle in the head
+  const nmTopY    = nmHeadCY - nmHeadR;
+  const nmD       = nmTipY - nmHeadCY;
+  const nmTy      = nmHeadCY + (nmHeadR * nmHeadR) / nmD;
+  const nmTx      = nmHeadR * Math.sqrt(Math.max(0, nmD * nmD - nmHeadR * nmHeadR)) / nmD;
+  // Teardrop outline: top point → arc down the right side of the head → straight
+  // to the tail tip → back up the left side → arc over the crown → close. Both
+  // arcs are < 180°, so large-arc=0 is unambiguous.
+  const nmPath = `M 0,${nmTopY.toFixed(3)} A ${nmHeadR},${nmHeadR} 0 0 1 ${nmTx.toFixed(3)},${nmTy.toFixed(3)} L 0,${nmTipY.toFixed(3)} L ${(-nmTx).toFixed(3)},${nmTy.toFixed(3)} A ${nmHeadR},${nmHeadR} 0 0 1 0,${nmTopY.toFixed(3)} Z`;
   // DZ-only pedestal geometry — a taller/wider foot plus a stepped collar band at the
   // neck, so the onion-dome reads as resting on a solid plinth instead of a flat disc.
   // Deliberately separate from baseRX/baseRY/baseCY above so Classic's pedestal is
@@ -2241,8 +2258,9 @@ const PawnToken = memo(function PawnToken({
       <motion.g animate={scaleCtrl} initial={{ scale: stackScaleVal }} style={{ willChange: 'transform' }}>
 
         {/* Ground shadow — anchored to base elevation, NOT lifted by arc */}
-        <ellipse cx={0.04} cy={HR*0.90} rx={HR*0.70} ry={HR*0.18}
-          fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : isNormal ? 'rgba(0,0,0,0.26)' : 'rgba(0,0,0,0.62)'}
+        <ellipse cx={isNormal ? 0.02 : 0.04} cy={isNormal ? 0.33 : HR*0.90}
+          rx={isNormal ? 0.30 : HR*0.70} ry={isNormal ? 0.075 : HR*0.18}
+          fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : isNormal ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.62)'}
           filter={isClassic ? 'url(#cl-pawn-shadow)' : isDz ? 'url(#dz-pawn-shadow)' : undefined}/>
 
         {/* Capture speaking echo — breathes under the piece while a capture
@@ -2375,31 +2393,30 @@ const PawnToken = memo(function PawnToken({
         ) : isNormal ? (
           <>
             {/* Flat white map-pin / location-marker pawn — Normal board only.
-                A white teardrop silhouette with a solid player-colour circle in
-                the head and a soft drop shadow beneath (the ground-shadow
-                ellipse above). No gloss, no gradients, no neon. */}
-            {/* Movable highlight — quiet flat dark ring, no neon pulse */}
+                A chunky white teardrop body with a solid player-colour circle in
+                the head and a soft drop shadow beneath (the ground-shadow ellipse
+                above). No gloss, no gradients, no neon — just a clean, legible
+                game piece. */}
+            {/* Movable highlight — quiet flat dark ring around the pin head */}
             {isMovable && (
-              <motion.circle cx={0} cy={domeCY} r={domeR + 0.08}
+              <motion.circle cx={0} cy={nmHeadCY} r={nmHeadR + 0.10}
                 fill="none" stroke="rgba(58,58,58,0.55)" strokeWidth="0.030"
                 animate={{ opacity: [0.25, 0.80, 0.25] }}
                 transition={{ duration: 1.0, repeat: Infinity, ease: 'easeInOut' }}
               />
             )}
 
-            {/* White map-pin body — one solid teardrop: the large arc (sweep 0)
-                sweeps OVER the top of the head, so the round top and the
-                pointed tail form a single closed location-pin silhouette. */}
+            {/* White map-pin body — solid, rounded head tapering to a point */}
             <path
-              d="M 0,0.30 L 0.194,0.134 A 0.275,0.275 0 1 0 -0.194,0.134 Z"
+              d={nmPath}
               fill="#FFFFFF"
-              stroke="rgba(0,0,0,0.25)"
-              strokeWidth="0.022"
+              stroke="rgba(0,0,0,0.28)"
+              strokeWidth="0.024"
               strokeLinejoin="round"
             />
 
             {/* Solid player-colour circle centred in the pin head */}
-            <circle cx={0} cy={domeCY} r="0.16" fill={nmColor} />
+            <circle cx={0} cy={nmHeadCY} r={nmCircleR} fill={nmColor} />
           </>
         ) : (
           <>
@@ -3785,15 +3802,32 @@ const BoardSVG = memo(function BoardSVG({
         }
 
         if (isNormal) {
-          // Normal home zone — one solid, flat, fully-saturated quadrant from
-          // edge to edge. The four pieces sit directly on this colour; there is
-          // no white inset panel. No gradients, textures, or ornamentation.
-          const solid = NM.HOME_COLORS[player as 0|1|2|3];
+          // Normal home base — the standard finished-Ludo look: a solid
+          // saturated quadrant with a white, bordered inset "tray" where the
+          // four pieces sit. The inset frame uses a deeper shade of the home
+          // colour so the base reads as a proper tray, not a flat block.
+          const solid  = NM.HOME_COLORS[player as 0|1|2|3];
+          const border = NM.HOME_BASE_BORDER[player as 0|1|2|3];
           return (
             <g key={`hz-${player}`}>
               {/* Solid saturated quadrant */}
               <rect x={zc} y={zr} width="6" height="6" fill={solid}
                 fillOpacity={exists ? 1 : 0.30}/>
+              {/* White base inset */}
+              <rect x={zc+0.55} y={zr+0.55} width="4.90" height="4.90" rx="0.45"
+                fill="#FFFFFF" fillOpacity={exists ? 1 : 0.55}/>
+              {/* Coloured border — one shade deeper than the quadrant */}
+              <rect x={zc+0.55} y={zr+0.55} width="4.90" height="4.90" rx="0.45"
+                fill="none" stroke={border} strokeWidth="0.08"
+                strokeOpacity={exists ? 1 : 0.55}/>
+              {/* Faint inner hairline — subtle tray depth without a gradient */}
+              <rect x={zc+0.72} y={zr+0.72} width="4.56" height="4.56" rx="0.30"
+                fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="0.018"/>
+              {/* Four pawn slots — faint circles so an empty base still reads */}
+              {E.HOME_BASES[player].map(([br, bc], si) => (
+                <circle key={si} cx={bc+0.5} cy={br+0.5} r="0.40"
+                  fill="none" stroke="rgba(0,0,0,0.10)" strokeWidth="0.02"/>
+              ))}
               {/* Home-impact flash on defeat arrival — flat, colour-only, at the
                   returning piece's own home slot */}
               {homeImpact?.player === player && (() => {

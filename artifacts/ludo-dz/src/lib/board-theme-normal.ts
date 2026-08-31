@@ -15,6 +15,15 @@ export const HOME_COLORS = [
   '#43A047', // Player 4 (index 3, BL corner) — pure green
 ] as const;
 
+// One shade deeper than each home colour — used for the border of the white
+// home-base inset so each base reads as a framed tray rather than a flat block.
+export const HOME_BASE_BORDER = [
+  '#C62828', // Red   — red 800
+  '#1565C0', // Blue  — blue 800
+  '#F9A825', // Yellow — yellow 800
+  '#2E7D32', // Green — green 800
+] as const;
+
 // Neutral white path background — the whole cross-shaped track reads as a
 // plain white board, exactly like a standard printed Ludo board.
 export const PATH_WHITE = '#FFFFFF';
