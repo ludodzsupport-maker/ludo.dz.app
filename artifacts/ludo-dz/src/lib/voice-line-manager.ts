@@ -5,10 +5,11 @@ import { setSfxDucking } from './sound-manager';
 //
 // Every event owns one dedicated folder under `src/assets/audio/voice/<event>/`.
 // Every audio file inside that folder is the event's clip pool, and no clip is
-// ever shared between events. Selecting a line is a uniform random pick from
-// that event's own pool — no weights, no mood tags, no cross-event eligibility.
-// The only anti-repetition rule is: never play the exact same clip twice in a
-// row within the same event's pool.
+// ever shared between events. Selecting a line is a random pick from that
+// event's own pool — no mood tags, no cross-event eligibility. The draw is not
+// uniform: it is recency-gated and play-count-balanced so every clip in a pool
+// gets even exposure over a session, however large the pool grows. See
+// `ClipSelector`.
 //
 // Events are registered one at a time. `VOICE_EVENTS` is the single source of
 // truth; adding an event here (with its Arabic key + folder) is all that's
@@ -133,8 +134,9 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
 // It reuses the same isolated-folder model: the reply pool lives under
 // `voice/ردود/<event>/` and is shared across all players (the audio content is
 // generic; only the speaking indicator is tied to a specific player). No clip is
-// shared between events, nor between an event and its own replies, and the
-// no-immediate-repeat rule applies within each reply pool.
+// shared between events, nor between an event and its own replies, and the same
+// recency-gated, play-count-balanced selection (`ClipSelector`) applies within
+// each reply pool.
 //
 // To enable replies for a new event, add its key to `REPLYABLE_EVENTS` and drop
 // clips into `voice/ردود/<event>/` — nothing else changes. The pool is auto-built,
@@ -210,8 +212,18 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
  * of line, and `ضمّ` has no interrupt privilege that would justify widening
  * its window the way the top-priority `الأكل` does — so a second knob at the
  * same value would just be a duplicate dial for one question.
+ *
+ * Tightened 1200 → 900 ms (2026-09-01). The threshold is the *upper bound* on
+ * how much of the audible line may remain for a second trigger to still earn
+ * its own line, so lowering it lengthens the stretch of a line during which a
+ * newcomer is suppressed (a line of length D suppresses over its first
+ * `D - threshold` ms instead of `D - 1200`). Consecutive triggers therefore
+ * coalesce/cancel more often and produce fewer immediately back-to-back lines;
+ * only triggers that land in the final ~0.9 s of the audible line — where a
+ * follow-up still reads as a reaction to its own moment rather than as a
+ * rushed queue drain — get a line of their own.
  */
-export const EXIT_QUEUE_MAX_WAIT_MS = 1200;
+export const EXIT_QUEUE_MAX_WAIT_MS = 900;
 
 /**
  * `الأكل` (a piece captures/eats another piece) — the highest-priority voice
@@ -227,15 +239,21 @@ export const EXIT_QUEUE_MAX_WAIT_MS = 1200;
  *    running line finishes and a fresh (different-clip) capture line plays;
  *  • remaining wait  > threshold → both captures are one combined event: the
  *    running line already covers them, so no second line is queued.
- * Default 1500 ms: capture reactions in this game's style run ~1.5-4 s (the
+ * Default 1150 ms: capture reactions in this game's style run ~1.5-4 s (the
  * existing primary pools measure 1.8-4.0 s), and a second capture realistically
- * lands 2-6 s after the first (pawn defeat arc + extra-turn roll). With 1500 ms,
- * captures landing in the last ~1.5 s of the running line still get their own
+ * lands 2-6 s after the first (pawn defeat arc + extra-turn roll). With 1150 ms,
+ * captures landing in the last ~1.15 s of the running line still get their own
  * follow-up line (feels responsive), while earlier ones — which would otherwise
  * start long after their visual moment or machine-gun-interrupt each other —
  * coalesce into the line already playing. Slightly larger than
- * EXIT_QUEUE_MAX_WAIT_MS (1200 ms) on purpose: capture lines are the event the
+ * EXIT_QUEUE_MAX_WAIT_MS (900 ms) on purpose: capture lines are the event the
  * player most wants heard, so the "give it a separate line" window is wider.
+ *
+ * Tightened 1500 → 1150 ms (2026-09-01), in step with EXIT_QUEUE_MAX_WAIT_MS
+ * (see that constant for why a *lower* value is the stricter gate) and keeping
+ * the same ~1.25× ratio between the two windows, so the capture event stays
+ * the most permissive one relative to everything else while stacked captures
+ * coalesce into one line more readily than before.
  *
  * The capture reply (ردود/الأكل) follows this run rule 1:1: the reply is
  * reserved on the running capture line and re-owned to every stacked capture
@@ -243,7 +261,7 @@ export const EXIT_QUEUE_MAX_WAIT_MS = 1200;
  * surviving capture-line run — captures combined into one shared line yield
  * one reply, not one per captured piece.
  */
-export const CAPTURE_COALESCE_MAX_WAIT_MS = 1500;
+export const CAPTURE_COALESCE_MAX_WAIT_MS = 1150;
 
 // Conversational beat between the primary line ending and the reply starting.
 // Measured from the primary's END (not its start), so it is a real pause in the
@@ -346,28 +364,135 @@ interface VoiceClip {
   url: string;
 }
 
-// One isolated pool per registered event, built from that event's folder only.
-const eventPools = new Map<VoiceLineEvent, VoiceClip[]>();
-const lastPlayed = new Map<VoiceLineEvent, string>();
+// ─── Clip selection: recency-gated, play-count-balanced weighted random ──────
+//
+// Within one pool, picking a clip has two competing goals: each individual pick
+// must feel unpredictable, and across a long session every clip in the pool
+// must get roughly the same amount of airtime. A plain uniform draw satisfies
+// the first and fails the second (with n clips, the chance a given clip is
+// still unheard after n draws is ~37 %, and the gap only widens as pools grow),
+// while a strict rotation satisfies the second and fails the first. `ClipSelector`
+// composes two cheap mechanisms that together satisfy both — see the class doc.
+//
+// Both the primary pools and the `ردود` reply pools go through it, so any pool
+// added later inherits the behaviour without extra wiring.
 
-for (const event of VOICE_EVENTS) {
-  const pool = Object.entries(VOICE_FILES)
-    .filter(([path]) => path.includes(`/voice/${event}/`))
-    .map(([path, url]) => ({ path, url }))
-    .sort((a, b) => a.path.localeCompare(b.path));
-  eventPools.set(event, pool);
+/**
+ * Share of a pool held on recency cooldown, i.e. the clips most recently played
+ * are ineligible for the next draw. Expressed as a fraction so the rule scales
+ * with the pool instead of being a fixed count: with 2-3 clips it collapses to
+ * exactly the old "never the same clip twice in a row", and with 30 clips it
+ * guarantees a ten-clip gap before any clip can come round again. Clamped to
+ * `[1, n - 1]` at use, so a draw is always possible.
+ */
+const RECENCY_WINDOW_RATIO = 1 / 3;
+
+/**
+ * Picks clips from one fixed pool: weighted random with a recency cooldown.
+ *
+ * 1. **Recency gate — short-term variety.** The clips played within the last
+ *    `RECENCY_WINDOW_RATIO` × n draws are excluded outright, so a clip can
+ *    never come back around while it is still fresh in the player's ear. This
+ *    generalises the old no-immediate-repeat rule and grows with the pool.
+ *
+ * 2. **Play-count balancing — long-term fairness.** Among the eligible clips,
+ *    the draw is weighted by how far each clip lags behind the most-played clip
+ *    of its pool: `weight = (maxPlays - plays) + 1`. Under-played clips are
+ *    proportionally likelier, a pool that is already evenly used degenerates to
+ *    a uniform draw (all weights 1), and a clip whose count falls behind is
+ *    pulled back harder the further it drifts. The weight is a *bounded
+ *    deficit*, not an accumulating score, so counts self-correct instead of
+ *    diverging, and a clip that has never played yet (`plays = 0`, e.g. a file
+ *    dropped into the folder for a later build) is surfaced quickly rather than
+ *    waiting on chance.
+ *
+ * Cost per pick is O(n) with zero allocation (the weight buffer is reused) and
+ * O(n) memory for the whole pool, so growing a category from 5 clips to 100
+ * changes nothing structurally. State is per-session and in-memory, matching
+ * the previous behaviour.
+ */
+class ClipSelector {
+  private readonly pool: readonly VoiceClip[];
+  /** Times each clip has played this session. */
+  private readonly plays: number[];
+  /** Draw ordinal at which each clip last played; `-Infinity` = never played. */
+  private readonly lastPickedAt: number[];
+  /** Reused scratch buffer for the per-draw weights (no per-pick allocation). */
+  private readonly weights: number[];
+  /** Monotonic count of draws served — the clock the recency gate reads. */
+  private draws = 0;
+
+  constructor(pool: readonly VoiceClip[]) {
+    this.pool = pool;
+    this.plays = new Array<number>(pool.length).fill(0);
+    this.lastPickedAt = new Array<number>(pool.length).fill(Number.NEGATIVE_INFINITY);
+    this.weights = new Array<number>(pool.length).fill(0);
+  }
+
+  /** Next clip for this pool, or `null` when the pool is empty. */
+  next(): VoiceClip | null {
+    const n = this.pool.length;
+    if (n === 0) return null;
+    if (n === 1) return this.take(0);
+
+    // At most `n - 1` clips can be gated, so at least one stays eligible.
+    const window = Math.min(n - 1, Math.max(1, Math.round(n * RECENCY_WINDOW_RATIO)));
+    const cooldownFrom = this.draws - window;
+
+    let maxPlays = 0;
+    for (let i = 0; i < n; i += 1) {
+      if (this.plays[i] > maxPlays) maxPlays = this.plays[i];
+    }
+
+    let total = 0;
+    for (let i = 0; i < n; i += 1) {
+      const weight = this.lastPickedAt[i] >= cooldownFrom ? 0 : maxPlays - this.plays[i] + 1;
+      this.weights[i] = weight;
+      total += weight;
+    }
+
+    // `total` is always >= 1 (see the window clamp above).
+    let ticket = Math.random() * total;
+    for (let i = 0; i < n; i += 1) {
+      ticket -= this.weights[i];
+      if (ticket < 0) return this.take(i);
+    }
+
+    // Floating-point guard only: fall back to the last eligible clip.
+    for (let i = n - 1; i >= 0; i -= 1) {
+      if (this.weights[i] > 0) return this.take(i);
+    }
+    return this.take(n - 1);
+  }
+
+  private take(index: number): VoiceClip {
+    this.plays[index] += 1;
+    this.lastPickedAt[index] = this.draws;
+    this.draws += 1;
+    return this.pool[index];
+  }
 }
 
-// One isolated reply pool per registered event, built from `ردود/<event>/`.
-const eventReplyPools = new Map<VoiceLineEvent, VoiceClip[]>();
-const lastPlayedReply = new Map<VoiceLineEvent, string>();
-
-for (const event of VOICE_EVENTS) {
-  const pool = Object.entries(VOICE_FILES)
-    .filter(([path]) => path.includes(`/voice/ردود/${event}/`))
+function buildPool(prefix: string): VoiceClip[] {
+  return Object.entries(VOICE_FILES)
+    .filter(([path]) => path.includes(prefix))
     .map(([path, url]) => ({ path, url }))
     .sort((a, b) => a.path.localeCompare(b.path));
-  eventReplyPools.set(event, pool);
+}
+
+// One isolated pool per registered event, built from that event's folder only,
+// plus the selector that owns that pool's exposure history. Reply pools
+// (`ردود/<event>/`) get the same treatment, kept separate so an event and its
+// replies never share clips or history.
+const eventPools = new Map<VoiceLineEvent, VoiceClip[]>();
+const eventSelectors = new Map<VoiceLineEvent, ClipSelector>();
+const eventReplySelectors = new Map<VoiceLineEvent, ClipSelector>();
+
+for (const event of VOICE_EVENTS) {
+  const pool = buildPool(`/voice/${event}/`);
+  eventPools.set(event, pool);
+  eventSelectors.set(event, new ClipSelector(pool));
+  eventReplySelectors.set(event, new ClipSelector(buildPool(`/voice/ردود/${event}/`)));
 }
 
 function clampVoiceVolume(volume: number): number {
@@ -567,36 +692,17 @@ function isRegisteredEvent(event: VoiceLineTrigger): event is VoiceLineEvent {
   return (VOICE_EVENTS as readonly string[]).includes(event);
 }
 
-/** Uniform random pick from the event's own pool, skipping the last clip played. */
-function pickRandomClip(event: VoiceLineEvent): VoiceClip | null {
-  const pool = eventPools.get(event) ?? [];
-  if (pool.length === 0) return null;
-  if (pool.length === 1) {
-    lastPlayed.set(event, pool[0].url);
-    return pool[0];
-  }
-
-  const previous = lastPlayed.get(event);
-  const candidates = previous ? pool.filter(clip => clip.url !== previous) : pool;
-  const picked = candidates[Math.floor(Math.random() * candidates.length)];
-  lastPlayed.set(event, picked.url);
-  return picked;
+/**
+ * Next clip from the event's own pool — weighted so the whole pool gets even
+ * exposure over a session (see `ClipSelector`). `null` when the pool is empty.
+ */
+function pickClip(event: VoiceLineEvent): VoiceClip | null {
+  return eventSelectors.get(event)?.next() ?? null;
 }
 
-/** Uniform random pick from the event's reply pool, skipping the last reply. */
-function pickRandomReply(event: VoiceLineEvent): VoiceClip | null {
-  const pool = eventReplyPools.get(event) ?? [];
-  if (pool.length === 0) return null;
-  if (pool.length === 1) {
-    lastPlayedReply.set(event, pool[0].url);
-    return pool[0];
-  }
-
-  const previous = lastPlayedReply.get(event);
-  const candidates = previous ? pool.filter(clip => clip.url !== previous) : pool;
-  const picked = candidates[Math.floor(Math.random() * candidates.length)];
-  lastPlayedReply.set(event, picked.url);
-  return picked;
+/** Same selection strategy, over the event's `ردود/<event>/` reply pool. */
+function pickReply(event: VoiceLineEvent): VoiceClip | null {
+  return eventReplySelectors.get(event)?.next() ?? null;
 }
 
 function isReplyable(event: VoiceLineTrigger): event is VoiceLineEvent {
@@ -848,7 +954,7 @@ function prepareReply(event: VoiceLineEvent, options: VoiceLineContext, owner: H
   }
   if (speaker === undefined) return;
 
-  const clip = pickRandomReply(event); // empty folder = safe no-op
+  const clip = pickReply(event); // empty folder = safe no-op
   if (!clip) return;
 
   // Future events take priority: if one is already active/queued here, this
@@ -1150,13 +1256,13 @@ function playNextQueued(): boolean {
 
     if (next.kind === 'event') {
       if (!isRegisteredEvent(next.event)) continue;
-      const clip = pickRandomClip(next.event);
+      const clip = pickClip(next.event);
       if (!clip) continue;
       playClip(next, clip);
       return true;
     }
 
-    const clip = pickRandomReply(next.replyEvent);
+    const clip = pickReply(next.replyEvent);
     if (!clip) continue;
     playClip(next, clip);
     return true;
@@ -1208,8 +1314,8 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
 
       if (remainingWaitMs <= CAPTURE_COALESCE_MAX_WAIT_MS) {
         // Short remaining wait → separate events: let the first line finish,
-        // then play a fresh capture line (the no-immediate-repeat pick ensures
-        // it is a *different* clip than the one that just played). Insert at
+        // then play a fresh capture line (the recency-gated pick ensures it is
+        // a *different* clip than the one that just played). Insert at
         // the head so it follows the running capture line directly, ahead of
         // any older queue entries — a capture line never waits behind things.
         queue.unshift({ kind: 'event', event, options: context ?? {} });
@@ -1231,7 +1337,7 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
     }
 
     // Empty pool = safe no-op — never interrupt just to leave silence.
-    const clip = pickRandomClip(event);
+    const clip = pickClip(event);
     if (!clip) return;
 
     // Interrupt everything: cut the active line (of any type — primary line,
@@ -1265,14 +1371,14 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
   //
   // Near-simultaneous threats coalesce with the same remaining-wait run rule
   // (the capture run shape, reusing EXIT_QUEUE_MAX_WAIT_MS instead of the
-  // capture's wider 1500 ms window — a threat is a warning about a state,
+  // capture's wider 1150 ms window — a threat is a warning about a state,
   // not the event the player most wants heard, so it coalesces slightly more
   // eagerly):
   //   • a threat firing while a `التهديد` line is still audible with
   //     <= EXIT_QUEUE_MAX_WAIT_MS left queues one fresh follow-up line
   //     (at most one threat line ever waits — a newer threat replaces a
-  //     stale queued one, and the no-immediate-repeat pick keeps it a
-  //     different clip);
+  //     stale queued one, and the recency-gated pick keeps it a different
+  //     clip);
   //   • a threat firing earlier in a running threat line is combined into
   //     the line already playing — no second line, so simultaneous or
   //     near-simultaneous threat bursts always produce one audible line.
@@ -1295,7 +1401,7 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
     }
 
     // Voice is idle: play immediately.
-    const clip = pickRandomClip(event);
+    const clip = pickClip(event);
     if (!clip) return;
     playClip({ kind: 'event', event, options: context ?? {} }, clip);
     return;
@@ -1356,7 +1462,7 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
     }
 
     // Voice is idle: play immediately.
-    const clip = pickRandomClip(event);
+    const clip = pickClip(event);
     if (!clip) return;
     playClip({ kind: 'event', event, options: context ?? {} }, clip);
     return;
@@ -1452,7 +1558,7 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
     }
 
     // Voice is idle: play immediately.
-    const clip = pickRandomClip(event);
+    const clip = pickClip(event);
     if (!clip) return;
     playClip({ kind: 'event', event, options: context ?? {} }, clip);
     return;
@@ -1501,7 +1607,7 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
     if (speaker !== undefined) {
       lastExitSpeaker = speaker;
     }
-    const clip = pickRandomClip(event);
+    const clip = pickClip(event);
     if (!clip) return;
     playClip({ kind: 'event', event, options: context ?? {} }, clip);
     return;
@@ -1534,7 +1640,7 @@ export function playVoiceLine(event: VoiceLineTrigger, context?: VoiceLineContex
     return;
   }
 
-  const clip = pickRandomClip(event);
+  const clip = pickClip(event);
   if (!clip) return;
   playClip({ kind: 'event', event, options: context ?? {} }, clip);
 }
