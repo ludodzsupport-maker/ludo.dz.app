@@ -59,9 +59,9 @@ Current model in `voice-line-manager.ts`:
 - **`إخراج_بيدق` primary line queue rules (2026-08-29, unchanged):**
   - **Scenario A (Same-turn back-to-back exits):** If a second `إخراج_بيدق` trigger arrives for the same speaker
     without an intervening turn/action from another player, it is unconditionally cancelled (never queued).
-  - **Scenario B (Cross-turn exits):** Evaluated against the currently playing line's remaining duration (`EXIT_QUEUE_MAX_WAIT_MS = 1200` ms).
-    If the active line finishes in <= 1200 ms, the new exit line is queued (replacing any existing queued exit line so at most 1 exit line is queued).
-    If remaining wait > 1200 ms, the new exit line is cancelled. If play advances to a 3rd player (color C), any queued exit line for B is cancelled.
+  - **Scenario B (Cross-turn exits):** Evaluated against the currently playing line's remaining duration (`EXIT_QUEUE_MAX_WAIT_MS = 900` ms, tightened from 1200 on 2026-09-01 — a *lower* threshold is the stricter gate: it lengthens the stretch of a line during which a newcomer is suppressed).
+    If the active line finishes in <= 900 ms, the new exit line is queued (replacing any existing queued exit line so at most 1 exit line is queued).
+    If remaining wait > 900 ms, the new exit line is cancelled. If play advances to a 3rd player (color C), any queued exit line for B is cancelled.
 - `finishLine(owner)` is the single end-of-clip callback. If `pendingReply.owner === owner`,
   no foreign event is queued/active, and no queued exit line remains, it starts the reply
   after `REPLY_GAP_MIN_MS`-`REPLY_GAP_MAX_MS` measured from the last primary's **end**. The
@@ -93,10 +93,11 @@ it goes through the capture branch of `playVoiceLine`, which
 - drops the reserved exit reply (`clearPendingReply`/`clearReplyGap` + keeps
   `exitReplyRun.preempted = true` so a queued continuation exit line still plays but
   cannot resurrect the reply);
-- coalesces **stacked captures** with its own tunable `CAPTURE_COALESCE_MAX_WAIT_MS = 1500`
-  (analogous to `EXIT_QUEUE_MAX_WAIT_MS`, deliberately a bit larger): if the running
-  `الأكل` line finishes within 1500 ms the new capture is a separate event and gets queued
-  at the **head** (a capture never queues behind stale lines; the universal no-repeat pick
+- coalesces **stacked captures** with its own tunable `CAPTURE_COALESCE_MAX_WAIT_MS = 1150`
+  (tightened from 1500 on 2026-09-01 in step with `EXIT_QUEUE_MAX_WAIT_MS`, keeping the same
+  ~1.25× ratio — deliberately a bit larger than the exit window): if the running
+  `الأكل` line finishes within 1150 ms the new capture is a separate event and gets queued
+  at the **head** (a capture never queues behind stale lines; the recency-gated pick
   guarantees a different clip); if it has longer to run, both captures are one combined
   event and the new line is dropped along with any stale queued capture line;
 - is a safe no-op when its pool is empty — it never interrupts just to leave silence.
@@ -107,9 +108,22 @@ extra wiring; the capture branch upgrades it from preempt-and-queue to preempt-a
 
 **How to apply:** any future "interrupts everything" event copies this branch shape
 (immediate stop + pool-empty guard + head-inserted coalescing queue). All voice pools —
-primary and reply — inherit the no-immediate-repeat rule for free because selection is
-funnelled through `pickRandomClip`/`pickRandomReply`; per-event pickers must keep using
-them.
+primary and reply — inherit clip selection for free because it is funnelled through
+`pickClip`/`pickReply` (renamed from `pickRandomClip`/`pickRandomReply` on 2026-09-01);
+per-event pickers must keep using them.
+
+## Clip selection is recency-gated + play-count-balanced, not uniform (2026-09-01)
+
+`ClipSelector` (one instance per primary pool and per `ردود` reply pool) replaced the old
+"uniform random, never the same clip twice in a row" rule. Each draw: (1) the clips played
+within the last `round(n / 3)` draws (clamped to `[1, n-1]`) are ineligible — a recency gate
+that *is* the old no-repeat rule at n = 2-3 and scales with the pool; (2) among the eligible
+clips the draw is weighted by `maxPlays - plays + 1`, a bounded deficit that pulls
+under-played clips up and degenerates to uniform on an evenly used pool. O(n) per pick, no
+allocation (weight scratch buffer is reused), per-session in-memory state. Simulated over
+30n draws: play counts stay within ~±3 of even at n = 120 (the old rule spread 17 vs 45),
+and full coverage of a 120-clip pool arrives in ~274 draws instead of ~626. Never-played
+clips carry the largest weight, so clips added to a folder later surface quickly.
 
 ## Voice ducking lives in sound-manager and covers every SFX by construction
 
