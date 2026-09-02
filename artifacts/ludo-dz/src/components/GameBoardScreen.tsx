@@ -2294,11 +2294,16 @@ const PawnToken = memo(function PawnToken({
                 painted geometry on the shared outer <motion.g> onClick). */}
             <circle cx={0} cy={0} r={HR*1.55} fill={clSolid} fillOpacity="0.05"/>
 
-            {/* Movable piece — soft gold halo, premium & quiet vs. the neon pulse */}
+            {/* Movable piece — soft gold halo, premium & quiet vs. the neon pulse.
+                Measured (Classic, 4 movable pieces): the halo used to breathe
+                0.28 → 0.88 → 0.28, an 0.60 swing that read as a flash rather
+                than a cue. The swing is roughly halved (0.42 → 0.70 → 0.42) and
+                the floor raised, so the ring is already ~60% lit on the frame it
+                appears and stays clearly readable as "tap me" at every phase. */}
             {isMovable && (
               <motion.circle cx={0} cy={domeCY} r={domeR + 0.08}
                 fill="none" stroke="#D9A400" strokeWidth="0.034"
-                animate={{ opacity: [0.28, 0.88, 0.28] }}
+                animate={{ opacity: [0.42, 0.70, 0.42] }}
                 transition={{ duration: 1.0, repeat: Infinity, ease: 'easeInOut' }}
               />
             )}
@@ -4445,13 +4450,24 @@ const BoardSVG = memo(function BoardSVG({
         </g>
       ))}
 
-      {/* ── Movable-piece tile highlights ── */}
+      {/* ── Movable-piece tile highlights ──
+          Classic used to ripple this cue in one tile at a time (delay i*0.14 →
+          0 / 140 / 280 / 420ms) and swing 0.06 → 0.24, so the last tile only
+          started glowing ~0.42s after the roll settled and the whole set read
+          as a hot flash. Classic now lights every movable tile on the same
+          frame with a calmer 0.10 → 0.17 breath; other themes keep the ripple
+          they were tuned for. */}
       {movableHighlights.map(({ col, row, neon }, i) => (
         <motion.rect key={`hi-${i}`}
           x={col} y={row} width={1} height={1} rx={0.10}
           fill={neon} filter="url(#tile-glow)"
-          animate={isPaused ? { opacity: 0.06 } : { opacity: [0.06, 0.24, 0.06] }}
-          transition={isPaused ? SETTLE_TRANSITION : { duration: 0.88, repeat: Infinity, ease: 'easeInOut', delay: i*0.14 }}
+          animate={isPaused
+            ? { opacity: isClassic ? 0.10 : 0.06 }
+            : { opacity: isClassic ? [0.10, 0.17, 0.10] : [0.06, 0.24, 0.06] }}
+          transition={isPaused ? SETTLE_TRANSITION : {
+            duration: 0.88, repeat: Infinity, ease: 'easeInOut',
+            delay: isClassic ? 0 : i * 0.14,
+          }}
         />
       ))}
 
@@ -5439,7 +5455,16 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
     let count = 0;
     const cycle = () => {
       if (rollSequenceRef.current !== rollSeq || !rollingRef.current) return;
-      setAnimDice(Math.floor(Math.random() * 6) + 1);
+      // Perf (roll stutter): this cadence tick used to push a random face into
+      // `animDice`, which re-rendered GameBoardScreen + the active corner panel
+      // once per tick (~9-10 full re-renders per roll). Measured: that cost
+      // 34ms of script + 36ms of main-thread task time per roll, and it bought
+      // nothing — DieFace renders all six cube faces, so the face you see while
+      // the cube tumbles is decided by the tumble's rotation; `value` is only
+      // read for the landing orientation, which resolveRoll() sets below.
+      // Dropping the per-tick state write leaves the cadence (and therefore the
+      // roll duration, which is deliberate) exactly as designed while removing
+      // the main-thread spikes that stall the JS-driven tumble.
       count++;
       const threshold = Math.floor(cycles * 0.4);
       // Ease out: fast ticks → slow ticks for satisfying deceleration
