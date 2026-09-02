@@ -6165,10 +6165,10 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
           }}
           animate={exitPause
             ? { boxShadow: boardShadowAnimation.boxShadow[0] }
-            : (isNormal
+            : (isClassic || isNormal
               ? { boxShadow: '0 10px 30px rgba(0,0,0,0.45)' }
               : boardShadowAnimation)}
-          transition={exitPause ? SETTLE_TRANSITION : (isNormal ? { duration: 0.3 } : boardShadowTransition)}>
+          transition={exitPause ? SETTLE_TRANSITION : (isClassic || isNormal ? { duration: 0.3 } : boardShadowTransition)}>
 
           {/* Inner felt — live SVG board, clipped to the rounded frame */}
           <div style={{
