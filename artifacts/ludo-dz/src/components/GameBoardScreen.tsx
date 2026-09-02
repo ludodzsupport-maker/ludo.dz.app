@@ -520,6 +520,11 @@ const PANEL_GAP = 6;  // px — space between panel edge and board frame edge
 // left/right edge horizontally instead of overhanging sideways — this keeps
 // them fully outside the board while costing almost no extra board width.
 const BOARD_MARGIN = 4;    // px — minimal side margin for the board frame itself
+// Board frame geometry — the Classic frame-glow layer must mirror the wrapper's
+// border-box exactly (padding now matches its inset). Kept in one place so the
+// two can never drift.
+const BOARD_FRAME_PADDING = 6;  // px — wrapper padding; also the glow layer's outward inset
+const BOARD_FRAME_RADIUS  = 22; // px — wrapper border-radius; also the glow layer's radius
 const PANEL_INSET  = 9;    // px — how far the panel sits inward from the frame's corner
 // Connector tail — a small triangle inside the untouched PANEL_GAP buffer,
 // pointing from the panel toward its board corner. TAIL_H + TAIL_GAP must
@@ -6155,20 +6160,45 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
             width: `min(calc(100vw - ${2 * BOARD_MARGIN}px), calc(${supportsDvh ? '100dvh' : '100vh'} - 270px))`,
             aspectRatio: '1',
             boxSizing: 'border-box',
-            borderRadius: 22,
+            borderRadius: BOARD_FRAME_RADIUS,
             overflow: 'visible',
-            padding: '6px',
+            padding: `${BOARD_FRAME_PADDING}px`,
             background: (isClassic || isDz || isNormal)
               ? 'transparent'
               : 'radial-gradient(ellipse 120% 100% at 50% 50%, #0e2647 0%, #030b16 70%)',
+
             border: (isClassic || isDz || isNormal) ? 'none' : '1px solid rgba(255,255,255,0.07)',
           }}
           animate={exitPause
             ? { boxShadow: boardShadowAnimation.boxShadow[0] }
             : (isNormal
               ? { boxShadow: '0 10px 30px rgba(0,0,0,0.45)' }
+              : isClassic
+              ? {}
               : boardShadowAnimation)}
-          transition={exitPause ? SETTLE_TRANSITION : (isNormal ? { duration: 0.3 } : boardShadowTransition)}>
+          transition={exitPause ? SETTLE_TRANSITION : (isNormal ? { duration: 0.3 } : (isClassic ? undefined : boardShadowTransition))}>
+
+          {/* Classic: the board's animated (active-color) frame-glow lives on a
+              dedicated empty layer (same border-box geometry, same box-shadow
+              values and timing). The SVG board below is a separate, cached
+              layer, so the pulse never re-rasterizes it every frame —
+              identical pixels, no repaint cascade. The corner dice panels
+              keep their own pulse. */}
+          {isClassic && (
+            <motion.div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                top: -BOARD_FRAME_PADDING, left: -BOARD_FRAME_PADDING,
+                right: -BOARD_FRAME_PADDING, bottom: -BOARD_FRAME_PADDING,
+                borderRadius: BOARD_FRAME_RADIUS,
+                pointerEvents: 'none',
+                willChange: 'box-shadow',
+              }}
+              animate={{ boxShadow: boardShadowAnimation.boxShadow }}
+              transition={boardShadowTransition}
+            />
+          )}
 
           {/* Inner felt — live SVG board, clipped to the rounded frame */}
           <div style={{
