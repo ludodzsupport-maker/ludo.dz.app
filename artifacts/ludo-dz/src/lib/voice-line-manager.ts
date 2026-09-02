@@ -7,8 +7,9 @@ import { setSfxDucking } from './sound-manager';
 // Every audio file inside that folder is the event's clip pool, and no clip is
 // ever shared between events. Selecting a line is a random pick from that
 // event's own pool — no mood tags, no cross-event eligibility. The draw is not
-// uniform: it is recency-gated and play-count-balanced so every clip in a pool
-// gets even exposure over a session, however large the pool grows. See
+// uniform: it is play-count-balanced with a soft recency shape and per-draw
+// jitter, so every clip in a pool gets even exposure over a session while each
+// individual pick stays unpredictable, however large the pool grows. See
 // `ClipSelector`.
 //
 // Events are registered one at a time. `VOICE_EVENTS` is the single source of
@@ -135,8 +136,8 @@ const VOICE_VOLUME_STORAGE_KEY = 'ludo-dz:voice-commentary-volume';
 // `voice/ردود/<event>/` and is shared across all players (the audio content is
 // generic; only the speaking indicator is tied to a specific player). No clip is
 // shared between events, nor between an event and its own replies, and the same
-// recency-gated, play-count-balanced selection (`ClipSelector`) applies within
-// each reply pool.
+// play-count-balanced, recency-shaped, jittered selection (`ClipSelector`)
+// applies within each reply pool.
 //
 // To enable replies for a new event, add its key to `REPLYABLE_EVENTS` and drop
 // clips into `voice/ردود/<event>/` — nothing else changes. The pool is auto-built,
@@ -364,7 +365,7 @@ interface VoiceClip {
   url: string;
 }
 
-// ─── Clip selection: recency-gated, play-count-balanced weighted random ──────
+// ─── Clip selection: deficit-weighted, recency-shaped, jittered random ──────
 //
 // Within one pool, picking a clip has two competing goals: each individual pick
 // must feel unpredictable, and across a long session every clip in the pool
@@ -372,44 +373,108 @@ interface VoiceClip {
 // the first and fails the second (with n clips, the chance a given clip is
 // still unheard after n draws is ~37 %, and the gap only widens as pools grow),
 // while a strict rotation satisfies the second and fails the first. `ClipSelector`
-// composes two cheap mechanisms that together satisfy both — see the class doc.
+// composes four cheap layers plus a wildcard escape hatch that together satisfy
+// both — see the class doc.
 //
 // Both the primary pools and the `ردود` reply pools go through it, so any pool
 // added later inherits the behaviour without extra wiring.
 
 /**
- * Share of a pool held on recency cooldown, i.e. the clips most recently played
- * are ineligible for the next draw. Expressed as a fraction so the rule scales
- * with the pool instead of being a fixed count: with 2-3 clips it collapses to
- * exactly the old "never the same clip twice in a row", and with 30 clips it
- * guarantees a ten-clip gap before any clip can come round again. Clamped to
- * `[1, n - 1]` at use, so a draw is always possible.
+ * Share of the pool spanned by the soft recency ramp: the ramp's reach is
+ * `R = round(n × RECENCY_WINDOW_RATIO)`, clamped to `[1, n - 1]` at use. It is
+ * the same pool-share scale the previous hard recency gate used, but what it
+ * sizes now is a smooth multiplier from ~0 to 1, not a cliff: a clip that just
+ * barely exited the "just played" state is heavily suppressed (never excluded),
+ * and the suppression fades smoothly as more draws pass. With 30 clips the
+ * ramp spans ten draws; with 2-3 clips it collapses to where the only effective
+ * shape left is the min-separation rule.
  */
 const RECENCY_WINDOW_RATIO = 1 / 3;
 
 /**
- * Picks clips from one fixed pool: weighted random with a recency cooldown.
+ * Exponent of the soft recency ramp:
+ * `ramp = min(1, age / R) ** RECENCY_RAMP_EXPONENT`. A value of 2 (quadratic)
+ * drops a clip's weight fast right after it plays and eases it smoothly back
+ * to full weight, which reads as "recently heard, so less likely" instead of
+ * "on cooldown" — no point where eligibility switches on.
+ */
+const RECENCY_RAMP_EXPONENT = 2;
+
+/**
+ * Standard deviation σ of the fairness jitter: every candidate's weight is
+ * multiplied by `noise = exp(σ · z)` with z drawn from a standard normal — a
+ * lognormal multiplier with median 1, so it is scale-free and can never flip a
+ * weight's sign. σ ≈ 0.5 is strong enough that the actual per-draw ordering is
+ * unpredictable even with perfect knowledge of the play history, yet small
+ * enough that the *expected* order still favours under-played clips, so
+ * long-run fairness holds.
+ */
+const FAIRNESS_JITTER_SIGMA = 0.5;
+
+/**
+ * Chance (~7 %) that a draw is a *wildcard*: all weighting is bypassed and the
+ * clip is drawn uniformly from the pool minus only the immediately-previous
+ * clip. Uniform is unbiased, so this is fairness-neutral; its job is to permit
+ * the rare close-together repeat (gap 2-5), which is what makes the sequence
+ * feel genuinely human/spontaneous rather than mechanically anti-repetitive —
+ * a hard "this never happens" rule is itself a detectable pattern.
+ */
+const WILDCARD_CHANCE = 0.07;
+
+/**
+ * Picks clips from one fixed pool: one weighted random draw ("ticket walk")
+ * over four composed layers, plus a wildcard escape hatch.
  *
- * 1. **Recency gate — short-term variety.** The clips played within the last
- *    `RECENCY_WINDOW_RATIO` × n draws are excluded outright, so a clip can
- *    never come back around while it is still fresh in the player's ear. This
- *    generalises the old no-immediate-repeat rule and grows with the pool.
+ * 1. **Min-separation — the only hard exclusion, ever.** The clip that played
+ *    in the immediately-previous draw (`age === 1`) gets weight 0. No other
+ *    clip is ever hard-excluded: unlike the old sliding recency gate there is
+ *    no "dead zone" of clips that provably cannot play for a while — every
+ *    other candidate keeps a non-zero (possibly tiny) weight on every draw.
  *
- * 2. **Play-count balancing — long-term fairness.** Among the eligible clips,
- *    the draw is weighted by how far each clip lags behind the most-played clip
- *    of its pool: `weight = (maxPlays - plays) + 1`. Under-played clips are
+ * 2. **Soft recency ramp — short-term variety.** Each candidate's weight is
+ *    scaled by `ramp = min(1, age / R) ** RECENCY_RAMP_EXPONENT`, where `age`
+ *    is how many draws ago the clip last played (`Infinity`, i.e. full ramp,
+ *    if never) and `R = round(n × RECENCY_WINDOW_RATIO)` clamped to
+ *    `[1, n - 1]` — the same pool-share scale the old hard-gate window used,
+ *    but as a smooth multiplier from ~0 to 1 instead of a cliff. A clip that
+ *    barely exited the "just played" state is heavily suppressed but not
+ *    impossible; the suppression fades smoothly as more draws pass.
+ *
+ * 3. **Play-count balancing — long-term fairness.** The fairness core is the
+ *    bounded deficit: `deficit = maxPlays - plays + 1`, where `maxPlays` is
+ *    the count of the pool's most-played clip. Under-played clips are
  *    proportionally likelier, a pool that is already evenly used degenerates to
- *    a uniform draw (all weights 1), and a clip whose count falls behind is
+ *    a uniform draw (all deficits 1), and a clip whose count falls behind is
  *    pulled back harder the further it drifts. The weight is a *bounded
  *    deficit*, not an accumulating score, so counts self-correct instead of
  *    diverging, and a clip that has never played yet (`plays = 0`, e.g. a file
- *    dropped into the folder for a later build) is surfaced quickly rather than
- *    waiting on chance.
+ *    dropped into the folder for a later build) is surfaced quickly rather
+ *    than waiting on chance.
  *
- * Cost per pick is O(n) with zero allocation (the weight buffer is reused) and
- * O(n) memory for the whole pool, so growing a category from 5 clips to 100
- * changes nothing structurally. State is per-session and in-memory, matching
- * the previous behaviour.
+ * 4. **Jittered fairness — unpredictability.** Each candidate's weight is
+ *    multiplied by `noise = exp(FAIRNESS_JITTER_SIGMA · z)` with z drawn from
+ *    a standard normal. The multiplier's median is 1, so the expected order
+ *    still favours under-played clips and long-run fairness holds, while the
+ *    actual per-draw ordering becomes unpredictable even with perfect
+ *    knowledge of the play history.
+ *
+ * **Wildcard:** with probability WILDCARD_CHANCE (~7 %) the draw ignores every
+ * layer and goes uniform over the pool minus only the immediately-previous
+ * clip. Fairness-neutral (uniform is unbiased), it is what lets the rare
+ * close-together repeat (gap 2-5) happen — the burst of spontaneity a purely
+ * weighted rule would suppress.
+ *
+ * Final weight per candidate: `w = deficit × ramp × noise` (wildcard draws
+ * bypass this and go uniform); selection is a standard weighted random draw
+ * over the computed weights.
+ *
+ * Cost per pick is O(n) with zero allocation (the weight buffer and the
+ * Box–Muller spare normal are reused) and O(n) memory for the whole pool, so
+ * growing a category from 5 clips to 100 changes nothing structurally. Edge
+ * sizes: n = 1 always returns the one clip; n = 2 and n = 3 collapse to simple
+ * forced alternation (the just-played clip is the only one ever excluded) —
+ * the unavoidable floor at tiny pool sizes, not a bug. State is per-session
+ * and in-memory, matching the previous behaviour.
  */
 class ClipSelector {
   private readonly pool: readonly VoiceClip[];
@@ -419,7 +484,12 @@ class ClipSelector {
   private readonly lastPickedAt: number[];
   /** Reused scratch buffer for the per-draw weights (no per-pick allocation). */
   private readonly weights: number[];
-  /** Monotonic count of draws served — the clock the recency gate reads. */
+  /**
+   * Spare standard-normal sample from the Box–Muller transform (which yields
+   * two at a time), carried to the next jitter draw so nothing is allocated.
+   */
+  private spareNormal: number | null = null;
+  /** Monotonic count of draws served — the clock the recency ramp reads. */
   private draws = 0;
 
   constructor(pool: readonly VoiceClip[]) {
@@ -435,9 +505,30 @@ class ClipSelector {
     if (n === 0) return null;
     if (n === 1) return this.take(0);
 
-    // At most `n - 1` clips can be gated, so at least one stays eligible.
-    const window = Math.min(n - 1, Math.max(1, Math.round(n * RECENCY_WINDOW_RATIO)));
-    const cooldownFrom = this.draws - window;
+    // The clip that played in the immediately-previous draw (`age === 1`), if
+    // one exists yet. Unique by construction: exactly one clip is taken per
+    // draw ordinal.
+    let previousIndex = -1;
+    for (let i = 0; i < n; i += 1) {
+      if (this.lastPickedAt[i] === this.draws - 1) {
+        previousIndex = i;
+        break;
+      }
+    }
+
+    // Wildcard draw: bypass every layer and go uniform over the pool minus
+    // only the immediately-previous clip — still excluded, because
+    // min-separation is the one rule a wildcard does not break.
+    if (Math.random() < WILDCARD_CHANCE) {
+      const eligible = previousIndex === -1 ? n : n - 1;
+      let index = Math.floor(Math.random() * eligible);
+      if (previousIndex !== -1 && index >= previousIndex) index += 1;
+      return this.take(index);
+    }
+
+    // Ramp reach: the same pool-share scale the old hard-gate window used,
+    // clamped so it is always positive and never spans the whole pool.
+    const rampReach = Math.min(n - 1, Math.max(1, Math.round(n * RECENCY_WINDOW_RATIO)));
 
     let maxPlays = 0;
     for (let i = 0; i < n; i += 1) {
@@ -446,23 +537,62 @@ class ClipSelector {
 
     let total = 0;
     for (let i = 0; i < n; i += 1) {
-      const weight = this.lastPickedAt[i] >= cooldownFrom ? 0 : maxPlays - this.plays[i] + 1;
+      // Draws since this clip last played; `Infinity` = never played.
+      const age = this.draws - this.lastPickedAt[i];
+      // Min-separation — the only hard exclusion, ever: the clip that just
+      // played cannot come round again immediately. No other age is excluded.
+      if (age === 1) {
+        this.weights[i] = 0;
+        continue;
+      }
+      // Soft recency ramp — smoothly fading suppression instead of a gate.
+      const ramp = Math.min(1, age / rampReach) ** RECENCY_RAMP_EXPONENT;
+      // Bounded deficit — the fairness core, unchanged.
+      const deficit = maxPlays - this.plays[i] + 1;
+      // Jitter — lognormal multiplier (median 1) that shuffles the per-draw
+      // order without biasing the long-run expected order.
+      const noise = Math.exp(FAIRNESS_JITTER_SIGMA * this.nextGaussian());
+      const weight = deficit * ramp * noise;
       this.weights[i] = weight;
       total += weight;
     }
 
-    // `total` is always >= 1 (see the window clamp above).
+    // `total` is always > 0: at most one candidate (the just-played clip) is
+    // zeroed, and every other weight is a product of positives
+    // (deficit >= 1, ramp > 0, noise > 0).
     let ticket = Math.random() * total;
     for (let i = 0; i < n; i += 1) {
       ticket -= this.weights[i];
       if (ticket < 0) return this.take(i);
     }
 
-    // Floating-point guard only: fall back to the last eligible clip.
+    // Floating-point guard only: fall back to the last positive weight.
     for (let i = n - 1; i >= 0; i -= 1) {
       if (this.weights[i] > 0) return this.take(i);
     }
     return this.take(n - 1);
+  }
+
+  /**
+   * One sample from the standard normal distribution (Box–Muller). The second
+   * value the transform produces is kept for the next caller, so the amortised
+   * cost is one `random()` per sample and the allocation cost is zero.
+   */
+  private nextGaussian(): number {
+    const spare = this.spareNormal;
+    if (spare !== null) {
+      this.spareNormal = null;
+      return spare;
+    }
+    // `log(u1)` below must stay finite: redraw in the (never-in-practice)
+    // event of an exact 0.
+    let u1 = Math.random();
+    while (u1 === 0) u1 = Math.random();
+    const u2 = Math.random();
+    const radius = Math.sqrt(-2 * Math.log(u1));
+    const angle = 2 * Math.PI * u2;
+    this.spareNormal = radius * Math.sin(angle);
+    return radius * Math.cos(angle);
   }
 
   private take(index: number): VoiceClip {
