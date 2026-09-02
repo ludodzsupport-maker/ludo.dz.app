@@ -112,18 +112,39 @@ primary and reply — inherit clip selection for free because it is funnelled th
 `pickClip`/`pickReply` (renamed from `pickRandomClip`/`pickRandomReply` on 2026-09-01);
 per-event pickers must keep using them.
 
-## Clip selection is recency-gated + play-count-balanced, not uniform (2026-09-01)
+## Clip selection is four-layer: min-separation + soft recency + jitter + wildcard (2026-09-02)
 
 `ClipSelector` (one instance per primary pool and per `ردود` reply pool) replaced the old
-"uniform random, never the same clip twice in a row" rule. Each draw: (1) the clips played
-within the last `round(n / 3)` draws (clamped to `[1, n-1]`) are ineligible — a recency gate
-that *is* the old no-repeat rule at n = 2-3 and scales with the pool; (2) among the eligible
-clips the draw is weighted by `maxPlays - plays + 1`, a bounded deficit that pulls
-under-played clips up and degenerates to uniform on an evenly used pool. O(n) per pick, no
-allocation (weight scratch buffer is reused), per-session in-memory state. Simulated over
-30n draws: play counts stay within ~±3 of even at n = 120 (the old rule spread 17 vs 45),
-and full coverage of a 120-clip pool arrives in ~274 draws instead of ~626. Never-played
+"uniform random, never the same clip twice in a row" rule. The 2026-09-01 version (hard
+`round(n/3)` recency gate + `maxPlays - plays + 1` deficit weighting) balanced long-run
+exposure well, but a listener could *feel* a soft rotation: the hard gate gave a learnable
+"out of the running" set, and the deficit re-boosted a clip right as its cooldown expired,
+so a clip's returns clustered around one near-constant gap. The current draw computes
+`weight = deficit × softRamp × jitter` per clip, with four layers:
+
+1. **Minimum separation — the only hard rule.** `age === 1` (picked on the immediately
+   preceding draw) → weight 0. Nothing else is ever excluded outright, so there is no
+   cooldown window to anticipate.
+2. **Soft recency ramp.** `min(1, age / rampHorizon)²` with `rampHorizon = n/3` (same
+   clamped pool share the old gate used — same average cadence, no cliff). Never-played
+   clips have `age = ∞` → full ramp.
+3. **Jittered fairness.** The bounded deficit `maxPlays - plays + 1` is kept exactly (still
+   fully fair long-run), but each weight is multiplied by `e^(σ·z)`, `z ~ N(0,1)`,
+   `σ = 0.5`: expected order still favours laggers, actual order is re-rolled every draw.
+4. **Wildcard draws.** With probability 0.07 the draw is uniform over the pool minus the
+   last clip (unbiased, so fairness-neutral): this is the source of the rare close echo
+   that breaks the "recent clips never come back" inference.
+
+n = 2-3 collapse to forced alternation (identical to the old rule). O(n) per pick, no
+allocation (weight scratch buffer reused), per-session in-memory state. Simulated over 30n
+draws (40 seeds, n = 10/28/50): play-count spread widens only ~1.2× vs the old selector
+and stays bounded at 200n draws (self-correcting deficit); immediate-repeat rate is 0;
+gap-≤5 returns go from ~0 % (n = 28/50) to a few per session; per-clip gap CV rises
+(n = 50: 0.58 → 0.71) and min observed gap drops from `window + 1` exactly to 2 — the
+near-constant return spacing that made the old selector feel cyclical is gone. Never-played
 clips carry the largest weight, so clips added to a folder later surface quickly.
+Tunables: `RECENCY_WINDOW_RATIO` (1/3), `RECENCY_RAMP_EXPONENT` (2),
+`FAIRNESS_JITTER_SIGMA` (0.5), `WILDCARD_CHANCE` (0.07).
 
 ## Voice ducking lives in sound-manager and covers every SFX by construction
 
