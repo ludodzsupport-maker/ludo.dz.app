@@ -306,6 +306,29 @@ function dzDomePath(cx: number, cy: number, R: number): string {
     Z`;
 }
 
+// Detached brass plinth for the DZ pawn — a flattened octagon (a zellige tile
+// seen in perspective) that sits on the board *under* the onion-dome body, as
+// its own ground fixture, never fused to it. Drawn as a top face over an
+// extruded side wall (the same octagon shifted down by DZ_PLINTH_DEPTH). The
+// octagon deliberately echoes the eight-fold zellige geometry without using an
+// eight-point star — the pawn's on-board star effects were removed by design.
+// Shared by PawnToken (the live piece) and the home-bay empty-perch marker so
+// the two always agree on where a pawn's foot lands.
+const DZ_PLINTH_RX    = 0.305; // half-width of the top face
+const DZ_PLINTH_RY    = 0.105; // half-height of the top face (perspective squash)
+const DZ_PLINTH_CY    = 0.140; // top-face centre, pawn-local (0,0 = cell centre); socket rim ≈ 0.100, just under the dome foot-rim (≈0.091) so the body reads seated at rest
+const DZ_PLINTH_DEPTH = 0.055; // visible side-wall height beneath the top face
+const DZ_SOCKET_RX    = 0.165; // recessed socket where the dome's flat underside seats
+const DZ_SOCKET_RY    = 0.040;
+function dzPlinthPoints(cx: number, cy: number, rx: number, ry: number): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 8; i++) {
+    const a = ((22.5 + 45 * i) * Math.PI) / 180;
+    pts.push(`${(cx + rx * Math.cos(a)).toFixed(4)},${(cy + ry * Math.sin(a)).toFixed(4)}`);
+  }
+  return pts.join(' ');
+}
+
 // ─── Fixed resting slots for finished pawns inside each player's center triangle ──
 // Center 3×3 spans columns/rows 6–9, apex at (7.5, 7.5). [x, y] = [col, row].
 // Red=left, Blue=top, Yellow=right, Green=bottom.
@@ -1927,7 +1950,6 @@ const READY_SHADOW_FADE = 0.72; // …and lightens, the way a lifted object's do
 // selectable", then the marker holds still. Only the piece itself keeps a slow
 // loop (the breath), so a selectable pawn costs one animated transform instead
 // of three — measured on DZ/Neon, a second endless loop cost ~1ms per frame.
-const READY_KHATEM_TURN = { duration: 0.55, ease: 'easeOut' as const }; // DZ: star turns into its seat
 const READY_LOCK = { duration: 0.22, ease: 'easeOut' as const };        // Neon: reticle snaps shut
 
 // Build a cell-by-cell SVG hop path for a piece moving from pFrom → pTo.
@@ -2296,18 +2318,14 @@ const PawnToken = memo(function PawnToken({
   // to the tail tip → back up the left side → arc over the crown → close. Both
   // arcs are < 180°, so large-arc=0 is unambiguous.
   const nmPath = `M 0,${nmTopY.toFixed(3)} A ${nmHeadR},${nmHeadR} 0 0 1 ${nmTx.toFixed(3)},${nmTy.toFixed(3)} L 0,${nmTipY.toFixed(3)} L ${(-nmTx).toFixed(3)},${nmTy.toFixed(3)} A ${nmHeadR},${nmHeadR} 0 0 1 0,${nmTopY.toFixed(3)} Z`;
-  // DZ-only pedestal geometry — a taller/wider foot plus a stepped collar band at the
-  // neck, so the onion-dome reads as resting on a solid plinth instead of a flat disc.
-  // Deliberately separate from baseRX/baseRY/baseCY above so Classic's pedestal is
-  // untouched. dzBaseRX clears the dome's true widest point (~0.279) with margin, and
-  // dzBaseRY/dzBaseCY are tuned so the foot's curve meets the dome's flat underside with
-  // no seam gap (verified numerically, not just by eye).
-  const dzBaseRX   = 0.32;
-  const dzBaseRY   = 0.13;
-  const dzBaseCY   = 0.20;
-  const dzCollarRX = 0.215;
-  const dzCollarRY = 0.048;
-  const dzCollarCY = 0.10;
+  // DZ-only plinth geometry — see DZ_PLINTH_* / dzPlinthPoints at module level.
+  // The plinth is a detached ground fixture: it is drawn outside the "Ready lift"
+  // group so the dome body rises out of its socket, and it never shares an edge
+  // with the dome (the dome's flat underside at domeCY + 0.55*domeR ≈ 0.091 sits
+  // seated on the socket rim at DZ_PLINTH_CY - DZ_SOCKET_RY ≈ 0.100 and lifts out of it). Separate
+  // from baseRX/baseRY/baseCY above so Classic's pedestal is untouched.
+  const dzPlinthTop  = dzPlinthPoints(0, DZ_PLINTH_CY, DZ_PLINTH_RX, DZ_PLINTH_RY);
+  const dzPlinthWall = dzPlinthPoints(0, DZ_PLINTH_CY + DZ_PLINTH_DEPTH, DZ_PLINTH_RX, DZ_PLINTH_RY);
 
   // Capture speaking echo colours — the exact per-theme speaking tokens the
   // corner SpeakingAura receives (CornerDice's speechColor/speechBloom), so the
@@ -2352,6 +2370,15 @@ const PawnToken = memo(function PawnToken({
             rise reads as real elevation instead of a slid-up sprite. Sits on
             its own one-shot tween (never a loop) and Normal is excluded, so
             every other theme at rest is byte-identical to before. */}
+        {/* DZ: the old fused foot/shadow ellipse is gone. The plinth is a
+            ground fixture in its own right, so it casts a single soft contact
+            shadow seated under the plinth footprint (not under the dome). It is
+            static — the plinth never lifts, so its shadow never changes. */}
+        {isDz ? (
+          <ellipse cx={0.03} cy={DZ_PLINTH_CY + DZ_PLINTH_DEPTH + 0.02}
+            rx={DZ_PLINTH_RX * 1.02} ry={DZ_PLINTH_RY * 0.95}
+            fill="rgba(20,14,4,0.36)" filter="url(#dz-pawn-shadow)" pointerEvents="none"/>
+        ) : (
         <motion.ellipse cx={isNormal ? 0.02 : 0.04} cy={isNormal ? 0.33 : HR*0.90}
           initial={false}
           animate={{
@@ -2360,8 +2387,9 @@ const PawnToken = memo(function PawnToken({
             opacity: ready ? READY_SHADOW_FADE : 1,
           }}
           transition={READY_RING_IN}
-          fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : isNormal ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.62)'}
-          filter={isClassic ? 'url(#cl-pawn-shadow)' : isDz ? 'url(#dz-pawn-shadow)' : undefined}/>
+          fill={isClassic ? 'rgba(30,20,8,0.38)' : isNormal ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.62)'}
+          filter={isClassic ? 'url(#cl-pawn-shadow)' : undefined}/>
+        )}
 
         {isClassic && (
           <g pointerEvents="none" aria-hidden>
@@ -2423,14 +2451,16 @@ const PawnToken = memo(function PawnToken({
                     fill="none" stroke="#D9A400" strokeWidth="0.014" strokeOpacity="0.45"/>
                 </g>
               ) : isDz ? (
-                <motion.g
-                  initial={{ rotate: -30 }}
-                  animate={{ rotate: 0 }}
-                  transition={pulseReduced ? { duration: 0 } : READY_KHATEM_TURN}>
-                  <polygon points={starPoints(0, dzBaseCY + 0.01, dzBaseRX + 0.075, (dzBaseRX + 0.075) * 0.62, 8)}
-                    fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.026" strokeOpacity="0.95"
+                <g>
+                  {/* Gold setting ring — an octagon outline following the plinth's
+                      own footprint (no star: the DZ jump/lift star was removed). */}
+                  <polygon points={dzPlinthPoints(0, DZ_PLINTH_CY + DZ_PLINTH_DEPTH * 0.5, DZ_PLINTH_RX + 0.085, DZ_PLINTH_RY + 0.075)}
+                    fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.024" strokeOpacity="0.92"
                     strokeLinejoin="round"/>
-                </motion.g>
+                  <polygon points={dzPlinthPoints(0, DZ_PLINTH_CY + DZ_PLINTH_DEPTH * 0.5, DZ_PLINTH_RX + 0.040, DZ_PLINTH_RY + 0.040)}
+                    fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.013" strokeOpacity="0.45"
+                    strokeLinejoin="round"/>
+                </g>
               ) : (
                 <motion.g
                   initial={{ scale: pulseReduced ? 1 : 1.18 }}
@@ -2449,6 +2479,34 @@ const PawnToken = memo(function PawnToken({
             Wraps only the piece body, so the ground shadow and the socket ring
             stay put while the piece rises. Nested inside the arc group, so the
             lift composes with (never fights) hop arcs and landing squash. */}
+        {/* DZ detached plinth — drawn here, OUTSIDE the lift group below, so it
+            stays seated on the board while the dome body rises out of it. It
+            rides inside the arc group so it still travels with the pawn on hops. */}
+        {isDz && (
+          <g pointerEvents="none" aria-hidden>
+            {/* Extruded side wall — darker brass, gives the tile its thickness */}
+            <polygon points={dzPlinthWall} fill="url(#dzplinth-wall)"
+              stroke={DZ.BORDER_DEEP} strokeWidth="0.016" strokeOpacity="0.70" strokeLinejoin="round"/>
+            <rect x={-DZ_PLINTH_RX} y={DZ_PLINTH_CY} width={DZ_PLINTH_RX * 2} height={DZ_PLINTH_DEPTH}
+              fill="url(#dzplinth-wall)"/>
+            {/* Top face — brushed brass, lit from the upper left */}
+            <polygon points={dzPlinthTop} fill="url(#dzplinth-top)"
+              stroke={DZ.BORDER_DEEP} strokeWidth="0.016" strokeOpacity="0.80" strokeLinejoin="round"/>
+            {/* Inner engraved keyline — a zellige tile's own border */}
+            <polygon points={dzPlinthPoints(0, DZ_PLINTH_CY, DZ_PLINTH_RX * 0.80, DZ_PLINTH_RY * 0.76)}
+              fill="none" stroke={DZ.BORDER_DEEP} strokeWidth="0.010" strokeOpacity="0.40" strokeLinejoin="round"/>
+            {/* Player-colour inlay ring — ties the shared brass foot to its owner */}
+            <ellipse cx={0} cy={DZ_PLINTH_CY} rx={DZ_SOCKET_RX + 0.040} ry={DZ_SOCKET_RY + 0.026}
+              fill="none" stroke={dzColor} strokeWidth="0.022" strokeOpacity="0.88"/>
+            {/* Recessed socket the dome seats into — reads as a hollow, not a weld */}
+            <ellipse cx={0} cy={DZ_PLINTH_CY} rx={DZ_SOCKET_RX} ry={DZ_SOCKET_RY}
+              fill="url(#dzplinth-socket)" stroke={DZ.BORDER_DEEP} strokeWidth="0.012" strokeOpacity="0.55"/>
+            {/* Front-edge catch-light on the top face rim */}
+            <path d={`M ${-DZ_PLINTH_RX * 0.92},${DZ_PLINTH_CY + DZ_PLINTH_RY * 0.40} Q 0,${DZ_PLINTH_CY + DZ_PLINTH_RY * 1.12} ${DZ_PLINTH_RX * 0.92},${DZ_PLINTH_CY + DZ_PLINTH_RY * 0.40}`}
+              fill="none" stroke="#FFF3CF" strokeWidth="0.012" strokeOpacity="0.55" strokeLinecap="round"/>
+          </g>
+        )}
+
         <motion.g animate={liftCtrl} initial={{ y: 0, scale: 1 }} style={{ willChange: 'transform' }}>
 
         {isClassic ? (
@@ -2502,23 +2560,11 @@ const PawnToken = memo(function PawnToken({
                 stays identical between themes. */}
             <circle cx={0} cy={0} r={HR*1.55} fill={dzColor} fillOpacity="0.06"/>
 
-            {/* Base pedestal — shared brass/gold foot across all four players. A wider,
-                taller foot plus a stepped collar band at the neck (echoing the dome's own
-                gold belt above) reads as a proper plinth instead of a flat disc, and the
-                collar also bridges the seam where the dome's flat underside meets the foot. */}
-            <ellipse cx={0} cy={dzBaseCY} rx={dzBaseRX} ry={dzBaseRY}
-              fill="url(#dzbase)" stroke={DZ.BORDER_DEEP} strokeWidth="0.020" strokeOpacity="0.75"/>
-            {/* Underside shadow — grounds the foot against the board, mirrors Classic's treatment */}
-            <path d={`M ${dzBaseRX},${dzBaseCY} A ${dzBaseRX} ${dzBaseRY} 0 0 1 ${-dzBaseRX},${dzBaseCY}`}
-              fill="none" stroke="#000000" strokeOpacity="0.24" strokeWidth="0.028"/>
-            {/* Foot rim catch-light */}
-            <ellipse cx={0} cy={dzBaseCY - dzBaseRY*0.52} rx={dzBaseRX*0.62} ry={dzBaseRY*0.26}
-              fill="white" fillOpacity="0.24"/>
-            {/* Collar / step band bridging the dome's neck into the foot below */}
-            <ellipse cx={0} cy={dzCollarCY} rx={dzCollarRX} ry={dzCollarRY}
-              fill={shadeColor(DZ.BORDER_GOLD, -12)} stroke={DZ.BORDER_GOLD} strokeWidth="0.016" strokeOpacity="0.90"/>
-            <ellipse cx={0} cy={dzCollarCY - dzCollarRY*0.45} rx={dzCollarRX*0.66} ry={dzCollarRY*0.30}
-              fill="white" fillOpacity="0.22"/>
+            {/* Body underside — a thin gold foot-rim closing the dome's flat bottom,
+                so the body is a complete object of its own, seated on (not welded to)
+                the detached plinth drawn outside the lift group. */}
+            <ellipse cx={0} cy={domeCY + 0.55*domeR} rx={0.62*domeR} ry={0.11*domeR}
+              fill={shadeColor(DZ.BORDER_GOLD, -18)} stroke={DZ.BORDER_GOLD} strokeWidth="0.014" strokeOpacity="0.90"/>
 
             {/* Onion-dome / lantern body — the player's Algerian home colour */}
             <path d={dzDomePath(0, domeCY, domeR)}
@@ -2922,7 +2968,10 @@ const DustPuffEffect = memo(function DustPuffEffect({
   );
 }, (prev, next) => prev.x === next.x && prev.y === next.y);
 
-// ─── DZ sparkle trail — quiet gold/ivory glint left at each hop cell ─────────
+// ─── DZ sparkle trail — RETIRED ──────────────────────────────────────────────
+// The per-hop 8-point star glint under DZ pawns was removed by design. The
+// component and its event plumbing are kept (never spawned: spawnDzSparkle is
+// no longer called) so the BoardSVG prop surface stays untouched.
 // This is intentionally compact and neutral: it echoes the board's najma stars
 // and gilt inlay without borrowing any player's colour, expanding ring, or
 // particle flight. It sits beneath the pawn and fades within one hop interval.
@@ -3544,12 +3593,20 @@ const BoardSVG = memo(function BoardSVG({
                 <stop offset="100%" stopColor={shadeColor(c, -24)} stopOpacity="0.30"/>
               </radialGradient>
             ))}
-            {/* DZ pawn base — shared brass/gold pedestal foot across all four players */}
-            <linearGradient id="dzbase" x1="20%" y1="0%" x2="75%" y2="100%">
-              <stop offset="0%"   stopColor="#F6E3A8"/>
-              <stop offset="48%"  stopColor={DZ.BORDER_GOLD}/>
-              <stop offset="100%" stopColor={shadeColor(DZ.BORDER_GOLD, -38)}/>
+            {/* DZ pawn plinth — detached brass tile under every pawn (see DZ_PLINTH_*) */}
+            <linearGradient id="dzplinth-top" x1="10%" y1="0%" x2="85%" y2="100%">
+              <stop offset="0%"   stopColor="#FBEBB8"/>
+              <stop offset="45%"  stopColor={DZ.BORDER_GOLD}/>
+              <stop offset="100%" stopColor={shadeColor(DZ.BORDER_GOLD, -26)}/>
             </linearGradient>
+            <linearGradient id="dzplinth-wall" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%"   stopColor={shadeColor(DZ.BORDER_GOLD, -30)}/>
+              <stop offset="100%" stopColor={shadeColor(DZ.BORDER_GOLD, -58)}/>
+            </linearGradient>
+            <radialGradient id="dzplinth-socket" cx="50%" cy="35%" r="70%">
+              <stop offset="0%"   stopColor={shadeColor(DZ.BORDER_GOLD, -62)}/>
+              <stop offset="100%" stopColor={shadeColor(DZ.BORDER_GOLD, -40)}/>
+            </radialGradient>
           </>
         )}
       </defs>
@@ -3685,22 +3742,24 @@ const BoardSVG = memo(function BoardSVG({
                 if (slotInHome && !slotAnimating) return null; // occupied — no perch drawn
 
                 const px = bc + 0.5, py = br + 0.5;
-                // Radii mirror PawnToken's own domeR/domeCY/dzBase* constants so the ghost
+                // Radii mirror PawnToken's own domeR/domeCY/DZ_PLINTH_* constants so the ghost
                 // silhouette is a true scale-echo of the real pawn, not an approximation.
                 const perchR      = 0.275;
                 const perchDomeCY = py - 0.06;
-                const perchBaseCY = py + 0.20;
+                const perchBaseCY = py + DZ_PLINTH_CY;
                 return (
                   <g key={`perch-${si}`} opacity={isCurrent ? 0.34 : 0.22} pointerEvents="none"
                     filter="url(#dz-perch-soften)">
                     {/* Soft contact shadow — grounds the ghost silhouette with the same
                         neutral black-based shadow technique used under the real pawn's
-                        foot, just much fainter. Adds depth without a new base colour. */}
-                    <ellipse cx={px} cy={perchBaseCY + 0.03} rx={0.30} ry={0.11}
+                        plinth, just much fainter. Adds depth without a new base colour. */}
+                    <ellipse cx={px + 0.03} cy={perchBaseCY + DZ_PLINTH_DEPTH + 0.02} rx={DZ_PLINTH_RX} ry={DZ_PLINTH_RY}
                       fill="url(#dz-perch-shadow)"/>
-                    {/* Pedestal-foot echo */}
-                    <ellipse cx={px} cy={perchBaseCY} rx={0.32} ry={0.13}
+                    {/* Detached-plinth echo — same octagon footprint as the live pawn's foot */}
+                    <polygon points={dzPlinthPoints(px, perchBaseCY, DZ_PLINTH_RX, DZ_PLINTH_RY)}
                       fill="none" stroke={perchInk} strokeWidth="0.020" strokeLinejoin="round"/>
+                    <ellipse cx={px} cy={perchBaseCY} rx={DZ_SOCKET_RX} ry={DZ_SOCKET_RY}
+                      fill="none" stroke={perchInk} strokeWidth="0.012" strokeLinejoin="round"/>
                     {/* Onion-dome silhouette echo — same path fn as the real pawn body */}
                     <path d={dzDomePath(px, perchDomeCY, perchR)}
                       fill={perchInk} fillOpacity="0.09" stroke={perchInk} strokeWidth="0.022" strokeLinejoin="round"/>
@@ -4877,16 +4936,6 @@ const BoardSVG = memo(function BoardSVG({
         />
       ))}
 
-      {/* ── DZ gilt sparkle trail — one quiet glint per vacated hop cell ── */}
-      {dzSparkles.map(sparkle => (
-        <DzSparkleTrailEffect
-          key={sparkle.id}
-          x={sparkle.x}
-          y={sparkle.y}
-          onDone={() => onDzSparkleDone(sparkle.id)}
-        />
-      ))}
-
       {/* ── Pieces ── each PawnToken manages its own dual-control animation ── */}
       {piecePositions.map(({ player, index, xy: [fx, fy], stackScale, showSafeStar }) => {
         const pid  = E.pieceId(player, index);
@@ -5664,14 +5713,15 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   // sequence, move resolution, or VFX; the callback is only ever invoked
   // when isDz is true (see PawnToken's per-step guard), so Neon/Classic are
   // unaffected.
-  const handleDzSparkleStep = useCallback((x: number, y: number) => {
-    spawnDzSparkle(x, y);
+  const handleDzSparkleStep = useCallback((_x: number, _y: number) => {
+    // The per-hop 8-point star glint (DzSparkleTrailEffect) was removed by
+    // design — this callback now only drives the DZ hop sound + haptics.
     if (isDz) playDzPawnMove(pawnTiming.hopMs);
     // Haptics are theme-independent: this callback is only ever invoked when
     // DZ is active (see PawnToken's per-step guard), so exactly one of the
     // three handle*Step callbacks fires per physical hop regardless of theme.
     vibratePawnStep();
-  }, [isDz, spawnDzSparkle, pawnTiming]);
+  }, [isDz, pawnTiming]);
 
   // ── triggerMove — async-safe, decoupled animation from state resolution ──
   // Uses refs for game/isAnimating so it is stable (no deps) and never stale.
