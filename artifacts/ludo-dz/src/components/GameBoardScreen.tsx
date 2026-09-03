@@ -2363,6 +2363,17 @@ const PawnToken = memo(function PawnToken({
           fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : isNormal ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.62)'}
           filter={isClassic ? 'url(#cl-pawn-shadow)' : isDz ? 'url(#dz-pawn-shadow)' : undefined}/>
 
+        {isDz && (
+          <g pointerEvents="none" aria-hidden>
+            <ellipse cx={0} cy={dzBaseCY} rx={dzBaseRX} ry={dzBaseRY}
+              fill="url(#dzbase)" stroke={DZ.BORDER_DEEP} strokeWidth="0.020" strokeOpacity="0.75"/>
+            <path d={`M ${dzBaseRX},${dzBaseCY} A ${dzBaseRX} ${dzBaseRY} 0 0 1 ${-dzBaseRX},${dzBaseCY}`}
+              fill="none" stroke="#000000" strokeOpacity="0.24" strokeWidth="0.028"/>
+            <ellipse cx={0} cy={dzBaseCY - dzBaseRY*0.52} rx={dzBaseRX*0.62} ry={dzBaseRY*0.26}
+              fill="white" fillOpacity="0.24"/>
+          </g>
+        )}
+
         {/* Capture speaking echo — breathes under the piece while a capture
             voice line (captor) or its reply (victim) is audible. Sits behind
             the body (shadow → echo → piece) so it never obscures the pawn, is
@@ -2501,18 +2512,6 @@ const PawnToken = memo(function PawnToken({
                 stays identical between themes. */}
             <circle cx={0} cy={0} r={HR*1.55} fill={dzColor} fillOpacity="0.06"/>
 
-            {/* Base pedestal — shared brass/gold foot across all four players. A wider,
-                taller foot plus a stepped collar band at the neck (echoing the dome's own
-                gold belt above) reads as a proper plinth instead of a flat disc, and the
-                collar also bridges the seam where the dome's flat underside meets the foot. */}
-            <ellipse cx={0} cy={dzBaseCY} rx={dzBaseRX} ry={dzBaseRY}
-              fill="url(#dzbase)" stroke={DZ.BORDER_DEEP} strokeWidth="0.020" strokeOpacity="0.75"/>
-            {/* Underside shadow — grounds the foot against the board, mirrors Classic's treatment */}
-            <path d={`M ${dzBaseRX},${dzBaseCY} A ${dzBaseRX} ${dzBaseRY} 0 0 1 ${-dzBaseRX},${dzBaseCY}`}
-              fill="none" stroke="#000000" strokeOpacity="0.24" strokeWidth="0.028"/>
-            {/* Foot rim catch-light */}
-            <ellipse cx={0} cy={dzBaseCY - dzBaseRY*0.52} rx={dzBaseRX*0.62} ry={dzBaseRY*0.26}
-              fill="white" fillOpacity="0.24"/>
             {/* Collar / step band bridging the dome's neck into the foot below */}
             <ellipse cx={0} cy={dzCollarCY} rx={dzCollarRX} ry={dzCollarRY}
               fill={shadeColor(DZ.BORDER_GOLD, -12)} stroke={DZ.BORDER_GOLD} strokeWidth="0.016" strokeOpacity="0.90"/>
