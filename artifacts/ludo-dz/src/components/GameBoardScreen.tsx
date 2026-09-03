@@ -1084,6 +1084,49 @@ const CornerDice = memo(function CornerDice({
     </motion.div>
     </div>
   );
+}, (prev, next) => {
+  // CornerDice is handed the whole GameState but reads only four things out of
+  // it: activePlayer, phase, playerSlots, and its own player's pieces. With the
+  // default shallow compare, every state write (each dice tick, each hop step,
+  // each VFX bookkeeping update) re-rendered all four corner panels, and each
+  // panel rebuilds per-theme gradient and box-shadow keyframe strings.
+  //
+  // This is a render-skip only: no animation target, transition or style is
+  // touched, so the rendered output is identical.
+  const a = prev.game, b = next.game;
+  if (a !== b) {
+    if (a.activePlayer !== b.activePlayer) return false;
+    if (a.phase !== b.phase) return false;
+    if (a.playerSlots !== b.playerSlots &&
+        (a.playerSlots.length !== b.playerSlots.length ||
+         a.playerSlots.some((s, i) => s !== b.playerSlots[i]))) return false;
+    // Only this panel's own pieces drive its progress dots.
+    if (a.pieces !== b.pieces) {
+      if (a.pieces.length !== b.pieces.length) return false;
+      const p = next.player;
+      for (let i = 0; i < a.pieces.length; i++) {
+        const pa = a.pieces[i], pb = b.pieces[i];
+        if (pa === pb) continue;
+        if (pa.player === p || pb.player === p) return false;
+      }
+    }
+  }
+  return (
+    prev.player === next.player &&
+    prev.anchor === next.anchor &&
+    prev.isAI === next.isAI &&
+    prev.lang === next.lang &&
+    prev.boardStyle === next.boardStyle &&
+    prev.rolling === next.rolling &&
+    prev.animDice === next.animDice &&
+    prev.justLanded === next.justLanded &&
+    prev.lastDice === next.lastDice &&
+    prev.onRoll === next.onRoll &&
+    prev.canRoll === next.canRoll &&
+    prev.panelLayout === next.panelLayout &&
+    prev.paused === next.paused &&
+    prev.speaking === next.speaking
+  );
 });
 
 // ─── Speaking cue ─────────────────────────────────────────────────────────────
@@ -3139,6 +3182,19 @@ const BoardSVG = memo(function BoardSVG({
   // Classic palette: uses module-level CL_SOLID / CL_LIGHT / CL_BORDER / CL_ARROW
   // DZ palette: uses ../lib/board-theme-dz (Phase 1 — base colors only)
   const pieces      = game.pieces;
+  // boardStatic below is ~1650 lines of JSX and was keyed on the whole `game`
+  // object, so every state write (dice tick, hop step, VFX bookkeeping) threw
+  // it away and rebuilt the entire board. It actually reads only these fields.
+  const gamePhase  = game.phase;
+  const gameActive = game.activePlayer;
+  // Value-stable identity: same contents -> same reference, so the memo holds
+  // even when resolvePlayerSlots hands back a fresh array.
+  const slotsKey = game.playerSlots.join(',');
+  const slotsRef = useRef(game.playerSlots);
+  if (slotsRef.current !== game.playerSlots && slotsRef.current.join(',') !== slotsKey) {
+    slotsRef.current = game.playerSlots;
+  }
+  const gamePlayerSlots = slotsRef.current;
 
   const piecePositions = useMemo(
     () => pieces.map(p => {
@@ -3232,6 +3288,29 @@ const BoardSVG = memo(function BoardSVG({
       return [{ col: gp[1], row: gp[0], neon: E.PLAYER_NEONS[piece.player] }];
     });
   }, [game.movable, game.phase, pieces, isNormal]);
+
+  // Same trick as animatingHomeSlots above, for the other half of what
+  // boardStatic reads out of `game.pieces`: the DZ perch markers and the
+  // Classic bays only ask "is this player's pawn #i logically at home?". That
+  // is a 16-bit fact that changes a handful of times per game, while
+  // `game.pieces` gets a brand new array on every roll, hop step and capture.
+  // Deriving it as an identity-stable Set lets boardStatic depend on the fact
+  // instead of the array, so mid-track movement no longer rebuilds the board.
+  const homeSlotsRef = useRef<ReadonlySet<string>>(new Set());
+  const homeSlots = useMemo(() => {
+    const next = new Set<string>();
+    for (const p of pieces) {
+      if (p.relPos === -1) next.add(E.pieceId(p.player, p.index));
+    }
+    const prev = homeSlotsRef.current;
+    if (prev.size === next.size) {
+      let same = true;
+      next.forEach(pid => { if (!prev.has(pid)) same = false; });
+      if (same) return prev; // contents unchanged -> keep identity -> memo holds
+    }
+    homeSlotsRef.current = next;
+    return next;
+  }, [pieces]);
 
   const boardStatic = useMemo(() => (
     <>
@@ -3625,8 +3704,8 @@ const BoardSVG = memo(function BoardSVG({
       {[0,1,2,3].map(player => {
         const [zr, zc] = [[0,0],[0,9],[9,9],[9,0]][player] as [number,number];
         const neon      = E.PLAYER_NEONS[player];
-        const exists    = game.playerSlots.includes(player);
-        const isCurrent = player === game.activePlayer && game.phase !== 'done';
+        const exists    = gamePlayerSlots.includes(player);
+        const isCurrent = player === gameActive && gamePhase !== 'done';
         const cx = zc + 3, cy = zr + 3;
 
         // Opacity helper
@@ -3735,9 +3814,7 @@ const BoardSVG = memo(function BoardSVG({
                   movement, entry/exit, or game state. Flat, stroke-led, low-opacity by
                   design so it never competes with an actual pawn on the tile. */}
               {exists && E.HOME_BASES[player].map(([br, bc], si) => {
-                const slotInHome = game.pieces.some(
-                  p => p.player === player && p.index === si && p.relPos === -1
-                );
+                const slotInHome = homeSlots.has(E.pieceId(player, si));
                 const slotAnimating = animatingHomeSlots.has(E.pieceId(player, si));
                 if (slotInHome && !slotAnimating) return null; // occupied — no perch drawn
 
@@ -3883,9 +3960,7 @@ const BoardSVG = memo(function BoardSVG({
                 // (steps='defeat'). In both cases the slot must read as empty immediately —
                 // no faded-placeholder flash on departure, no premature fill on arrival.
                 const slotPid      = E.pieceId(player, si);
-                const slotInHome   = game.pieces.some(
-                  p => p.player === player && p.index === si && p.relPos === -1
-                );
+                const slotInHome   = homeSlots.has(slotPid);
                 const slotAnimating = animatingHomeSlots.has(slotPid);
                 const slotOccupied  = slotInHome && !slotAnimating;
                 return (
@@ -4271,20 +4346,20 @@ const BoardSVG = memo(function BoardSVG({
             : (player === 1 ? r - 1 : 13 - r);   // vertical arms
           const t = Math.max(0, Math.min(1, depth / 5));
           fill    = isClassic ? CL_SOLID[player as 0|1|2|3] : isDz ? DZ.STRIP_COLORS[player as 0|1|2|3] : isNormal ? NM.STRIP_COLORS[player as 0|1|2|3] : E.PLAYER_COLORS[player];
-          fillOp  = game.playerSlots.includes(player)
+          fillOp  = gamePlayerSlots.includes(player)
             ? (isClassic || isDz ? 0.88 + t * 0.10 : isNormal ? 1 : 0.18 + t * 0.52)
             : (isClassic || isDz || isNormal ? 0.18 : 0.04);
-          stroke  = game.playerSlots.includes(player)
+          stroke  = gamePlayerSlots.includes(player)
             ? (isClassic ? CL_BORDER[player as 0|1|2|3] : isDz ? DZ.BORDER_DEEP : isNormal ? NM.BORDER_DARK : E.PLAYER_NEONS[player])
             : 'transparent';
-          useGlow = !isClassic && !isDz && !isNormal && game.playerSlots.includes(player) && t > 0.5;
+          useGlow = !isClassic && !isDz && !isNormal && gamePlayerSlots.includes(player) && t > 0.5;
         }
         // strip + path → remain the neutral dark fill defined above,
         // EXCEPT the 4 exit squares (below), which get their house tint.
 
         // Exit square (where pieces land leaving home) — premium neon tint
         // in the owning player's colour, layered on top of the base cell.
-        const exitActive = isStart && player >= 0 && game.playerSlots.includes(player);
+        const exitActive = isStart && player >= 0 && gamePlayerSlots.includes(player);
 
         const exitPlayerIdx = isStart ? (E.PLAYER_STARTS as readonly number[]).indexOf(pathPos as number) : -1;
         const starNeon = exitPlayerIdx >= 0
@@ -4666,11 +4741,11 @@ const BoardSVG = memo(function BoardSVG({
       {!isDz && (
         <>
           <polygon points="6,6 9,6 7.5,7.5"
-            fill={isClassic ? CL_SOLID[1] : isNormal ? NM.HOME_COLORS[1] : E.PLAYER_COLORS[1]} opacity={game.playerSlots.includes(1) ? (isClassic || isNormal ? 0.96 : 0.58) : (isClassic || isNormal ? 0.28 : 0.14)}/>
+            fill={isClassic ? CL_SOLID[1] : isNormal ? NM.HOME_COLORS[1] : E.PLAYER_COLORS[1]} opacity={gamePlayerSlots.includes(1) ? (isClassic || isNormal ? 0.96 : 0.58) : (isClassic || isNormal ? 0.28 : 0.14)}/>
           <polygon points="9,6 9,9 7.5,7.5"
-            fill={isClassic ? CL_SOLID[2] : isNormal ? NM.HOME_COLORS[2] : E.PLAYER_COLORS[2]} opacity={game.playerSlots.includes(2) ? (isClassic || isNormal ? 0.96 : 0.58) : (isClassic || isNormal ? 0.28 : 0.14)}/>
+            fill={isClassic ? CL_SOLID[2] : isNormal ? NM.HOME_COLORS[2] : E.PLAYER_COLORS[2]} opacity={gamePlayerSlots.includes(2) ? (isClassic || isNormal ? 0.96 : 0.58) : (isClassic || isNormal ? 0.28 : 0.14)}/>
           <polygon points="9,9 6,9 7.5,7.5"
-            fill={isClassic ? CL_SOLID[3] : isNormal ? NM.HOME_COLORS[3] : E.PLAYER_COLORS[3]} opacity={game.playerSlots.includes(3) ? (isClassic || isNormal ? 0.96 : 0.58) : (isClassic || isNormal ? 0.28 : 0.14)}/>
+            fill={isClassic ? CL_SOLID[3] : isNormal ? NM.HOME_COLORS[3] : E.PLAYER_COLORS[3]} opacity={gamePlayerSlots.includes(3) ? (isClassic || isNormal ? 0.96 : 0.58) : (isClassic || isNormal ? 0.28 : 0.14)}/>
           <polygon points="6,9 6,6 7.5,7.5"
             fill={isClassic ? CL_SOLID[0] : isNormal ? NM.HOME_COLORS[0] : E.PLAYER_COLORS[0]} opacity={(isClassic || isNormal) ? 0.96 : 0.58}/>
         </>
@@ -4885,7 +4960,7 @@ const BoardSVG = memo(function BoardSVG({
       )}
 
     </>
-  ), [activeNeon, boardStyle, game, homeImpact, isClassic, isDz, isNormal, movableHighlights, animatingHomeSlots, safeCellOccupancy, isPaused]);
+  ), [activeNeon, boardStyle, gamePhase, gameActive, gamePlayerSlots, homeSlots, homeImpact, isClassic, isDz, isNormal, movableHighlights, animatingHomeSlots, safeCellOccupancy, isPaused]);
 
   return (
     <svg viewBox="0 0 15 15"
