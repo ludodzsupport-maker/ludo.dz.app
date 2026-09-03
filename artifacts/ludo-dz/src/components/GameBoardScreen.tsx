@@ -2363,6 +2363,18 @@ const PawnToken = memo(function PawnToken({
           fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : isNormal ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.62)'}
           filter={isClassic ? 'url(#cl-pawn-shadow)' : isDz ? 'url(#dz-pawn-shadow)' : undefined}/>
 
+        {isClassic && (
+          <g pointerEvents="none" aria-hidden>
+            <ellipse cx={0} cy={baseCY} rx={baseRX} ry={baseRY}
+              fill={`url(#clbase${player})`}
+              stroke={clBorder} strokeWidth="0.018" strokeOpacity="0.60"/>
+            <path d={`M ${baseRX},${baseCY} A ${baseRX} ${baseRY} 0 0 1 ${-baseRX},${baseCY}`}
+              fill="none" stroke="#000000" strokeOpacity="0.22" strokeWidth="0.026"/>
+            <ellipse cx={0} cy={baseCY - baseRY*0.55} rx={baseRX*0.70} ry={baseRY*0.32}
+              fill="white" fillOpacity="0.26"/>
+          </g>
+        )}
+
         {/* Capture speaking echo — breathes under the piece while a capture
             voice line (captor) or its reply (victim) is audible. Sits behind
             the body (shadow → echo → piece) so it never obscures the pawn, is
@@ -2445,17 +2457,6 @@ const PawnToken = memo(function PawnToken({
                 hit-area stays identical between themes (pointer-events follow
                 painted geometry on the shared outer <motion.g> onClick). */}
             <circle cx={0} cy={0} r={HR*1.55} fill={clSolid} fillOpacity="0.05"/>
-
-            {/* Base disc — flattened pedestal foot, top-lit gradient for real dimension */}
-            <ellipse cx={0} cy={baseCY} rx={baseRX} ry={baseRY}
-              fill={`url(#clbase${player})`}
-              stroke={clBorder} strokeWidth="0.018" strokeOpacity="0.60"/>
-            {/* Base underside shadow — grounds the pedestal against the board */}
-            <path d={`M ${baseRX},${baseCY} A ${baseRX} ${baseRY} 0 0 1 ${-baseRX},${baseCY}`}
-              fill="none" stroke="#000000" strokeOpacity="0.22" strokeWidth="0.026"/>
-            {/* Base rim catch-light */}
-            <ellipse cx={0} cy={baseCY - baseRY*0.55} rx={baseRX*0.70} ry={baseRY*0.32}
-              fill="white" fillOpacity="0.26"/>
 
             {/* Dome / helmet body — glossy 3D ball, rich per-colour radial gradient for deep saturation */}
             <circle cx={0} cy={domeCY} r={domeR}
