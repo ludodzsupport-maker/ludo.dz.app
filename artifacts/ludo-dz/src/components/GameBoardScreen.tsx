@@ -1927,7 +1927,6 @@ const READY_SHADOW_FADE = 0.72; // …and lightens, the way a lifted object's do
 // selectable", then the marker holds still. Only the piece itself keeps a slow
 // loop (the breath), so a selectable pawn costs one animated transform instead
 // of three — measured on DZ/Neon, a second endless loop cost ~1ms per frame.
-const READY_KHATEM_TURN = { duration: 0.55, ease: 'easeOut' as const }; // DZ: star turns into its seat
 const READY_LOCK = { duration: 0.22, ease: 'easeOut' as const };        // Neon: reticle snaps shut
 
 // Build a cell-by-cell SVG hop path for a piece moving from pFrom → pTo.
@@ -2365,12 +2364,13 @@ const PawnToken = memo(function PawnToken({
 
         {isDz && (
           <g pointerEvents="none" aria-hidden>
-            <ellipse cx={0} cy={dzBaseCY} rx={dzBaseRX} ry={dzBaseRY}
-              fill="url(#dzbase)" stroke={DZ.BORDER_DEEP} strokeWidth="0.020" strokeOpacity="0.75"/>
-            <path d={`M ${dzBaseRX},${dzBaseCY} A ${dzBaseRX} ${dzBaseRY} 0 0 1 ${-dzBaseRX},${dzBaseCY}`}
-              fill="none" stroke="#000000" strokeOpacity="0.24" strokeWidth="0.028"/>
-            <ellipse cx={0} cy={dzBaseCY - dzBaseRY*0.52} rx={dzBaseRX*0.62} ry={dzBaseRY*0.26}
-              fill="white" fillOpacity="0.24"/>
+            <ellipse cx={0} cy={dzBaseCY} rx={dzBaseRX * 0.70} ry={dzBaseRY * 0.36}
+              fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.010"
+              strokeOpacity={ready ? 0.52 : 0.22}/>
+            {ready && (
+              <ellipse cx={0} cy={dzBaseCY} rx={dzBaseRX * 0.92} ry={dzBaseRY * 0.50}
+                fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.016" strokeOpacity="0.82"/>
+            )}
           </g>
         )}
 
@@ -2401,14 +2401,13 @@ const PawnToken = memo(function PawnToken({
             gap between piece and marker is what your eye reads as height.
               Classic — brass double inlay: a bright outer setting line with a
                 faint inner one, like a ring set into a wooden board.
-              DZ      — a gold khatem, the 8-point star the rest of the DZ board
-                is built from, turning one 45° step per 6s (seamless: the star
-                maps onto itself). Reduced motion holds it still.
+              DZ      — a flat gold oval on the board plane (drawn with the
+                contact shadow, outside this hop/lift group). No 8-point star.
               Neon    — HUD target-lock brackets that snap inward around the hex
                 and then breathe once per 2.2s at 3.5%: acquisition, not glow.
             All three are stroke-only geometry with transform-only motion. */}
         <AnimatePresence>
-          {ready && (
+          {ready && !isDz && (
             <motion.g key="ready-socket" pointerEvents="none" aria-hidden
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -2421,15 +2420,6 @@ const PawnToken = memo(function PawnToken({
                   <ellipse cx={0} cy={baseCY} rx={baseRX + 0.040} ry={baseRY + 0.028}
                     fill="none" stroke="#D9A400" strokeWidth="0.014" strokeOpacity="0.45"/>
                 </g>
-              ) : isDz ? (
-                <motion.g
-                  initial={{ rotate: -30 }}
-                  animate={{ rotate: 0 }}
-                  transition={pulseReduced ? { duration: 0 } : READY_KHATEM_TURN}>
-                  <polygon points={starPoints(0, dzBaseCY + 0.01, dzBaseRX + 0.075, (dzBaseRX + 0.075) * 0.62, 8)}
-                    fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.026" strokeOpacity="0.95"
-                    strokeLinejoin="round"/>
-                </motion.g>
               ) : (
                 <motion.g
                   initial={{ scale: pulseReduced ? 1 : 1.18 }}
@@ -5662,14 +5652,13 @@ export function GameBoardScreen({ config, lang, boardStyle, initialSnapshot, onB
   // sequence, move resolution, or VFX; the callback is only ever invoked
   // when isDz is true (see PawnToken's per-step guard), so Neon/Classic are
   // unaffected.
-  const handleDzSparkleStep = useCallback((x: number, y: number) => {
-    spawnDzSparkle(x, y);
+  const handleDzSparkleStep = useCallback((_x: number, _y: number) => {
     if (isDz) playDzPawnMove(pawnTiming.hopMs);
     // Haptics are theme-independent: this callback is only ever invoked when
     // DZ is active (see PawnToken's per-step guard), so exactly one of the
     // three handle*Step callbacks fires per physical hop regardless of theme.
     vibratePawnStep();
-  }, [isDz, spawnDzSparkle, pawnTiming]);
+  }, [isDz, pawnTiming]);
 
   // ── triggerMove — async-safe, decoupled animation from state resolution ──
   // Uses refs for game/isAnimating so it is stable (no deps) and never stale.
