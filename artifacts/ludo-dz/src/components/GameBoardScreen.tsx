@@ -251,6 +251,19 @@ function starPoints(cx: number, cy: number, rOuter: number, rInner: number, spik
   return pts.join(' ');
 }
 
+// Point-string for a squashed regular polygon (n vertices on an ellipse).
+// Used by the selectable-piece "socket" ring, whose silhouette borrows each
+// theme's own geometry language: a circle for Classic, an octagon for DZ's
+// zellij/star lattice, a pointy-top hexagon for Neon's hex pawn.
+function ringPts(cx: number, cy: number, rx: number, ry: number, n: number, rot = 0): string {
+  const pts: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = rot + (i / n) * Math.PI * 2;
+    pts.push(`${(cx + rx * Math.cos(a)).toFixed(3)},${(cy + ry * Math.sin(a)).toFixed(3)}`);
+  }
+  return pts.join(' ');
+}
+
 // Crescent path (evenodd two-circle subtraction) for the DZ crescent-and-star
 // motif: an outer circle minus an overlapping inner "cutting" circle leaves a
 // moon-sliver whose horns open toward the cutting circle — the companion star
@@ -1867,6 +1880,24 @@ const SQUASH_MS = 46;   // ms — fits within INTER_MS, plays during the pause g
 // ── Capture: defeat arc (captured piece flies home) ──────────────────────────
 const DEFEAT_ARC_H = 3.20; // SVG units — dramatic high parabolic arc
 
+// ─── "Ready lift" — the selectable-piece indicator (Classic / DZ / Neon) ──────
+// Elevation is the one state channel nothing else on this board uses: capture
+// echoes, threat beacons, escape puffs, safe-star badges and the Neon bloom are
+// all *glows*, so a glow can never say "tappable" unambiguously — and a wash on
+// the tile can't say which pawn it means when two share a cell. A selectable
+// piece instead rises off the board, sits in a crisp socket ring drawn in the
+// theme's own accent/geometry, and casts a lifted (broader, softer) shadow.
+// Three coordinated parts, no pulsing brightness, no SVG blur filter.
+const READY_LIFT   = -0.125; // SVG units the piece rises off the board
+const READY_SCALE  = 1.06;   // slight "in hand" growth that comes with the lift
+const READY_FLOAT  = 0.05;   // gentle breathing amplitude while it waits
+const READY_FLOAT_S = 1.9;   // seconds per breath — slow enough to read as calm
+const READY_LIFT_SPRING = { type: 'spring' as const, stiffness: 540, damping: 26, mass: 0.8 };
+const READY_DROP = { duration: 0.16, ease: 'easeOut' as const };
+const READY_RING_IN  = { duration: 0.16, ease: 'easeOut' as const };
+const READY_SHADOW_LIFT = 1.10; // contact shadow broadens as the piece rises
+const READY_SHADOW_FADE = 0.72; // …and lightens, the way a lifted object's does
+
 // Build a cell-by-cell SVG hop path for a piece moving from pFrom → pTo.
 // Each entry in the returned array is the SVG centre of a MAIN_PATH cell —
 // exactly one entry per die pip, no inserted waypoints. The 4 inner-corner
@@ -1939,7 +1970,10 @@ const PawnToken = memo(function PawnToken({
   const baseCtrl  = useAnimationControls();
   const arcCtrl   = useAnimationControls();
   const scaleCtrl = useAnimationControls();
+  const liftCtrl  = useAnimationControls();
   const stackScaleVal = stackScale ?? 1;
+  // "Ready lift" — Classic / DZ / Neon only. Normal keeps its own indicator.
+  const ready     = !!isMovable && !isNormal;
 
   // Capture speaking echo (see SpeakingPawnPulse): holds still under reduced
   // motion exactly like the corner aura treats its own `paused`.
@@ -2164,11 +2198,34 @@ const PawnToken = memo(function PawnToken({
       transition: { type: 'spring', ...springCfgRef.current } });
   }, [finalX, finalY, hopSteps]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Effect 2b: "Ready lift" — pop the piece up when it becomes selectable ──
+  // One spring lifts it off the board; only once it has settled does the slow
+  // breathing float take over, so the cue lands immediately (no fade-in from a
+  // dim start) and never fights the initial pop. Reduced motion keeps the lift
+  // and drops the float — the raised position alone still marks the piece.
+  useEffect(() => {
+    if (!ready) {
+      liftCtrl.start({ y: 0, scale: 1, transition: READY_DROP });
+      return;
+    }
+    let stale = false;
+    (async () => {
+      await liftCtrl.start({ y: READY_LIFT, scale: READY_SCALE, transition: READY_LIFT_SPRING });
+      if (stale || pulseReduced) return;
+      liftCtrl.start({
+        y: [READY_LIFT, READY_LIFT - READY_FLOAT, READY_LIFT],
+        transition: { duration: READY_FLOAT_S, repeat: Infinity, ease: 'easeInOut' },
+      });
+    })();
+    return () => { stale = true; };
+  }, [ready, pulseReduced]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => () => {
     seqKeyRef.current++;
     baseCtrl.stop();
     arcCtrl.stop();
     scaleCtrl.stop();
+    liftCtrl.stop();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Visual geometry (unchanged) ──────────────────────────────────────────────
@@ -2179,9 +2236,6 @@ const PawnToken = memo(function PawnToken({
   const hr2      = HR * 0.62;
   const h32      = hr2 * 0.866;
   const innerPts = `0,${-hr2} ${h32},${-hr2*0.5} ${h32},${hr2*0.5} 0,${hr2} ${-h32},${hr2*0.5} ${-h32},${-hr2*0.5}`;
-  const pR       = HR + 0.148;
-  const ph3      = pR * 0.866;
-  const pulsePts = `0,${-pR} ${ph3},${-pR*0.5} ${ph3},${pR*0.5} 0,${pR} ${-ph3},${pR*0.5} ${-ph3},${-pR*0.5}`;
 
   // ── 3D dome-token geometry (shared by Classic's ball dome and DZ's onion dome) ──
   const clSolid   = CL_SOLID[player as 0|1|2|3];
@@ -2260,9 +2314,20 @@ const PawnToken = memo(function PawnToken({
           transient landing squash/stretch — the two scales simply compose. */}
       <motion.g animate={scaleCtrl} initial={{ scale: stackScaleVal }} style={{ willChange: 'transform' }}>
 
-        {/* Ground shadow — anchored to base elevation, NOT lifted by arc */}
-        <ellipse cx={isNormal ? 0.02 : 0.04} cy={isNormal ? 0.33 : HR*0.90}
-          rx={isNormal ? 0.30 : HR*0.70} ry={isNormal ? 0.075 : HR*0.18}
+        {/* Ground shadow — anchored to base elevation, NOT lifted by arc.
+            Part 3 of the "Ready lift": when the piece is selectable its contact
+            shadow broadens and lightens, the way a lifted object's does, so the
+            rise reads as real elevation instead of a slid-up sprite. Sits on
+            its own one-shot tween (never a loop) and Normal is excluded, so
+            every other theme at rest is byte-identical to before. */}
+        <motion.ellipse cx={isNormal ? 0.02 : 0.04} cy={isNormal ? 0.33 : HR*0.90}
+          initial={false}
+          animate={{
+            rx: (isNormal ? 0.30 : HR*0.70) * (ready ? READY_SHADOW_LIFT : 1),
+            ry: (isNormal ? 0.075 : HR*0.18) * (ready ? READY_SHADOW_LIFT : 1),
+            opacity: ready ? READY_SHADOW_FADE : 1,
+          }}
+          transition={READY_RING_IN}
           fill={isClassic ? 'rgba(30,20,8,0.38)' : isDz ? 'rgba(20,14,4,0.40)' : isNormal ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.62)'}
           filter={isClassic ? 'url(#cl-pawn-shadow)' : isDz ? 'url(#dz-pawn-shadow)' : undefined}/>
 
@@ -2287,26 +2352,49 @@ const PawnToken = memo(function PawnToken({
         {/* Inner group: parabolic Y-arc overlay — GPU-composited for buttery arcs */}
         <motion.g animate={arcCtrl} initial={{ y: 0 }} style={{ willChange: 'transform' }}>
 
+        {/* ── "Ready lift" part 2: the socket ring ────────────────────────────
+            A crisp, single-weight outline drawn on the ground under the piece,
+            in the theme's own accent and silhouette: a plain ellipse for
+            Classic's turned-wood pedestal, an octagon for DZ's zellij lattice,
+            a pointy-top hexagon for Neon's hex body. It fades in with the lift
+            and then holds steady — no pulsing, no blur — and it stays at ground
+            level (outside the lift group) so it reads as the socket the piece
+            has been lifted out of. */}
+        <AnimatePresence>
+          {ready && (
+            <motion.g key="ready-socket" pointerEvents="none" aria-hidden
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={READY_RING_IN}>
+              {isClassic ? (
+                <ellipse cx={0} cy={baseCY} rx={baseRX + 0.078} ry={baseRY + 0.058}
+                  fill="none" stroke="#D9A400" strokeWidth="0.036" strokeOpacity="0.95"/>
+              ) : isDz ? (
+                <polygon points={ringPts(0, dzBaseCY + 0.01, dzBaseRX + 0.085, dzBaseRY + 0.055, 8, Math.PI / 8)}
+                  fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.036" strokeOpacity="0.95"
+                  strokeLinejoin="round"/>
+              ) : (
+                <polygon points={ringPts(0, HR * 0.52, HR + 0.105, (HR + 0.105) * 0.46, 6, -Math.PI / 2)}
+                  fill="none" stroke={neon} strokeWidth="0.036" strokeOpacity="0.92"
+                  strokeLinejoin="round"/>
+              )}
+            </motion.g>
+          )}
+        </AnimatePresence>
+
+        {/* ── "Ready lift" part 1: the elevation ──────────────────────────────
+            Wraps only the piece body, so the ground shadow and the socket ring
+            stay put while the piece rises. Nested inside the arc group, so the
+            lift composes with (never fights) hop arcs and landing squash. */}
+        <motion.g animate={liftCtrl} initial={{ y: 0, scale: 1 }} style={{ willChange: 'transform' }}>
+
         {isClassic ? (
           <>
             {/* Ambient warm halo — mirrors the neon bloom's radius so tap/click
                 hit-area stays identical between themes (pointer-events follow
                 painted geometry on the shared outer <motion.g> onClick). */}
             <circle cx={0} cy={0} r={HR*1.55} fill={clSolid} fillOpacity="0.05"/>
-
-            {/* Movable piece — soft gold halo, premium & quiet vs. the neon pulse.
-                Measured (Classic, 4 movable pieces): the halo used to breathe
-                0.28 → 0.88 → 0.28, an 0.60 swing that read as a flash rather
-                than a cue. The swing is roughly halved (0.42 → 0.70 → 0.42) and
-                the floor raised, so the ring is already ~60% lit on the frame it
-                appears and stays clearly readable as "tap me" at every phase. */}
-            {isMovable && (
-              <motion.circle cx={0} cy={domeCY} r={domeR + 0.08}
-                fill="none" stroke="#D9A400" strokeWidth="0.034"
-                animate={{ opacity: [0.42, 0.70, 0.42] }}
-                transition={{ duration: 1.0, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            )}
 
             {/* Base disc — flattened pedestal foot, top-lit gradient for real dimension */}
             <ellipse cx={0} cy={baseCY} rx={baseRX} ry={baseRY}
@@ -2350,15 +2438,6 @@ const PawnToken = memo(function PawnToken({
             {/* Ambient warm halo — mirrors the neon bloom's radius so tap/click hit-area
                 stays identical between themes. */}
             <circle cx={0} cy={0} r={HR*1.55} fill={dzColor} fillOpacity="0.06"/>
-
-            {/* Movable piece — soft gold halo pulse, premium & quiet vs. the neon pulse */}
-            {isMovable && (
-              <motion.circle cx={0} cy={domeCY} r={domeR + 0.09}
-                fill="none" stroke={DZ.BORDER_GOLD} strokeWidth="0.032"
-                animate={{ opacity: [0.30, 0.92, 0.30] }}
-                transition={{ duration: 1.0, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            )}
 
             {/* Base pedestal — shared brass/gold foot across all four players. A wider,
                 taller foot plus a stepped collar band at the neck (echoing the dome's own
@@ -2431,25 +2510,17 @@ const PawnToken = memo(function PawnToken({
         {/* Ambient neon bloom */}
         <circle cx={0} cy={0} r={HR*1.55} fill={neon} fillOpacity="0.042"/>
 
-        {/* Movable hex pulse ring */}
-        {isMovable && (
-          <motion.polygon points={pulsePts}
-            fill="none" stroke={neon} strokeWidth="0.076"
-            animate={paused ? { opacity: 0.15 } : { opacity: [0.15, 0.88, 0.15] }}
-            transition={paused ? SETTLE_TRANSITION : { duration: 0.88, repeat: Infinity, ease: 'easeInOut' }}
-          />
-        )}
-
-        {/* Hex body */}
+        {/* Hex body — rim and fill no longer change when the piece is
+            selectable: the "Ready lift" carries that state now, so the pawn
+            keeps its own rim at rest and no Gaussian blur is attached to it. */}
         <polygon points={hexPts}
           fill={`url(#pgcp${player})`}
-          filter={isMovable ? `url(#pglow${player})` : undefined}
         />
 
         {/* Neon hex rim */}
         <polygon points={hexPts} fill="none"
-          stroke={isMovable ? neon : `url(#pgrim${player})`}
-          strokeWidth={isMovable ? 0.056 : 0.028}
+          stroke={`url(#pgrim${player})`}
+          strokeWidth={0.028}
         />
 
         {/* Inner hex frame */}
@@ -2562,6 +2633,7 @@ const PawnToken = memo(function PawnToken({
             />
           )}
         </AnimatePresence>
+        </motion.g>
       </motion.g>
       </motion.g>
     </motion.g>
@@ -3032,7 +3104,12 @@ const BoardSVG = memo(function BoardSVG({
     return next;
   }, [pieces, pieceAnims]);
 
+  // Normal-only now. Classic, DZ and Neon mark the *piece* instead of the cell
+  // (see the "Ready lift" indicator in PawnToken), so they no longer paint the
+  // per-cell wash; keeping this empty for them also keeps the blurred
+  // `tile-glow` rects and their raster cost out of those three themes.
   const movableHighlights = useMemo(() => {
+    if (!isNormal) return [];
     if (game.phase !== 'selecting' || !game.movable.length) return [];
     return game.movable.flatMap(pid => {
       const [ps, is] = pid.split(':').map(Number);
@@ -3042,7 +3119,7 @@ const BoardSVG = memo(function BoardSVG({
       if (!gp) return [];
       return [{ col: gp[1], row: gp[0], neon: E.PLAYER_NEONS[piece.player] }];
     });
-  }, [game.movable, game.phase, pieces]);
+  }, [game.movable, game.phase, pieces, isNormal]);
 
   const boardStatic = useMemo(() => (
     <>
@@ -4450,24 +4527,16 @@ const BoardSVG = memo(function BoardSVG({
         </g>
       ))}
 
-      {/* ── Movable-piece tile highlights ──
-          Classic used to ripple this cue in one tile at a time (delay i*0.14 →
-          0 / 140 / 280 / 420ms) and swing 0.06 → 0.24, so the last tile only
-          started glowing ~0.42s after the roll settled and the whole set read
-          as a hot flash. Classic now lights every movable tile on the same
-          frame with a calmer 0.10 → 0.17 breath; other themes keep the ripple
-          they were tuned for. */}
+      {/* ── Movable-piece tile highlights — Normal board only ──
+          Classic, DZ and Neon mark the selectable *piece* instead of the cell
+          (see the "Ready lift" indicator in PawnToken), so this wash is left
+          exactly as it was for Normal and is simply never produced elsewhere. */}
       {movableHighlights.map(({ col, row, neon }, i) => (
         <motion.rect key={`hi-${i}`}
           x={col} y={row} width={1} height={1} rx={0.10}
           fill={neon} filter="url(#tile-glow)"
-          animate={isPaused
-            ? { opacity: isClassic ? 0.10 : 0.06 }
-            : { opacity: isClassic ? [0.10, 0.17, 0.10] : [0.06, 0.24, 0.06] }}
-          transition={isPaused ? SETTLE_TRANSITION : {
-            duration: 0.88, repeat: Infinity, ease: 'easeInOut',
-            delay: isClassic ? 0 : i * 0.14,
-          }}
+          animate={isPaused ? { opacity: 0.06 } : { opacity: [0.06, 0.24, 0.06] }}
+          transition={isPaused ? SETTLE_TRANSITION : { duration: 0.88, repeat: Infinity, ease: 'easeInOut', delay: i*0.14 }}
         />
       ))}
 

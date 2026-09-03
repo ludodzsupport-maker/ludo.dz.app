@@ -11,24 +11,30 @@ description: How to run a real headless browser for runtime DOM/pixel verificati
 
 ```bash
 mkdir /tmp/pptr && cd /tmp/pptr && npm init -y
-npm install puppeteer @sparticuz/chromium   # both from the npm registry
-# the chromium binary ships inside the npm tarball; inflate it:
+npm install puppeteer-core @sparticuz/chromium   # puppeteer (full) FAILS: its postinstall
+                                                 # downloads Chrome from a blocked CDN, so
+                                                 # install puppeteer-core and point it at the
+                                                 # bundled binary yourself
 node -e "require('@sparticuz/chromium').default.executablePath().then(console.log)"  # → /tmp/chromium
 # the same package ALSO ships the missing NSS shared libs in bin/al2023.tar.br:
-node -e "require('zlib').brotliDecompressSync(require('fs').readFileSync('node_modules/@sparticuz/chromium/bin/al2023.tar.br'))" > /tmp/al2023.tar
-mkdir -p /tmp/al2023 && tar xf /tmp/al2023.tar -C /tmp/al2023   # libnspr4.so, libnss3.so, libnssutil3.so …
-
-# launch with LD_LIBRARY_PATH so chromium finds libnss:
-LD_LIBRARY_PATH=/tmp/al2023/lib node -e "
-const puppeteer = require('puppeteer');
-(async () => {
-  const b = await puppeteer.launch({ executablePath: '/tmp/chromium',
-    args: ['--no-sandbox','--disable-gpu','--disable-dev-shm-usage'], headless: 'shell' });
-  const p = await b.newPage();
-  await p.goto('http://localhost:21341/');
-  // …
-})();" 
+node -e "const fs=require('fs');fs.writeFileSync('/tmp/al2023.tar',require('zlib').brotliDecompressSync(fs.readFileSync('node_modules/@sparticuz/chromium/bin/al2023.tar.br')))"
+mkdir -p /tmp/libs && tar xf /tmp/al2023.tar -C /tmp/libs --strip-components=1  # libnspr4.so, libnss3.so, libnssutil3.so …
+# launch with LD_LIBRARY_PATH so chromium finds libnss (set it in-process before launch()):
+process.env.LD_LIBRARY_PATH = '/tmp/libs'
+puppeteer.launch({ executablePath: '/tmp/chromium', headless: true,
+  args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'] })
 ```
+
+**Version drift (verified Sep 2026, @sparticuz/chromium 149):**
+- The package exports `{ default, inflate, setupLambdaEnvironment }` — `executablePath()` lives on
+  `.default`, NOT on the module object. `require('@sparticuz/chromium').executablePath()` throws
+  "not a function".
+- `ldd /tmp/chromium` reports exactly 3 missing libs (libnspr4, libnss3, libnssutil3); the al2023
+  archive covers all three. No other system lib is missing, so no apt is needed.
+- `/tmp` is wiped between turns (only the workspace is snapshotted), so re-run this recipe each
+  session that needs a browser. Budget ~1 min.
+- The npm registry is the ONLY reachable host (`storage.googleapis.com` and
+  `cdn.npmmirror.com` both time out), so anything Chromium-related must come from an npm tarball.
 
 ## Driving the Ludo app to a game board
 
