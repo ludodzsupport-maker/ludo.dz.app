@@ -41,3 +41,21 @@ puppeteer.launch({ executablePath: '/tmp/chromium', headless: true,
 Splash auto-dismisses (~3-4.5s) → welcome ("MULTIJOUEUR" card) → mode select ("Ordinateur") → config overlay. **The "Commencer" button must be clicked twice**: the first click opens the colour picker (`needsColorPicker`), the second launches the game. Click "4" first for a 4-player match. Synthetic `element.click()` works for React handlers; the exit/back buttons often have no text — select by `aria-label`.
 
 Runtime probes that paid off: `getComputedStyle(el).transform` matrix → translateY/rotate/scale; bounding-rect intersection with the clip window → visible fraction; `page.emulateMediaFeatures([{name:'prefers-reduced-motion', value:'reduce'}])` for the reduced-motion path; screenshot + PIL pixel-row analysis as ground truth (beware: the dice card's own box-shadow reads as "art" a few px beyond its edge — check the horizontal extent to tell a compact mascot hint from a card-wide shadow band).
+
+## Profiling correctness rules (learned the hard way, Sep 2026)
+
+1. **Never run tracing and a rAF recorder in the same window** — tracing alone
+   collapses the observed frame rate to ~3fps and invalidates the fps number.
+   Sequence them: metrics window → frames window → trace window.
+2. **Sandbox load drifts a lot inside one session** (a Classic board measured
+   95fps early on and 57fps 40 minutes later, same code). A before/after pair is
+   only trustworthy if the two variants are measured back to back. Note that a
+   *pathologically slow* "before" (e.g. a huge animated blur) is load-insensitive
+   because it saturates the raster threads, while the fixed "after" is not — so
+   an old "after" number must never be compared with a fresh "before" number.
+3. **Report raster per frame, not per window.** With `--disable-frame-rate-limit`
+   the frames-per-second figure is really throughput; `rasterMs / frames` is the
+   comparable per-frame cost.
+4. Navigate with ElementHandle clicks (`button, [role="button"], a`) — raw
+   coordinate clicks intermittently miss during entrance animations. Dismiss the
+   first-run "En développement / Compris" modal or it swallows the next click.
