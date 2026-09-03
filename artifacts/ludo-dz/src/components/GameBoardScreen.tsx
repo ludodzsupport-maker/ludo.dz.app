@@ -2446,17 +2446,12 @@ const PawnToken = memo(function PawnToken({
                 painted geometry on the shared outer <motion.g> onClick). */}
             <circle cx={0} cy={0} r={HR*1.55} fill={clSolid} fillOpacity="0.05"/>
 
-            {/* Base disc — flattened pedestal foot, top-lit gradient for real dimension */}
-            <ellipse cx={0} cy={baseCY} rx={baseRX} ry={baseRY}
-              fill={`url(#clbase${player})`}
-              stroke={clBorder} strokeWidth="0.018" strokeOpacity="0.60"/>
-            {/* Base underside shadow — grounds the pedestal against the board */}
-            <path d={`M ${baseRX},${baseCY} A ${baseRX} ${baseRY} 0 0 1 ${-baseRX},${baseCY}`}
-              fill="none" stroke="#000000" strokeOpacity="0.22" strokeWidth="0.026"/>
-            {/* Base rim catch-light */}
-            <ellipse cx={0} cy={baseCY - baseRY*0.55} rx={baseRX*0.70} ry={baseRY*0.32}
-              fill="white" fillOpacity="0.26"/>
-
+            {/* Classic pawns no longer carry a fused pedestal "base" under the body:
+                the disc + its underside shadow were lifting rigidly with the piece
+                during hops and the ready-lift, so they read as moulded into the pawn
+                mesh. They are removed; the independent ground shadow (the
+                <motion.ellipse> outside the lift/arc groups, which already stays flat
+                on the board) now supplies the pawn's contact shadow. */}
             {/* Dome / helmet body — glossy 3D ball, rich per-colour radial gradient for deep saturation */}
             <circle cx={0} cy={domeCY} r={domeR}
               fill={`url(#clpawn${player})`}
