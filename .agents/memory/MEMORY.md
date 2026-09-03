@@ -13,3 +13,6 @@
 - [Codemagic free-tier instance types](codemagic-free-tier.md) — only `mac_mini_m2` is unbilled; no free Linux keyword (`linux_x2`/`x4` both require billing) as of Aug 2026.
 - [Ludo DZ Cordova blank-screen debugging](ludo-dz-cordova-blank-screen.md) — root cause found: unfallbacked `dvh` collapses layout to 0 height; fix applied, pending on-device confirmation.
 - [CSS dvh viewport-unit fallback pattern](css-dvh-fallback-pattern.md) — use `@supports (height:100dvh)`, not a stacked vh/dvh declaration — minifiers strip the latter's fallback line.
+- [Ludo dice-roll + movable-glow measurements](ludo-dice-glow-measurements.md) — how to profile the Classic dice roll in the sandbox, which causes were falsified, and the values that shipped.
+- [Ludo DZ selectable-piece indicator](ludo-selectable-piece-indicator.md) — one behaviour, three languages (brass inlay / khatem star / HUD brackets); marker motion is one-shot for measured perf; Normal untouched.
+- [Ludo DZ board frame shadow](ludo-board-frame-shadow.md) — DZ/Neon used to run an infinite 2.6s box-shadow loop on the board wrapper; static now, with measured before/after.
