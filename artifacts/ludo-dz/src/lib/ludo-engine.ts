@@ -3,8 +3,16 @@
 
 export const MAIN_PATH_SIZE = 52; // physical length of MAIN_PATH (used for abs modulo)
 export const TRACK_SIZE    = 51; // home-entry threshold: relPos 51+ → HOME_COLS
-export const HOME_COL_SIZE = 6;
-export const FINISHED_POS  = TRACK_SIZE + HOME_COL_SIZE; // 57
+// A home lane is FIVE walkable squares (relPos 51-55). The sixth entry of each
+// HOME_COLS row ([7,6] / [6,7] / [7,8] / [8,7]) is NOT a lane square — it is a
+// cell of the central 3×3 finish area (classifyCell resolves rows/cols 6-8 as
+// 'center' before the homecol test, so it is never rendered as a lane cell in
+// any theme). Counting it as walkable made the journey one square too long:
+// the pawn reached its finish slot at relPos 55 and then took one extra
+// phantom hop into the centre. The lane geometry in HOME_COLS is untouched —
+// only how many of its entries count as steps changed.
+export const HOME_COL_SIZE = 5;
+export const FINISHED_POS  = TRACK_SIZE + HOME_COL_SIZE; // 56
 
 // ── Board path (52 cells, clockwise from Red's start) ──────────────────────
 //    Row = grid row (0-14)   Col = grid column (0-14)
@@ -71,7 +79,7 @@ export const PLAYER_NAMES_AR = ['أحمر','أزرق','أصفر','أخضر']    
 export interface Piece {
   player: number;
   index:  number;
-  relPos: number; // -1=home base, 0-50=track, 51-56=home col, 57=finished
+  relPos: number; // -1=home base, 0-50=track, 51-55=home col, 56=finished
 }
 
 export interface GameState {
@@ -133,7 +141,25 @@ export function resolvePlayerSlots(numPlayers: number, humanColor?: number, excl
   return normalizePlayerSlots(picked, numPlayers);
 }
 
+/**
+ * Clamp any piece position into the current relPos domain.
+ *
+ * Saves written before the home-lane length fix used a 6-square lane
+ * (FINISHED_POS = 57), so they can hold relPos 56 (the old phantom lane cell)
+ * or 57 (old finished). Both are now at-or-past the finish, so both migrate to
+ * the current FINISHED_POS (56). Without this, a restored pawn parked on an
+ * out-of-domain relPos would never satisfy the finished check nor pass the
+ * movable filter, freezing that colour for the rest of the match.
+ */
+function migratePieceRelPos(relPos: number): number {
+  return relPos > FINISHED_POS ? FINISHED_POS : relPos;
+}
+
 export function normalizeGameState(state: GameState, playerSlots?: readonly number[]): GameState {
+  const needsRelPosMigration = state.pieces.some(p => p.relPos > FINISHED_POS);
+  if (needsRelPosMigration) {
+    state = { ...state, pieces: state.pieces.map(p => ({ ...p, relPos: migratePieceRelPos(p.relPos) })) };
+  }
   const slots = normalizePlayerSlots(playerSlots ?? state.playerSlots, state.numPlayers);
   const fallbackActivePlayer = slots.includes(0) ? 0 : (slots[0] ?? 0);
   const activePlayer = slots.includes(state.activePlayer) ? state.activePlayer : fallbackActivePlayer;
