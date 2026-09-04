@@ -332,12 +332,17 @@ function dzPlinthPoints(cx: number, cy: number, rx: number, ry: number): string 
 // ─── Fixed resting slots for finished pawns inside each player's center triangle ──
 // Center 3×3 spans columns/rows 6–9, apex at (7.5, 7.5). [x, y] = [col, row].
 // Red=left, Blue=top, Yellow=right, Green=bottom.
-// Each triangle has 4 slots keyed by piece.index (0-3), arranged in a 2×2 pattern.
+// Each triangle has 4 slots keyed by piece.index (0-3), laid out as a clean,
+// evenly-spaced 2×2 grid — the two columns (base/inner) and the two rows are
+// each held at a consistent offset so the cluster reads as tidy rather than
+// scattered. The outer pair (index 0-1) sits near the base edge, the inner pair
+// (index 2-3) toward the apex, mirroring how a home base keeps its four pieces
+// in a regular grid.
 const HOME_FINISH_SLOTS: readonly (readonly [number, number][])[] = [
-  [[6.30, 6.95], [6.30, 8.05], [6.75, 7.20], [6.75, 7.80]], // Red   — left triangle
-  [[6.95, 6.30], [8.05, 6.30], [7.20, 6.75], [7.80, 6.75]], // Blue  — top triangle
-  [[8.70, 6.95], [8.70, 8.05], [8.25, 7.20], [8.25, 7.80]], // Yellow — right triangle
-  [[6.95, 8.70], [8.05, 8.70], [7.20, 8.25], [7.80, 8.25]], // Green — bottom triangle
+  [[6.30, 7.20], [6.75, 7.20], [6.30, 7.80], [6.75, 7.80]], // Red   — left triangle
+  [[7.20, 6.30], [7.80, 6.30], [7.20, 6.75], [7.80, 6.75]], // Blue  — top triangle
+  [[8.70, 7.20], [8.25, 7.20], [8.70, 7.80], [8.25, 7.80]], // Yellow — right triangle
+  [[7.20, 8.70], [7.80, 8.70], [7.20, 8.25], [7.80, 8.25]], // Green — bottom triangle
 ];
 
 // ─── Shared board-cell stack lookup ────────────────────────────────────────────

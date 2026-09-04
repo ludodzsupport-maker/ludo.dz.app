@@ -141,25 +141,7 @@ export function resolvePlayerSlots(numPlayers: number, humanColor?: number, excl
   return normalizePlayerSlots(picked, numPlayers);
 }
 
-/**
- * Clamp any piece position into the current relPos domain.
- *
- * Saves written before the home-lane length fix used a 6-square lane
- * (FINISHED_POS = 57), so they can hold relPos 56 (the old phantom lane cell)
- * or 57 (old finished). Both are now at-or-past the finish, so both migrate to
- * the current FINISHED_POS (56). Without this, a restored pawn parked on an
- * out-of-domain relPos would never satisfy the finished check nor pass the
- * movable filter, freezing that colour for the rest of the match.
- */
-function migratePieceRelPos(relPos: number): number {
-  return relPos > FINISHED_POS ? FINISHED_POS : relPos;
-}
-
 export function normalizeGameState(state: GameState, playerSlots?: readonly number[]): GameState {
-  const needsRelPosMigration = state.pieces.some(p => p.relPos > FINISHED_POS);
-  if (needsRelPosMigration) {
-    state = { ...state, pieces: state.pieces.map(p => ({ ...p, relPos: migratePieceRelPos(p.relPos) })) };
-  }
   const slots = normalizePlayerSlots(playerSlots ?? state.playerSlots, state.numPlayers);
   const fallbackActivePlayer = slots.includes(0) ? 0 : (slots[0] ?? 0);
   const activePlayer = slots.includes(state.activePlayer) ? state.activePlayer : fallbackActivePlayer;
