@@ -868,13 +868,20 @@ export function WelcomeScreen({ lang, onPlay, onSettings, onAbout }: WelcomeScre
                   style={{ background: `radial-gradient(circle at top left, ${btn.neon}18, transparent 65%)` }}
                 />
                 {/* WIP corner pill (Classement only) — same size/placement as
-                    the mode-select WIP cards, tinted with the tile's gold. */}
+                    the mode-select WIP cards, tinted with the tile's gold.
+                    The tile is only (100vw - 56px)/3 wide, so the label scales
+                    with it: at a fixed size the FR string either wraps (8px)
+                    or jams into the left rounded corner (7.3px @ 390vw).
+                    (cardWidth - 2*8px insets - 12px pad - 2px border) / 11.15em
+                    = (100vw - 146px) / 33.45, clamped to sane bounds. */}
                 {btn.wip && (
                   <div
                     className="pointer-events-none absolute right-2 top-2 z-20 rounded-full px-1.5 py-0.5 font-heading font-semibold"
                     style={{
-                      fontSize: "8px",
+                      fontSize: "clamp(3.5px, calc((100vw - 146px) / 33.45), 8.5px)",
+                      lineHeight: "12px",
                       letterSpacing: "0.04em",
+                      whiteSpace: "nowrap",
                       background: "rgba(0,0,0,0.38)",
                       border: `1px solid ${btn.neon}40`,
                       color: btn.neon,

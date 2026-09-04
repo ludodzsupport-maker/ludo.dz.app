@@ -49,27 +49,30 @@ plus `cordova platform add android`, which generates `package.json`,
 
 ## Android splash artwork
 
-The splash concept is a minimal premium line-art composition: a circular Ludo
-board path, dice outline, and abstract piece rings drawn over the brand blue
-background. The source artwork lives in `res/splash/ludo-dz-splash.svg` and uses
-SVG stroke-dash animations for a quick draw-in effect. The palette is limited to
-brand blue (`#2EB9F0`), soft white (`#F7FCFF`), and light cyan (`#BFF4FF`).
+The Android 12+ system splash shows `AndroidWindowSplashScreenAnimatedIcon`
+scaled into a 288dp box and masks everything outside its central 192dp circle,
+so a full-bleed square app icon would be zoomed in and cropped. The splash
+icon therefore ships as a pre-padded PNG:
+`res/splash/ludo-dz-splash-icon.png` is a 1152×1152 transparent canvas with
+the complete 576×576 logo (from `artifacts/ludo-dz/public/ludo-logo.png`,
+the same asset the in-app screens use) centered at exactly 50% of the canvas,
+so the whole logo lands inside the unmasked two-thirds circle (measured
+content radius ≈ 0.31 of the canvas vs. the 0.333 mask radius).
 
-Cordova Android's native launch splash copies a single Android resource from
-`AndroidWindowSplashScreenAnimatedIcon`, so `config.xml` points at
-`res/splash/android/ludo_dz_splash.xml`, a static vector-drawable fallback that
-matches the animated SVG line-art design without committing binary PNGs. If an
-older splash mechanism is reintroduced that only accepts PNG files, rasterize the
-SVG outside the repository into the required ldpi, mdpi, hdpi, xhdpi, xxhdpi, and
-xxxhdpi assets and upload those binary files separately.
-The Android splash screen is configured with Cordova Android's built-in AndroidX
-SplashScreen integration rather than `cordova-plugin-splashscreen` raster
-assets. `config.xml` points `AndroidWindowSplashScreenAnimatedIcon` at
-`res/splash/android/ludo_dz_splash.xml`, an Android vector drawable generated
-from the source SVG in `res/splash/ludo-dz-splash.svg`.
+To regenerate it after the logo changes:
 
-This keeps the committed splash setup text-based and scalable. No density PNGs
-are committed. If an older Cordova/Android splash mechanism is reintroduced that
-only accepts PNG files, rasterize the SVG outside the repository into the
-required ldpi, mdpi, hdpi, xhdpi, xxhdpi, and xxxhdpi assets and upload those
-binary files separately.
+```bash
+convert artifacts/ludo-dz/public/ludo-logo.png -resize 576x576 \
+  -background none -gravity center -extent 1152x1152 \
+  cordova/res/splash/ludo-dz-splash-icon.png
+```
+
+`config.xml` points `AndroidWindowSplashScreenAnimatedIcon` at that PNG. The
+older line-art concept (`res/splash/ludo-dz-splash.svg` +
+`res/splash/android/ludo_dz_splash.xml`) is kept for reference but is no
+longer referenced by the build; if it is ever reintroduced, note that the
+vector must keep the full logo inside the central 192/288 of its viewport or
+it will be circle-masked again. If an older splash mechanism is reintroduced
+that only accepts PNG files, rasterize the SVG outside the repository into
+the required ldpi, mdpi, hdpi, xhdpi, xxhdpi, and xxxhdpi assets and upload
+those binary files separately.
