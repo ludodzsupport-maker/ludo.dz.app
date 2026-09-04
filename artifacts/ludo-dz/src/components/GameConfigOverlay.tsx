@@ -271,6 +271,14 @@ function SettingsIcon({ neon }: { neon: string }) {
 }
 
 // ─── Config toggle (used inside team options rows) ────────────────────────────
+// RTL fix: the sheet sets dir="rtl" for Arabic. Without isolation the knob's
+// static position for the absolutely-positioned thumb is computed against the
+// parent's inline direction, so the same x values appear visually reversed in
+// RTL (ON seemed to slide to the opposite side vs French/LTR). The switch is
+// a physical control — it should slide to the same physical side for ON/OFF
+// in both directions. Isolate the control to ltr so its coordinate system is
+// stable and the knob always slides right for ON, left for OFF, matching
+// French/LTR behaviour exactly.
 function ConfigToggle({
   value,
   onChange,
@@ -282,12 +290,14 @@ function ConfigToggle({
 }) {
   return (
     <motion.button
+      dir="ltr"
       onClick={(e) => { e.stopPropagation(); const next = !value; playToggleClick(next); onChange(next); }}
       className="relative flex-shrink-0"
       style={{
         width: 46,
         height: 26,
         borderRadius: 13,
+        direction: "ltr",
         background: value
           ? `linear-gradient(135deg, ${neon}90, ${neon}55)`
           : "rgba(255,255,255,0.10)",
@@ -296,9 +306,12 @@ function ConfigToggle({
         transition: "background 0.22s, border-color 0.22s, box-shadow 0.22s",
       }}
       whileTap={{ scale: 0.92 }}
+      aria-pressed={value}
+      role="switch"
+      aria-checked={value}
     >
       <motion.div
-        className="absolute top-[3px]"
+        className="absolute top-[3px] left-0"
         style={{
           width: 18,
           height: 18,
@@ -307,6 +320,7 @@ function ConfigToggle({
           boxShadow: value ? `0 2px 8px ${neon}70` : "none",
         }}
         animate={{ x: value ? 22 : 3 }}
+        initial={false}
         transition={{ type: "spring", stiffness: 520, damping: 32 }}
       />
     </motion.button>

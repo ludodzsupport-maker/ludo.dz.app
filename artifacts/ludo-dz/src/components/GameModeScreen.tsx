@@ -687,10 +687,11 @@ function ComingSoonPopup({
           style={{ background: `radial-gradient(circle at top left, ${mode.neon}16, transparent 65%)` }}
         />
 
-        {/* Close button */}
+        {/* Close button — must sit above the content layer (z-20 vs z-10) so the padded content div doesn't intercept taps */ }
         <button
+          type="button"
           onClick={() => { playIconTap(); onClose(); }}
-          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center"
+          className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
           style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}
           aria-label="close"
         >
