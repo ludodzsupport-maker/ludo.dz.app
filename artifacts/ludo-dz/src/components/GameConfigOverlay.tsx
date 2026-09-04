@@ -509,7 +509,7 @@ export function GameConfigOverlay({ mode, lang, onClose, onStart, onResume, boar
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%", transition: { duration: 0.24 } }}
-        transition={{ type: "spring", stiffness: 330, damping: 36 }}
+        transition={{ type: "spring", stiffness: 200, damping: 32 }}
         dir={dir}
         onClick={(e) => e.stopPropagation()}
       >
