@@ -1,6 +1,6 @@
 import type { BoardStyle } from '../App';
 import type { GameConfig } from '../components/GameConfigOverlay';
-import type { GameState } from './ludo-engine';
+import { FINISHED_POS, type GameState } from './ludo-engine';
 import { SPEED_MIN, SPEED_MAX, type LegacyAnimSpeed } from './anim-speed';
 
 export const SAVED_GAME_STORAGE_KEY = 'ludo-dz:saved-game';
@@ -65,7 +65,12 @@ function isValidGameState(value: unknown): value is GameState {
     && value.pieces.every(piece => isRecord(piece)
       && Number.isInteger(piece.player)
       && Number.isInteger(piece.index)
-      && Number.isInteger(piece.relPos))
+      && Number.isInteger(piece.relPos)
+      // Old saves written before the home-lane length fix used a 6-square lane
+      // (relPos 56/57). They are no longer migrated — they are discarded, so
+      // any out-of-domain relPos marks a stale snapshot and is rejected here.
+      && (piece.relPos as number) >= -1
+      && (piece.relPos as number) <= FINISHED_POS)
     && value.playerSlots.every(slot => Number.isInteger(slot))
     && value.movable.every(id => typeof id === 'string');
 }
